@@ -1108,46 +1108,7 @@
         }
     
 
-        /* ==========================================================================
-           【v16特製】パスワードロック画面用スタイル
-           ========================================================================== */
         
-
-        
-
-        @keyframes lockFadeIn {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        .lock-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            display: inline-block;
-        }
-
-        
-
-        
-
-        .lock-input-group {
-            margin-bottom: 20px;
-        }
-
-        
-
-        .lock-input:focus {
-            outline: none;
-            border-color: #ffb300;
-            box-shadow: 0 0 0 2px rgba(255, 179, 0, 0.2);
-        }
-
-        
-
-        .lock-btn:hover {
-            background-color: #bfa030;
-            transform: translateY(-1px);
-        }
 
         
 
@@ -1155,11 +1116,6 @@
 </head>
 
 <body>
-
-    
-            <button class="lock-btn" onclick="verifyAndUnlock()">ロック解除</button>
-        </div>
-    </div>
 
 
     <!-- アプリのメイン器 -->
@@ -2684,7 +2640,7 @@
             SellaApp.state.autoDateEnabled = autoDateSetting;
             document.getElementById('setting-auto-date').checked = autoDateSetting;
 
-            console.log("🍺 Sella v10 Initialized & Fixed (v10).");
+            console.log("🍺 Sella v18 Initialized & Cleaned.");
         };
 
         
