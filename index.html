@@ -1,0 +1,2694 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v10)</title>
+    <style>
+        /* ==========================================================================
+           1. CSS変数の設計（テーマ変更プラグインによる着せ替えに完全対応）
+           ========================================================================== */
+        :root {
+            --bg-color: #0d0d0e;            /* メイン背景：漆黒 */
+            --panel-bg: #141416;            /* パネル背景：ダークチャコール */
+            --card-bg: #1c1c1e;             /* カード背景 */
+            --card-hover: #252528;          /* ホバー時のカード色 */
+            --border-color: #2a2a2d;        /* 境界線 */
+            --input-bg: #1c1c1e;            /* 入力エリア背景 */
+            --input-border: #3a3a3d;        /* 入力エリア枠線 */
+            
+            --text-primary: #f5f5f7;        /* メイン文字：明るいグレー */
+            --text-secondary: #8e8e93;      /* サブ文字：落ち着いたグレー */
+            
+            --accent-amber: #ffb300;        /* 琥珀色（お酒を照らす光） */
+            --accent-gold: #d4af37;         /* ゴールド（高級感） */
+            --accent-gold-hover: #bfa030;   
+            --danger-color: #ff453a;        /* 警告・削除赤 */
+            --danger-hover: #ff3b30;
+            
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            --border-radius-lg: 12px;
+            --border-radius-md: 8px;
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* 和風モダン・テーマ（テーマ変更プラグイン用の設定） */
+        [data-theme="wa-modern"] {
+            --bg-color: #f7f5f0;            /* 白木・和紙の温かみ */
+            --panel-bg: #ffffff;            /* 純白 */
+            --card-bg: #faf9f6;             
+            --card-hover: #f0ede4;          
+            --border-color: #e0dacb;        
+            --input-bg: #ffffff;            
+            --input-border: #cbd0c4;        
+            
+            --text-primary: #2c3e50;        /* 藍墨色 */
+            --text-secondary: #7f8c8d;      
+            
+            --accent-amber: #e74c3c;        /* 朱色（和のアクセント） */
+            --accent-gold: #16a085;         /* 青磁・漆緑 */
+            --accent-gold-hover: #117a65;   
+            --danger-color: #c0392b;        
+            --danger-hover: #a93226;
+            --shadow: 0 4px 12px rgba(44, 62, 80, 0.08);
+        }
+
+        /* ==========================================================================
+           2. 基本レイアウト（レスポンシブ設計）
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            transition: var(--transition);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+        }
+
+        /* アプリ全体のコンテナ */
+        .app-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* PCサイドバー（左カラム） */
+        .sidebar {
+            width: 240px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: var(--transition);
+            z-index: 100;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .logo-icon {
+            font-size: 24px;
+            color: var(--accent-gold);
+        }
+
+        .logo-text {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--accent-gold);
+            text-transform: uppercase;
+        }
+
+        .nav-menu {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: var(--border-radius-md);
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 500;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            color: var(--text-primary);
+            background-color: var(--card-bg);
+            border-left: 3px solid var(--accent-amber);
+        }
+
+        /* メインコンテンツ（中央カラム） */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 24px;
+            transition: var(--transition);
+        }
+
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        /* 検索バーの美装 */
+        .search-container {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 12px 16px 12px 40px;
+            border-radius: var(--border-radius-lg);
+            font-size: 14px;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        /* ビュー表示切り替え制御（PCでもスマホでも確実に効く共通ルール） */
+        .view-panel {
+            display: none;
+        }
+
+        .view-panel.active {
+            display: block;
+        }
+
+        /* 右サイドバー：プラグイン拡張＆AIエリア */
+        .right-sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            border-left: 1px solid var(--border-color);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+            transition: var(--transition);
+        }
+
+        /* ==========================================================================
+           3. UIパーツ（アコーディオン・カード・ポップアップ・詳細等）
+           ========================================================================== */
+        .card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--accent-gold);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        /* アコーディオン（酒蔵グループ） */
+        .brewery-accordion {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            margin-bottom: 14px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .brewery-header {
+            background-color: var(--card-bg);
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            transition: var(--transition);
+        }
+
+        .brewery-header:hover {
+            background-color: var(--card-hover);
+        }
+
+        .brewery-title-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brewery-name {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .brewery-count-badge {
+            font-size: 11px;
+            background-color: rgba(212, 175, 55, 0.15);
+            color: var(--accent-gold);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .brewery-toggle-icon {
+            font-size: 12px;
+            color: var(--text-secondary);
+            transition: transform 0.3s ease;
+        }
+
+        .brewery-accordion.open .brewery-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .brewery-content {
+            display: none;
+            padding: 12px;
+            border-top: 1px solid var(--border-color);
+            background-color: rgba(0,0,0,0.1);
+        }
+
+        .brewery-accordion.open .brewery-content {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* 銘柄カード */
+        .brand-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .brand-card:hover {
+            background-color: var(--card-hover);
+            border-color: var(--accent-amber);
+            transform: translateX(4px);
+        }
+
+        .brand-image-preview {
+            width: 50px;
+            height: 50px;
+            border-radius: 6px;
+            object-fit: cover;
+            background-color: #000;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .brand-info {
+            flex: 1;
+        }
+
+        .brand-name {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .brand-meta {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .brand-stats {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+        }
+
+        .brand-rating {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--accent-amber);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .brand-repeat-badge {
+            font-size: 10px;
+            background-color: rgba(255, 179, 0, 0.15);
+            color: var(--accent-amber);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        /* モーダル・重ね合わせレイアウト（登録画面・詳細表示用） */
+        
+        #form-modal {
+            z-index: 1010; /* 詳細モーダルより手前に重ねて表示 */
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        /* 編集モーダルの重ね合わせバグの完全修正 */
+        #detail-modal {
+            z-index: 1000;
+        }
+        #form-modal {
+            z-index: 1100; /* 詳細モーダルよりも手前に出す */
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            width: 100%;
+            max-width: 560px;
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            animation: modalFadeIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        @keyframes modalFadeIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--card-bg);
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent-gold);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .close-btn {
+            background: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            border: none;
+            padding: 4px;
+        }
+
+        .close-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        /* ==========================================================================
+           新設計：複数画像アップローダー、並び替え、サムネイル指定用のスタイル
+           ========================================================================== */
+        .image-uploader-box {
+            border: 2px dashed var(--input-border);
+            border-radius: var(--border-radius-md);
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background-color: var(--input-bg);
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .image-uploader-box:hover {
+            border-color: var(--accent-amber);
+            background-color: var(--card-bg);
+        }
+
+        .image-uploader-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .image-uploader-placeholder span {
+            font-size: 24px;
+        }
+
+        /* 登録フォームの複数サムネイル用コンテナ */
+        .form-image-thumb-wrapper {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            overflow: visible; /* ❌ボタンが飛び出すように */
+            background-color: #000;
+            transition: var(--transition);
+            cursor: grab;
+            user-select: none;
+        }
+
+        .form-image-thumb-wrapper:active {
+            cursor: grabbing;
+        }
+
+        .form-image-thumb-wrapper.dragging {
+            opacity: 0.4;
+            border: 2px dashed var(--accent-gold);
+        }
+
+        /* ❌ 独立した絶対配置の削除ボタン */
+        .form-image-delete-btn {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: var(--danger-color);
+            color: #fff;
+            border: 1px solid var(--panel-bg);
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+            z-index: 10;
+            transition: var(--transition);
+        }
+
+        .form-image-delete-btn:hover {
+            background-color: var(--danger-hover);
+            transform: scale(1.15);
+        }
+
+        /* ➕インライン写真追加カメラカード */
+        .form-image-add-card {
+            border: 2px dashed var(--input-border);
+            background-color: var(--input-bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .form-image-add-card:hover {
+            border-color: var(--accent-gold);
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+        }
+
+        .form-image-thumb-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .form-image-control-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: space-around;
+            padding: 2px 0;
+        }
+
+        .form-image-btn {
+            color: #fff;
+            font-size: 10px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .form-image-btn:hover {
+            color: var(--accent-amber);
+            transform: scale(1.2);
+        }
+
+        .form-image-badge-cover {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: var(--accent-amber);
+            color: #000;
+            font-size: 8px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+
+        /* ==========================================================================
+           新設計：詳細画面の画像スライドショー・ギャラリースタイル
+           ========================================================================== */
+        .detail-gallery-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .detail-gallery-main {
+            text-align: center;
+            background-color: #000;
+            border-radius: var(--border-radius-md);
+            overflow: hidden;
+            height: 240px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .detail-gallery-main img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .detail-gallery-thumbs {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 4px 0;
+            scrollbar-width: thin;
+        }
+
+        .detail-gallery-thumb-wrapper {
+            width: 54px;
+            height: 54px;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            flex-shrink: 0;
+            background-color: #000;
+            transition: var(--transition);
+        }
+
+        .detail-gallery-thumb-wrapper.active {
+            border-color: var(--accent-amber);
+        }
+
+        .detail-gallery-thumb-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* タイムライン表示（同一銘柄の履歴） */
+        .timeline-section {
+            margin-top: 20px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 16px;
+        }
+
+        .timeline-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: var(--accent-gold);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .timeline-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .timeline-item {
+            background-color: var(--card-bg);
+            border-left: 3px solid var(--accent-amber);
+            padding: 10px 14px;
+            border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+            position: relative;
+        }
+
+        .timeline-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .timeline-memo {
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        /* 入力フォーム内の設定 */
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-radius: var(--border-radius-md);
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-amber);
+            box-shadow: 0 0 0 2px rgba(255, 179, 0, 0.2);
+        }
+
+        .row-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .row-group .form-group {
+            flex: 1;
+        }
+
+        /* 評価（星システム） */
+        .rating-input-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .rating-star {
+            font-size: 22px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .rating-star.selected {
+            color: var(--accent-amber);
+            text-shadow: 0 0 4px rgba(255, 179, 0, 0.5);
+        }
+
+        /* ボタン */
+        button {
+            background-color: var(--accent-gold);
+            color: #000;
+            border: none;
+            padding: 12px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            border-radius: var(--border-radius-md);
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background-color: var(--accent-gold-hover);
+            transform: translateY(-1px);
+        }
+
+        button.secondary {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        button.secondary:hover {
+            background-color: var(--card-bg);
+        }
+
+        button.danger {
+            background-color: transparent;
+            border: 1px solid var(--danger-color);
+            color: var(--danger-color);
+        }
+
+        button.danger:hover {
+            background-color: rgba(255, 69, 58, 0.1);
+        }
+
+        /* スマホ用フローティング➕ボタン (FAB) */
+        .floating-add-btn {
+            display: none;
+            position: fixed;
+            bottom: 76px; /* ボトムバーの上に配置 */
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: var(--accent-amber);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: #000;
+            z-index: 99;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .floating-add-btn:hover {
+            transform: scale(1.05) rotate(90deg);
+        }
+
+        /* ボトムナビゲーション（モバイル用・デフォルト非表示） */
+        .bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            z-index: 999;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .bottom-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 10px;
+            cursor: pointer;
+            width: 25%;
+            height: 100%;
+            transition: var(--transition);
+        }
+
+        .bottom-nav-item.active {
+            color: var(--accent-amber);
+        }
+
+        .bottom-nav-icon {
+            font-size: 20px;
+        }
+
+        /* プレースホルダー（プラグイン拡張スペース） */
+        .plugin-box {
+            border: 1px dashed var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: 16px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 13px;
+            background-color: rgba(255,255,255,0.01);
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ==========================================================================
+           4. レスポンシブ挙動（ブレークポイント設計）
+           ========================================================================== */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+
+            .app-container {
+                flex-direction: column;
+                height: calc(100vh - 60px); /* ボトムナビの分を減らす */
+            }
+
+            .sidebar {
+                display: none; /* 左ナビを非表示 */
+            }
+
+            .right-sidebar {
+                display: none; /* スマホ時は基本非表示、設定などの切り替え時のみ */
+                width: 100%;
+                border-left: none;
+                height: 100%;
+                position: absolute;
+                top: 0;
+                left: 0;
+                z-index: 101;
+            }
+
+            .right-sidebar.mobile-open {
+                display: flex;
+            }
+
+            .main-content {
+                width: 100%;
+                height: 100%;
+                padding: 16px;
+                padding-bottom: 80px; /* ボトムナビにかぶらないように余白 */
+            }
+
+            .bottom-nav {
+                display: flex; /* モバイル用の下部メニューを表示 */
+            }
+
+            .floating-add-btn {
+                display: flex; /* モバイル用の＋ボタンを表示 */
+            }
+        }
+
+        /* ==========================================================================
+           【v11特製】画像ドラッグ＆ドロップ ＆ 誤削除防止用スタイル
+           ========================================================================== */
+        .form-image-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .form-image-thumb-wrapper {
+            position: relative;
+            aspect-ratio: 1;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            overflow: hidden;
+            background-color: #000;
+            cursor: grab;
+            transition: var(--transition);
+            user-select: none;
+        }
+
+        .form-image-thumb-wrapper:active {
+            cursor: grabbing;
+        }
+
+        .form-image-thumb-wrapper.dragging {
+            opacity: 0.4;
+            border: 2px dashed var(--accent-amber) !important;
+            transform: scale(0.95);
+        }
+
+        .form-image-thumb-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none; /* ドラッグ中に画像の標準動作をブロック */
+        }
+
+        /* ❌削除ボタンを右上に絶対配置し、他のボタンから隔離 */
+        .form-image-delete-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: rgba(255, 69, 58, 0.95);
+            color: #fff;
+            border: none;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            z-index: 10;
+            transition: var(--transition);
+        }
+
+        .form-image-delete-btn:hover {
+            background-color: #ff3b30;
+            transform: scale(1.15);
+        }
+
+        /* 代表バッジ */
+        .form-image-badge-cover {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            font-size: 8px;
+            background-color: var(--accent-amber);
+            color: #000;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 3px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            z-index: 9;
+        }
+
+        /* ➕サムネイル一覧にインラインで追加するための追加カード */
+        .form-image-add-card {
+            aspect-ratio: 1;
+            border: 2px dashed var(--input-border);
+            border-radius: var(--border-radius-md);
+            background-color: var(--input-bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+            color: var(--text-secondary);
+            user-select: none;
+        }
+
+        .form-image-add-card:hover {
+            border-color: var(--accent-amber);
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+        }
+
+        .form-image-add-card span {
+            font-size: 22px;
+        }
+
+        .form-image-add-card p {
+            font-size: 9px;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        /* 詳細ギャラリーの枠線美化 */
+        .detail-gallery-thumb-wrapper.active {
+            border-color: var(--accent-amber) !important;
+            box-shadow: 0 0 6px rgba(255,179,0,0.4);
+        }
+
+
+        .tag-suggestion-chip {
+            font-size: 11px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--accent-amber);
+            padding: 4px 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: var(--transition);
+            user-select: none;
+            display: inline-block;
+        }
+
+        .tag-suggestion-chip:hover {
+            background-color: var(--card-hover);
+            border-color: var(--accent-gold);
+            transform: translateY(-1px);
+        }
+        
+        .form-image-add-card {
+            border: 2px dashed var(--input-border) !important;
+            background-color: var(--input-bg) !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        
+        .form-image-add-card:hover {
+            border-color: var(--accent-amber) !important;
+            background-color: var(--card-bg) !important;
+            color: var(--text-primary);
+        }
+    
+
+        /* ==========================================================================
+           【v16特製】パスワードロック画面用スタイル
+           ========================================================================== */
+        
+
+        
+
+        @keyframes lockFadeIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .lock-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            display: inline-block;
+        }
+
+        
+
+        
+
+        .lock-input-group {
+            margin-bottom: 20px;
+        }
+
+        
+
+        .lock-input:focus {
+            outline: none;
+            border-color: #ffb300;
+            box-shadow: 0 0 0 2px rgba(255, 179, 0, 0.2);
+        }
+
+        
+
+        .lock-btn:hover {
+            background-color: #bfa030;
+            transform: translateY(-1px);
+        }
+
+        
+
+    </style>
+</head>
+
+<body>
+
+    
+            <button class="lock-btn" onclick="verifyAndUnlock()">ロック解除</button>
+        </div>
+    </div>
+
+
+    <!-- アプリのメイン器 -->
+    <div class="app-container">
+
+        <!-- ==========================================
+             左カラム：PC用サイドバー
+             ========================================== -->
+        <div class="sidebar">
+            <div>
+                <div class="logo-area">
+                    <span class="logo-icon">🍶</span>
+                    <span class="logo-text">Sella</span>
+                </div>
+                <ul class="nav-menu">
+                    <li class="nav-item active" onclick="switchView('dashboard')">
+                        <span>📊</span> Dashboard
+                    </li>
+                    <li class="nav-item" onclick="switchView('settings')">
+                        <span>⚙&nbsp;</span> Setting
+                    </li>
+                </ul>
+            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">
+                Sella Base v10.0.0
+            </div>
+        </div>
+
+        <!-- ==========================================
+             中央カラム：メインコンテンツ
+             ========================================== -->
+        <div class="main-content">
+            
+            <div class="header-bar">
+                <h1 class="header-title" id="page-title">ダッシュボード</h1>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 12px;">
+                        計: <span id="log-count" style="color: var(--accent-amber); font-weight: bold;">0</span> 杯
+                    </span>
+                    <!-- PC用の記録ボタン -->
+                    <button onclick="openFormModal('add', null, 'single')" style="padding: 6px 14px; font-size: 13px;">➕ 記録を登録</button>
+                </div>
+            </div>
+
+            <!-- 1. 検索バー（常に上部に設置、使いやすさ向上） -->
+            <div class="search-container" id="search-bar-wrapper">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" id="search-input" placeholder="銘柄、酒蔵、都道府県、タグ(#...)、味の感想から検索..." oninput="filterLogs()">
+            </div>
+
+            <!-- ビューパネル1：お酒棚（ダッシュボード） -->
+            <div id="view-dashboard" class="view-panel active">
+                <div id="log-accordion-container">
+                    <!-- JSで酒造・銘柄別アコーディオンが自動構築されます -->
+                </div>
+            </div>
+
+            <!-- ビューパネル2：設定＆バックアップ（スマホ・PC共通） -->
+            <div id="view-settings" class="view-panel">
+                <div class="card">
+                    <div class="card-title">
+                        <span>💾</span> バックアップ & 復元（完全ローカル）
+                    </div>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+                        データはすべてお使いのブラウザ内部にのみ安全に保存されています。別の端末への引っ越しや、バックアップの際にご活用ください。
+                    </p>
+                    <button onclick="exportJSON()" style="background-color: var(--accent-gold); color: #000; margin-bottom: 12px; width: 100%;">
+                        📤 バックアップを書き出す (JSONコピー)
+                    </button>
+                    
+                    <textarea id="import-text" rows="3" placeholder="コピーしたJSONデータをここに貼り付けてインポートボタンを押します。" style="margin-bottom: 10px;"></textarea>
+                    
+                    <button class="secondary" onclick="importJSON()" style="width: 100%;">
+                        📥 データをインポートして復元
+                    </button>
+                    
+                    
+                
+
+                <!-- ⚠️ 過去データの消去・リセットエリア -->
+                    <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 16px;">
+                        <span style="display: block; font-size: 11px; color: var(--danger-color); margin-bottom: 6px; font-weight: bold; text-transform: uppercase;">危険なエリア</span>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;">過去にテスト等で保存した内容も含め、ブラウザ内に蓄積されたすべてのお酒ログ・テーマデータを一度きれいにリセット（全削除）します。実行後の復元はできません。</p>
+                        <button class="danger" onclick="completelyResetData()" style="width: 100%; font-size: 13px;">
+                            💥 アプリの全データを完全に初期化（リセット）
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">
+                        <span>🔌</span> プラグイン＆テーマ管理（拡張スロット）
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="form-group">
+                            <label>アプリテーマ選択</label>
+                            <select id="theme-selector" onchange="changeTheme(this.value)">
+                                <option value="dark-bar">🥃 ダーク・バー (デフォルト)</option>
+                                <option value="wa-modern">🍶 和モダン (着せ替え)</option>
+                            </select>
+                        </div>
+
+                        <!-- 📷 写真の作成日時から飲んだ日を自動で取り込むトグル設定 -->
+                        <div class="form-group" style="display:flex; align-items:center; gap:10px; margin-top: 4px;">
+                            <input type="checkbox" id="setting-auto-date" onchange="toggleAutoDateSetting(this.checked)" style="width:auto; margin:0; cursor:pointer;">
+                            <label for="setting-auto-date" style="margin:0; text-transform:none; cursor:pointer; font-size: 13px; font-weight: 500; color: var(--text-primary);">📷 写真の撮影・作成日時から「飲んだ日」を自動セット</label>
+                        </div>
+                        
+                        <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">実装予定のプラグイン状態</div>
+                        <div class="plugin-box" id="plugin-qr-slot">
+                            📶 QRコードテキスト共有プラグイン (未有効)
+                        </div>
+                        <div class="plugin-box" id="plugin-gps-slot">
+                            📍 位置情報(GPS)取得プラグイン (未有効)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ==========================================
+             右カラム：PC用 拡張・AIエリア（プラグイン）
+             ========================================== -->
+        <div class="right-sidebar">
+            <div class="card" style="margin-bottom: 0;">
+                <div class="card-title">
+                    <span>🤖</span> Sella AI アシスタント
+                </div>
+                <div class="plugin-box" style="min-height: 150px;">
+                    <div>AI解析機能は現在 offline です。</div>
+                    <div style="font-size: 11px; margin-top: 8px;">「AI解析プラグイン」を有効にすると、ここにあなたのログからおすすめをレコメンドするソムリエが現れます。</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 0; flex: 1;">
+                <div class="card-title">
+                    <span>⚡</span> クイック共有 (QR)
+                </div>
+                <div class="plugin-box" style="height: calc(100% - 40px);">
+                    <div>QRコード共有機能</div>
+                    <div style="font-size: 11px; margin-top: 8px;">一覧からお酒を選んで「QRコード」を生成し、オフラインのまま友達のスマホにログをコピーできます。</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             下部：スマートフォン用ボトムナビ
+             ========================================== -->
+        <div class="bottom-nav">
+            <div class="bottom-nav-item active" onclick="switchView('dashboard')">
+                <span class="bottom-nav-icon">📊</span>
+                <span>Dashboard</span>
+            </div>
+            <div class="bottom-nav-item" onclick="openFormModal('add', null, 'single')">
+                <span class="bottom-nav-icon">➕</span>
+                <span>記録する</span>
+            </div>
+            <div class="bottom-nav-item" onclick="toggleMobileSidebar()">
+                <span class="bottom-nav-icon">🤖</span>
+                <span>AI / 共有</span>
+            </div>
+            <div class="bottom-nav-item" onclick="switchView('settings')">
+                <span class="bottom-nav-icon">⚙️</span>
+                <span>Setting</span>
+            </div>
+        </div>
+
+        <!-- スマホ用フローティング登録ボタン (FAB) -->
+        <div class="floating-add-btn" onclick="openFormModal('add', null, 'single')">➕</div>
+
+    </div>
+
+    <!-- ==========================================================================
+         モーダル1：新しいお酒の登録フォーム（オーバーレイ型）
+         ========================================================================== -->
+    <div class="modal-overlay" id="form-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title"><span>✍️</span> 新しく記録する</div>
+                <input type="hidden" id="edit-log-id" value="">
+                <button class="close-btn" onclick="closeFormModal()">×</button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- 📸 複数画像アップローダー＆軽量圧縮エンジン -->
+                <div class="form-group">
+                    <label>お酒の写真（複数登録可能：ビンの表面、裏面、曲面など）</label>
+                    <div class="image-uploader-box" id="image-uploader-box" onclick="document.getElementById('image-file-input').click()">
+                        <div class="image-uploader-placeholder" id="uploader-placeholder">
+                            <span>📷</span>
+                            <p>タップして写真を撮影、または追加</p>
+                            <p style="font-size: 11px; opacity:0.7;">(高精細を維持したまま、1枚ずつ自動で1/30以下に超圧縮)</p>
+                        </div>
+                    </div>
+                    <!-- 複数選択 multiple を有効化 -->
+                    <input type="file" id="image-file-input" accept="image/*" multiple style="display: none;" onchange="processAndCompressMultipleImages(this)">
+                    
+                    <!-- アップロードされた複数画像のリスト表示・コントロールエリア -->
+                    <div id="form-image-list-container" class="form-image-container" style="margin-top: 8px; margin-bottom: 14px;">
+                        <!-- JSで動的にサムネイルが生成されます -->
+                    </div>
+                </div>
+
+                <div class="row-group">
+                    <div class="form-group">
+                        <label>銘柄・名称</label>
+                        <input type="text" id="drink-name" placeholder="例：獺祭" required>
+                    </div>
+                    <div class="form-group" style="flex: 0.6;">
+                        <label>種類</label>
+                        <select id="drink-type" onchange="adaptFormFields()">
+                            <option value="sake">🍶 日本酒</option>
+                            <option value="wine">🍷 ワイン</option>
+                            <option value="whisky">🥃 ウイスキー</option>
+                            <option value="beer">🍺 ビール</option>
+                            <option value="other">🍹 その他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row-group">
+                    <div class="form-group">
+                        <label id="label-subtype">特定名称 / 詳細</label>
+                        <input type="text" id="drink-subtype" placeholder="例：純米大吟醸">
+                    </div>
+                    <div class="form-group">
+                        <label>酒蔵 / メーカー</label>
+                        <input type="text" id="drink-brewery" placeholder="例：旭酒造">
+                    </div>
+                </div>
+
+                <div class="row-group">
+                    <div class="form-group">
+                        <label>産地 / 都道府県</label>
+                        <input type="text" id="drink-region" placeholder="例：山口県">
+                    </div>
+                    <div class="form-group">
+                        <label>評価</label>
+                        <div class="rating-input-container">
+                            <input type="hidden" id="drink-rating" value="4">
+                            <span class="rating-star selected" onclick="setRating(1)">★</span>
+                            <span class="rating-star selected" onclick="setRating(2)">★</span>
+                            <span class="rating-star selected" onclick="setRating(3)">★</span>
+                            <span class="rating-star selected" onclick="setRating(4)">★</span>
+                            <span class="rating-star" onclick="setRating(5)">★</span>
+                            <span id="rating-value-label" style="font-size: 14px; font-weight: bold; color: var(--accent-amber); margin-left: 8px;">4.0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 📅 飲んだ日（手動選択 ＆ 写真日付からの自動取得対象） -->
+                <div class="form-group">
+                    <label>飲んだ日（日付）</label>
+                    <input type="date" id="drink-date" required>
+                </div>
+
+                <div class="form-group">
+                    <label>独自タグ（スペース区切り）</label>
+                    <input type="text" id="drink-tags" placeholder="例：#フルーティー #冷酒推奨 #リピート確定" oninput="showTagSuggestions()" onfocus="showTagSuggestions()">
+                    <!-- タグのサジェスト候補表示コンテナ -->
+                    <div id="tag-suggestions-container" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>感想・メモ</label>
+                    <textarea id="drink-memo" rows="3" placeholder="味の感想やおつまみの相性など自由にメモしてください。"></textarea>
+                </div>
+
+                <button onclick="saveLog()" style="width: 100%; margin-top: 8px;">
+                    <span>💾</span> ログを保存する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         モーダル2：お酒の個別詳細表示画面
+         ========================================================================== -->
+    <div class="modal-overlay" id="detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="detail-title-header">お酒の詳細</div>
+                <button class="close-btn" onclick="closeDetailModal()">×</button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- 📸 新設計：複数画像スライドショー・ギャラリーエリア -->
+                <div id="detail-gallery-wrapper" style="display: none;">
+                    <!-- JSでメインプレビュー ＆ サムネイル行が動的に組み立てられます -->
+                </div>
+
+                <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                    <div>
+                        <div id="detail-type-badge" style="display:inline-block; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:4px; background:rgba(212,175,55,0.15); color:var(--accent-gold); text-transform:uppercase; margin-bottom:8px;"></div>
+                        <h2 id="detail-name" style="font-size: 22px; font-weight: bold; color:var(--accent-gold); margin-bottom: 4px;"></h2>
+                        <p id="detail-brewery-info" style="font-size: 13px; color: var(--text-secondary);"></p>
+                    </div>
+                    <button class="secondary" onclick="triggerEditBrandSpec()" style="padding: 6px 12px; font-size: 11px; white-space: nowrap; margin-top: 4px;">
+                        📝 基本情報を編集
+                    </button>
+                </div>
+
+                <!-- 基本スペックカード -->
+                <div class="card" style="padding:14px; margin-bottom: 16px;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:13px;">
+                        <div><span style="color:var(--text-secondary);">特定名称 / 詳細:</span> <strong id="detail-spec-subtype">-</strong></div>
+                        <div><span style="color:var(--text-secondary);">平均評価:</span> <strong id="detail-spec-rating" style="color:var(--accent-amber);">-</strong></div>
+                    </div>
+                </div>
+
+                <!-- タグ一覧 -->
+                <div id="detail-tags-container" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">
+                    <!-- 動的タグ -->
+                </div>
+
+                <!-- 🔁 リピート履歴・タイムライン -->
+                <div class="timeline-section">
+                    <div class="timeline-title" id="detail-history-count-label">🔁 タイムライン（飲酒履歴: 1回）</div>
+                    <div class="timeline-list" id="detail-timeline-list">
+                        <!-- ここにその日のメモ、日付、評価のタイムラインが追加されます -->
+                    </div>
+                </div>
+
+                <!-- アクションボタンエリア -->
+                <div style="display: flex; gap: 10px; margin-top: 24px; border-top:1px solid var(--border-color); padding-top:16px;">
+                    <button id="btn-drink-again" style="flex: 1;" onclick="triggerRepeatDrink()">
+                        🔄 このお酒をもう一度飲む
+                    </button>
+                    <button class="danger" onclick="deleteEntireBrand()" style="padding:10px 16px;">
+                        🚨 全履歴削除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         5. JavaScriptロジック（ベース動作＆プラグイン機構）
+         ========================================== -->
+    <script>
+        // Sella コアアプリケーション
+        const SellaApp = {
+            state: {
+                logs: [],
+                currentTheme: 'dark-bar',
+                selectedBrandName: '',   // 詳細表示中のブランド名
+                selectedBreweryName: '',  // 詳細表示中の蔵元名
+                autoDateEnabled: true,   // 写真から撮影日を自動取得する設定（デフォルトオン）
+                currentGallery: [],       // 詳細画面ギャラリー保持用配列
+                wasDetailOpen: false     // 【v11特製】編集終了後に詳細画面に自動で戻るための遷移管理フラグ
+            },
+            plugins: {
+                onPluginLoaded: null
+            },
+
+            registerPlugin(name, pluginObj) {
+                this.plugins[name] = pluginObj;
+                if (pluginObj.init) pluginObj.init(this);
+                this.triggerHook('onPluginLoaded', { name, pluginObj });
+            },
+
+            triggerHook(hookName, data) {
+                Object.values(this.plugins).forEach(plugin => {
+                    if (plugin && plugin.hooks && typeof plugin.hooks[hookName] === 'function') {
+                        try { plugin.hooks[hookName](data, this); } catch (e) { console.error(e); }
+                    }
+                });
+            }
+        };
+
+        // 新規追加/編集フォーム用の画像管理用一時変数
+        let tempUploadedImages = [];
+        let tempCoverImageIndex = 0;
+
+        // ==========================================
+        // データのマイグレーション（画像複数枚配列化対応 ＆ ID付与）
+        // ==========================================
+        function migrateLegacyData() {
+            console.log("🛠️ データ検証・マイグレーションを実行中...");
+            const logs = getLogs();
+            let isModified = false;
+            
+            // 旧キー 'sake_logs' の救済
+            const legacyLogsStr = localStorage.getItem('sake_logs');
+            if (legacyLogsStr) {
+                try {
+                    const legacyLogs = JSON.parse(legacyLogsStr);
+                    if (Array.isArray(legacyLogs) && legacyLogs.length > 0) {
+                        logs.push(...legacyLogs);
+                        isModified = true;
+                        console.log(`✅ 旧キーから ${legacyLogs.length} 件のログを救出しました。`);
+                    }
+                    localStorage.removeItem('sake_logs');
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            logs.forEach((log, index) => {
+                // 1. IDがないレガシーデータ救済
+                if (!log.id) {
+                    log.id = 'log_legacy_' + Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 4);
+                    isModified = true;
+                }
+                // 2. 旧単一画像フィールド（image）を複数枚（images配列）に自動変換
+                if (log.image && (!log.images || log.images.length === 0)) {
+                    log.images = [log.image];
+                    log.coverImageIndex = 0;
+                    isModified = true;
+                }
+                // imagesが全く無い場合の初期配列化
+                if (!log.images) {
+                    log.images = [];
+                    log.coverImageIndex = 0;
+                    isModified = true;
+                }
+            });
+
+            if (isModified) {
+                localStorage.setItem('sella_logs', JSON.stringify(logs));
+                console.log("✅ マイグレーション完了: 複数画像配列化、および一意IDの付与が完了しました。");
+            }
+        }
+
+        // データのローカルストレージ安全取得
+        function getLogs() {
+            const data = localStorage.getItem('sella_logs');
+            return data ? JSON.parse(data) : [];
+        }
+
+        function saveLogsToStorage(logs) {
+            localStorage.setItem('sella_logs', JSON.stringify(logs));
+            SellaApp.state.logs = logs;
+            SellaApp.triggerHook('onDataChanged', logs);
+        }
+
+        // ==========================================
+        // 写真の日付（最終更新日）から「飲んだ日」に自動反映するロジック
+        // ==========================================
+        function autoSetDateFromFile(file) {
+            if (SellaApp.state.autoDateEnabled && file.lastModified) {
+                const d = new Date(file.lastModified);
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                document.getElementById('drink-date').value = `${yyyy}-${mm}-${dd}`;
+                console.log(`📅 写真のタイムスタンプから「飲んだ日」を自動セットしました: ${yyyy}-${mm}-${dd}`);
+            }
+        }
+
+        // Settingトグルの制御
+        function toggleAutoDateSetting(checked) {
+            SellaApp.state.autoDateEnabled = checked;
+            localStorage.setItem('sella_auto_date', checked);
+            console.log(`Setting [auto_date]: ${checked}`);
+        }
+
+        // ==========================================
+        // 複数画像処理： Canvas 高精細自動圧縮 ＆ 軽量化
+        // ==========================================
+        function processAndCompressMultipleImages(input) {
+            const files = Array.from(input.files);
+            if (files.length === 0) return;
+
+            // 1枚目の写真の更新日時（作成日代替）から日付を自動セット
+            if (files[0]) {
+                autoSetDateFromFile(files[0]);
+            }
+
+            let processedCount = 0;
+            const totalFiles = files.length;
+
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+
+                        const max_width = 1000;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > max_width) {
+                            height = Math.round((height * max_width) / width);
+                            width = max_width;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // 高品質画質75%でjpeg圧縮
+                        const base64Str = canvas.toDataURL('image/jpeg', 0.75);
+                        tempUploadedImages.push(base64Str);
+
+                        processedCount++;
+                        if (processedCount === totalFiles) {
+                            renderFormImageThumbs();
+                            input.value = ''; // 次回同じファイル選択可能にするリセット
+                        } else {
+                            renderFormImageThumbs();
+                        }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+
+        // ==========================================
+        // 【v11特製】ドラッグ＆ドロップ並べ替え処理ハンドラー
+        // ==========================================
+        function handleDragStart(e, index) {
+            e.dataTransfer.setData('text/plain', index);
+            e.dataTransfer.effectAllowed = 'move';
+            e.currentTarget.classList.add('dragging');
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDrop(e, toIndex) {
+            e.preventDefault();
+            const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+            if (isNaN(fromIndex) || fromIndex === toIndex) return;
+
+            // 画像データの入れ替え
+            const draggedImg = tempUploadedImages[fromIndex];
+            tempUploadedImages.splice(fromIndex, 1);
+            tempUploadedImages.splice(toIndex, 0, draggedImg);
+
+            // 代表サムネイルインデックスの追従
+            if (tempCoverImageIndex === fromIndex) {
+                tempCoverImageIndex = toIndex;
+            } else {
+                if (fromIndex < tempCoverImageIndex && toIndex >= tempCoverImageIndex) {
+                    tempCoverImageIndex--;
+                } else if (fromIndex > tempCoverImageIndex && toIndex <= tempCoverImageIndex) {
+                    tempCoverImageIndex++;
+                }
+            }
+
+            renderFormImageThumbs();
+        }
+
+        // 登録フォーム内の画像サムネイルの再描画 ＆ 操作メニュー
+        function renderFormImageThumbs() {
+            const container = document.getElementById('form-image-list-container');
+            container.innerHTML = '';
+
+            // v15改善: 全ての編集モード（個別・基本情報）で統一された追加UIを適用
+            const uploaderBox = document.getElementById('image-uploader-box');
+            if (tempUploadedImages.length === 0) {
+                if (uploaderBox) uploaderBox.style.display = 'block';
+            } else {
+                if (uploaderBox) uploaderBox.style.display = 'none';
+            }
+
+            // カバーインデックスの範囲外防止
+            if (tempCoverImageIndex >= tempUploadedImages.length) {
+                tempCoverImageIndex = 0;
+            }
+
+            tempUploadedImages.forEach((imgBase64, index) => {
+                const isCover = index === tempCoverImageIndex;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'form-image-thumb-wrapper';
+                wrapper.setAttribute('draggable', 'true');
+                wrapper.setAttribute('ondragstart', `handleDragStart(event, ${index})`);
+                wrapper.setAttribute('ondragover', `handleDragOver(event)`);
+                wrapper.setAttribute('ondrop', `handleDrop(event, ${index})`);
+                wrapper.setAttribute('ondragend', "this.classList.remove('dragging')");
+                
+                if (isCover) {
+                    wrapper.style.borderColor = 'var(--accent-amber)';
+                }
+
+                const coverBadge = isCover ? `<div class="form-image-badge-cover">代表</div>` : '';
+
+                wrapper.innerHTML = `
+                    <img src="${imgBase64}">
+                    ${coverBadge}
+                    <div class="form-image-delete-btn" title="この写真を削除" onclick="removeImage(${index}, event)">×</div>
+                    <div class="form-image-control-bar">
+                        <button class="form-image-btn" title="代表画像(サムネイル)に指定" onclick="setCoverImage(${index}, event)">👑</button>
+                        <button class="form-image-btn" title="左へ移動" onclick="moveImage(${index}, -1, event)">◀</button>
+                        <button class="form-image-btn" title="右へ移動" onclick="moveImage(${index}, 1, event)">▶</button>
+                    </div>
+                `;
+                container.appendChild(wrapper);
+            });
+
+            // ➕ 「📷 写真を追加」インラインカードをマウント
+            // すでに画像が1枚以上登録されている場合 (画像0枚の時は上部に大きな長いバーがあるので二重表示を防ぐために出さない)
+            if (tempUploadedImages.length > 0) {
+                const addCard = document.createElement('div');
+                addCard.className = 'form-image-thumb-wrapper form-image-add-card';
+                addCard.onclick = () => document.getElementById('image-file-input').click();
+                addCard.innerHTML = `
+                    <span style="font-size: 20px; line-height: 1;">📷</span>
+                    <span style="font-size: 9px; margin-top: 4px; font-weight: bold; line-height: 1;">写真を追加</span>
+                `;
+                container.appendChild(addCard);
+            }
+        }
+
+        function setCoverImage(index, e) {
+            if (e) e.stopPropagation();
+            tempCoverImageIndex = index;
+            renderFormImageThumbs();
+        }
+
+        function moveImage(index, direction, e) {
+            if (e) e.stopPropagation();
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= tempUploadedImages.length) return;
+
+            // スワップ処理
+            const temp = tempUploadedImages[index];
+            tempUploadedImages[index] = tempUploadedImages[targetIndex];
+            tempUploadedImages[targetIndex] = temp;
+
+            // 代表位置の追従
+            if (tempCoverImageIndex === index) {
+                tempCoverImageIndex = targetIndex;
+            } else if (tempCoverImageIndex === targetIndex) {
+                tempCoverImageIndex = index;
+            }
+
+            renderFormImageThumbs();
+        }
+
+        function removeImage(index, e) {
+            if (e) e.stopPropagation();
+            
+            // 【v11特製】誤削除防止のための確認アラート
+            if (!confirm("この写真を削除してもよろしいですか？")) {
+                return;
+            }
+
+            tempUploadedImages.splice(index, 1);
+
+            // 代表位置の調整
+            if (tempCoverImageIndex === index) {
+                tempCoverImageIndex = 0;
+            } else if (tempCoverImageIndex > index) {
+                tempCoverImageIndex--;
+            }
+
+            renderFormImageThumbs();
+        }
+
+        // =========================================
+        // ログの保存＆リピート・履歴一括編集
+        // =========================================
+        function saveLog() {
+            const editId = document.getElementById('edit-log-id').value;
+            const name = document.getElementById('drink-name').value.trim();
+            const type = document.getElementById('drink-type').value;
+            const subtype = document.getElementById('drink-subtype').value.trim();
+            const brewery = document.getElementById('drink-brewery').value.trim();
+            const region = document.getElementById('drink-region').value.trim();
+            const rating = document.getElementById('drink-rating').value;
+            const tagsInput = document.getElementById('drink-tags').value.trim();
+            const memo = document.getElementById('drink-memo').value.trim();
+            
+            // 登録日：フォーム日付から取得
+            const drinkDateVal = document.getElementById('drink-date').value;
+            const drinkDate = drinkDateVal ? new Date(drinkDateVal).toLocaleDateString() : new Date().toLocaleDateString();
+
+            if (!name) {
+                alert("銘柄・名称を入力してください");
+                return;
+            }
+
+            const tags = tagsInput ? tagsInput.split(/\s+/).filter(t => t.startsWith('#')) : [];
+            const logs = getLogs();
+
+            if (editId) {
+                // 【編集モード】
+                const targetLogIndex = logs.findIndex(log => log.id === editId);
+                if (targetLogIndex === -1) {
+                    alert("データが見つかりません。");
+                    return;
+                }
+
+                const oldLog = logs[targetLogIndex];
+                
+                // 基本情報が変更されたかどうか
+                const nameChanged = oldLog.name !== name;
+                const breweryChanged = oldLog.brewery !== brewery;
+                const regionChanged = oldLog.region !== region;
+                const typeChanged = oldLog.type !== type;
+                const subtypeChanged = oldLog.subtype !== subtype;
+                
+                if (nameChanged || breweryChanged || regionChanged || typeChanged || subtypeChanged) {
+                    if (confirm("お酒の基本スペック情報（銘柄、酒蔵、産地、特定名称など）が変更されました。この銘柄のすべての過去リピートログも一括で更新しますか？\n\n（「いいえ」を選ぶと、この1回分のログだけが別の銘柄グループとして独立します）")) {
+                        logs.forEach(log => {
+                            if (log.name === oldLog.name && log.brewery === oldLog.brewery) {
+                                log.name = name;
+                                log.brewery = brewery || '不明な蔵元';
+                                log.region = region || '不明な地域';
+                                log.type = type;
+                                log.subtype = subtype || '通常';
+                            }
+                        });
+                    }
+                }
+
+                // 対象ログの個別変更をマウント
+                const updatedLog = logs[targetLogIndex];
+                updatedLog.name = name;
+                updatedLog.type = type;
+                updatedLog.subtype = subtype || '通常';
+                updatedLog.brewery = brewery || '不明な蔵元';
+                updatedLog.region = region || '不明な地域';
+                updatedLog.rating = parseFloat(rating).toFixed(1);
+                updatedLog.tags = tags;
+                updatedLog.memo = memo;
+                updatedLog.date = drinkDate;
+                
+                // 複数画像の保存
+                updatedLog.images = [...tempUploadedImages];
+                updatedLog.coverImageIndex = tempCoverImageIndex;
+
+                saveLogsToStorage(logs);
+                closeFormModal();
+                renderLogs();
+
+                // 詳細モーダルを最新情報でリフレッシュ
+                if (document.getElementById('detail-modal').classList.contains('active')) {
+                    const refreshedLog = logs.find(log => log.name === name && log.brewery === brewery) || updatedLog;
+                    showLogDetail(refreshedLog);
+                }
+                
+                alert("記録を更新しました！");
+            } else {
+                // 【新規登録モード】
+                const newLog = {
+                    id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                    name,
+                    type,
+                    subtype: subtype || '通常',
+                    brewery: brewery || '不明な蔵元',
+                    region: region || '不明な地域',
+                    rating: parseFloat(rating).toFixed(1),
+                    tags,
+                    memo,
+                    images: [...tempUploadedImages],
+                    coverImageIndex: tempCoverImageIndex,
+                    date: drinkDate
+                };
+
+                logs.unshift(newLog);
+                saveLogsToStorage(logs);
+                closeFormModal();
+                renderLogs();
+                alert("お酒の記録を保存しました！");
+            }
+        }
+
+        // 特定の1回分の飲みログを個別削除
+        function deleteSingleTimelineLog(id, e) {
+            if (e) e.stopPropagation();
+            if (!confirm("この日（1回分）の記録を削除してもよろしいですか？")) return;
+
+            const logs = getLogs();
+            const updatedLogs = logs.filter(log => log.id !== id);
+            saveLogsToStorage(updatedLogs);
+
+            const currentBrand = SellaApp.state.selectedBrandName;
+            const currentBrewery = SellaApp.state.selectedBreweryName;
+
+            const remainingBrandLogs = updatedLogs.filter(log => log.name === currentBrand && log.brewery === currentBrewery);
+
+            if (remainingBrandLogs.length === 0) {
+                closeDetailModal();
+            } else {
+                const dummyCardData = { name: currentBrand, brewery: currentBrewery };
+                showLogDetail(dummyCardData);
+            }
+            renderLogs();
+        }
+
+        // グループ一括削除
+        function deleteEntireBrand() {
+            const brand = SellaApp.state.selectedBrandName;
+            const brewery = SellaApp.state.selectedBreweryName;
+            if (!confirm(`「${brewery} - ${brand}」のこれまでの全ての記録（すべてのリピートログ）を完全に削除しますか？\nこの操作は戻せません。`)) return;
+
+            const logs = getLogs();
+            const updatedLogs = logs.filter(log => !(log.name === brand && log.brewery === brewery));
+            saveLogsToStorage(updatedLogs);
+            
+            closeDetailModal();
+            renderLogs();
+            alert("全ての記録を完全に削除しました。");
+        }
+
+        // 完全データリセット
+        function completelyResetData() {
+            if (!confirm("⚠️ 【超重要警告】\nアプリに保存されているすべてのお酒の記録、画像、テーマなどの設定を『完全にリセット（全削除）』します。よろしいですか？")) {
+                return;
+            }
+            if (!confirm("本当に実行しますか？二度と元には戻せません。")) {
+                return;
+            }
+
+            localStorage.removeItem('sella_logs');
+            localStorage.removeItem('sake_logs');
+            localStorage.removeItem('sella_theme');
+            localStorage.removeItem('sella_auto_date');
+
+            SellaApp.state.logs = [];
+            
+            renderLogs();
+            changeTheme('dark-bar');
+            document.getElementById('theme-selector').value = 'dark-bar';
+            
+            alert("アプリ内のすべてのデータを完全に初期化しました。");
+            switchView('dashboard');
+        }
+
+        // ==========================================
+        // 画面描画：酒蔵 ＞ 銘柄でのアコーディオン自動グループ化
+        // ==========================================
+        function renderLogs() {
+            const logs = getLogs();
+            document.getElementById('log-count').innerText = logs.length;
+            const container = document.getElementById('log-accordion-container');
+            container.innerHTML = '';
+
+            if (logs.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: var(--text-secondary); padding: 50px 10px;">
+                        <span style="font-size: 42px;">🍶</span>
+                        <p style="margin-top: 14px; font-size: 14px;">お酒のログが登録されていません。<br>「記録を登録」から最初の一杯を記録しましょう！</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 1. データを「酒造」ごとにグループ化
+            const breweryGroups = {};
+            logs.forEach(log => {
+                const bName = log.brewery || '不明な蔵元';
+                if (!breweryGroups[bName]) {
+                    breweryGroups[bName] = {
+                        name: bName,
+                        region: log.region || '産地なし',
+                        brands: {}, 
+                        totalLogsCount: 0
+                    };
+                }
+                
+                const brandName = log.name;
+                if (!breweryGroups[bName].brands[brandName]) {
+                    breweryGroups[bName].brands[brandName] = [];
+                }
+                breweryGroups[bName].brands[brandName].push(log);
+                breweryGroups[bName].totalLogsCount++;
+            });
+
+            // 2. 酒造アコーディオンを画面に出力
+            Object.values(breweryGroups).forEach((brewery, bIndex) => {
+                const acc = document.createElement('div');
+                acc.className = 'brewery-accordion open'; // デフォルトで展開
+                acc.id = `brewery-acc-${bIndex}`;
+                acc.setAttribute('data-brewery-name', brewery.name.toLowerCase());
+                acc.setAttribute('data-brewery-region', brewery.region.toLowerCase());
+
+                // 酒蔵ヘッダー
+                const header = document.createElement('div');
+                header.className = 'brewery-header';
+                header.onclick = () => toggleAccordion(acc);
+                header.innerHTML = `
+                    <div class="brewery-title-container">
+                        <span class="brewery-name">🏢 ${brewery.name}</span>
+                        <span style="font-size:11px; color:var(--text-secondary);">(${brewery.region})</span>
+                        <span class="brewery-count-badge">${Object.keys(brewery.brands).length}種類 / 計${brewery.totalLogsCount}杯</span>
+                    </div>
+                    <span class="brewery-toggle-icon">▼</span>
+                `;
+
+                // 酒蔵の銘柄リスト格納庫
+                const content = document.createElement('div');
+                content.className = 'brewery-content';
+
+                // 各銘柄をカード化して追加
+                Object.entries(brewery.brands).forEach(([brandName, brandLogs]) => {
+                    const latestLog = brandLogs[0];
+                    const repeatCount = brandLogs.length;
+
+                    // 平均評価を算出
+                    const totalRating = brandLogs.reduce((sum, log) => sum + parseFloat(log.rating), 0);
+                    const avgRating = (totalRating / repeatCount).toFixed(1);
+
+                    const brandCard = document.createElement('div');
+                    brandCard.className = 'brand-card';
+                    brandCard.onclick = () => showLogDetail(latestLog);
+
+                    // 検索用の情報蓄積属性
+                    brandCard.setAttribute('data-search-name', brandName.toLowerCase());
+                    brandCard.setAttribute('data-search-subtype', (latestLog.subtype || '').toLowerCase());
+                    brandCard.setAttribute('data-search-memo', brandLogs.map(l => (l.memo || '')).join(' ').toLowerCase());
+                    brandCard.setAttribute('data-search-tags', brandLogs.flatMap(l => l.tags || []).join(' ').toLowerCase());
+
+                    const emojiMap = { sake: '🍶', wine: '🍷', whisky: '🥃', beer: '🍺', other: '🍹' };
+                    const typeEmoji = emojiMap[latestLog.type] || '🍶';
+
+                    // 代表（カバー）画像の決定ロジック
+                    let imageHTML = `<div class="brand-image-preview">${typeEmoji}</div>`;
+                    
+                    // 最新ログから画像を探し、無ければリピート過去ログを遡ってカバーを探す
+                    const targetLogWithImg = brandLogs.find(log => log.images && log.images.length > 0);
+                    if (targetLogWithImg && targetLogWithImg.images) {
+                        const coverIdx = targetLogWithImg.coverImageIndex || 0;
+                        const coverImg = targetLogWithImg.images[coverIdx] || targetLogWithImg.images[0];
+                        if (coverImg) {
+                            imageHTML = `<img src="${coverImg}" class="brand-image-preview">`;
+                        }
+                    }
+
+                    const repeatBadge = repeatCount > 1 ? `<span class="brand-repeat-badge">🔁 リピート ${repeatCount}回</span>` : '';
+
+                    brandCard.innerHTML = `
+                        ${imageHTML}
+                        <div class="brand-info">
+                            <div class="brand-name">${brandName}</div>
+                            <div class="brand-meta">${latestLog.subtype} | ${latestLog.date}</div>
+                        </div>
+                        <div class="brand-stats">
+                            <span class="brand-rating">★ ${avgRating}</span>
+                            ${repeatBadge}
+                        </div>
+                    `;
+
+                    content.appendChild(brandCard);
+                });
+
+                acc.appendChild(header);
+                acc.appendChild(content);
+                container.appendChild(acc);
+            });
+        }
+
+        function toggleAccordion(accElement) {
+            accElement.classList.toggle('open');
+        }
+
+        // 検索エンジン
+        function filterLogs() {
+            const query = document.getElementById('search-input').value.trim().toLowerCase();
+            const accordions = document.querySelectorAll('.brewery-accordion');
+
+            accordions.forEach(acc => {
+                const bName = acc.getAttribute('data-brewery-name');
+                const bRegion = acc.getAttribute('data-brewery-region');
+                const brandCards = acc.querySelectorAll('.brand-card');
+                let hasVisibleBrand = false;
+
+                brandCards.forEach(card => {
+                    const brandName = card.getAttribute('data-search-name');
+                    const subtype = card.getAttribute('data-search-subtype');
+                    const memo = card.getAttribute('data-search-memo');
+                    const tags = card.getAttribute('data-search-tags');
+
+                    if (!query || 
+                        bName.includes(query) || 
+                        bRegion.includes(query) || 
+                        brandName.includes(query) ||
+                        subtype.includes(query) ||
+                        memo.includes(query) ||
+                        tags.includes(query)) {
+                        card.style.display = 'flex';
+                        hasVisibleBrand = true;
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+
+                if (hasVisibleBrand) {
+                    acc.style.display = 'block';
+                    if (query) acc.classList.add('open');
+                } else {
+                    acc.style.display = 'none';
+                }
+            });
+        }
+
+        // ==========================================
+        // 詳細ギャラリー切り替えヘルパー
+        // ==========================================
+        function selectDetailGalleryImage(index) {
+            const gallery = SellaApp.state.currentGallery;
+            if (!gallery || !gallery[index]) return;
+
+            document.getElementById('detail-gallery-main-img').src = gallery[index].src;
+
+            const thumbs = document.querySelectorAll('.detail-gallery-thumb-wrapper');
+            thumbs.forEach((t, idx) => {
+                if (idx === index) {
+                    t.classList.add('active');
+                } else {
+                    t.classList.remove('active');
+                }
+            });
+        }
+
+        // ==========================================
+        // 1お酒個別詳細ページ（複数画像ギャラリー対応）
+        // ==========================================
+        function showLogDetail(brandSampleLog) {
+            const logs = getLogs();
+            const brandName = brandSampleLog.name;
+            const breweryName = brandSampleLog.brewery;
+
+            SellaApp.state.selectedBrandName = brandName;
+            SellaApp.state.selectedBreweryName = breweryName;
+
+            const brandLogs = logs.filter(log => log.name === brandName && log.brewery === breweryName);
+            const latestLog = brandLogs[0];
+
+            document.getElementById('detail-title-header').innerText = `${latestLog.brewery} の詳細`;
+            document.getElementById('detail-name').innerText = brandName;
+            document.getElementById('detail-brewery-info').innerText = `🏢 ${latestLog.brewery} (${latestLog.region})`;
+            document.getElementById('detail-spec-subtype').innerText = latestLog.subtype || '通常';
+
+            const totalRating = brandLogs.reduce((sum, log) => sum + parseFloat(log.rating), 0);
+            const avgRating = (totalRating / brandLogs.length).toFixed(1);
+            document.getElementById('detail-spec-rating').innerText = `★ ${avgRating} (計 ${brandLogs.length} 回飲酒)`;
+
+            const emojiMap = { sake: '🍶', wine: '🍷', whisky: '🥃', beer: '🍺', other: '🍹' };
+            const typeLabels = { sake: '日本酒', wine: 'ワイン', whisky: 'ウイスキー', beer: 'ビール', other: 'その他' };
+            document.getElementById('detail-type-badge').innerText = `${emojiMap[latestLog.type] || '🍶'} ${typeLabels[latestLog.type] || 'その他'}`;
+
+            // =========================================
+            // ギャラリー：すべてのログから登録されている画像をすべて集約してカルーセル化
+            // =========================================
+            const galleryImages = [];
+            brandLogs.forEach(log => {
+                if (log.images && log.images.length > 0) {
+                    log.images.forEach(img => {
+                        galleryImages.push({ src: img, date: log.date });
+                    });
+                }
+            });
+
+            const galleryWrapper = document.getElementById('detail-gallery-wrapper');
+            if (galleryImages.length > 0) {
+                galleryWrapper.style.display = 'block';
+                SellaApp.state.currentGallery = galleryImages;
+
+                let thumbsHTML = '';
+                galleryImages.forEach((imgObj, idx) => {
+                    thumbsHTML += `
+                        <div class="detail-gallery-thumb-wrapper ${idx === 0 ? 'active' : ''}" onclick="selectDetailGalleryImage(${idx})">
+                            <img src="${imgObj.src}">
+                        </div>
+                    `;
+                });
+
+                galleryWrapper.innerHTML = `
+                    <div class="detail-gallery-container">
+                        <div class="detail-gallery-main">
+                            <img id="detail-gallery-main-img" src="${galleryImages[0].src}">
+                        </div>
+                        <div class="detail-gallery-thumbs" style="${galleryImages.length <= 1 ? 'display:none;' : ''}">
+                            ${thumbsHTML}
+                        </div>
+                    </div>
+                `;
+            } else {
+                galleryWrapper.style.display = 'none';
+                SellaApp.state.currentGallery = [];
+            }
+
+            // タグの結合表示
+            const tagsContainer = document.getElementById('detail-tags-container');
+            tagsContainer.innerHTML = '';
+            const allTags = Array.from(new Set(brandLogs.flatMap(log => log.tags || [])));
+            if (allTags.length > 0) {
+                allTags.forEach(tag => {
+                    const span = document.createElement('span');
+                    span.className = 'log-tag';
+                    span.innerText = tag;
+                    tagsContainer.appendChild(span);
+                });
+            } else {
+                tagsContainer.innerHTML = '<span style="font-size:11px; color:var(--text-secondary); font-style:italic;">登録タグなし</span>';
+            }
+
+            // タイムライン飲酒履歴
+            document.getElementById('detail-history-count-label').innerText = `🔁 タイムライン（飲酒履歴: ${brandLogs.length}回）`;
+            const timelineContainer = document.getElementById('detail-timeline-list');
+            timelineContainer.innerHTML = '';
+
+            brandLogs.forEach(log => {
+                const item = document.createElement('div');
+                item.className = 'timeline-item';
+                
+                // 画像数のカウント
+                const imageCountBadge = log.images && log.images.length > 0 ? ` 📷 ×${log.images.length}` : '';
+
+                item.innerHTML = `
+                    <div class="timeline-meta">
+                        <span>📅 ${log.date}${imageCountBadge}</span>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="color:var(--accent-amber); font-weight:bold;">★ ${log.rating}</span>
+                            <span style="cursor:pointer; color:var(--text-secondary); font-size:11px;" onclick="triggerEditSingleLog('${log.id}', event)">📝 編集</span>
+                            <span style="cursor:pointer; color:var(--text-secondary); font-size:11px;" onclick="deleteSingleTimelineLog('${log.id}', event)">🗑️ 削除</span>
+                        </div>
+                    </div>
+                    <p class="timeline-memo">${log.memo || '<span style="color:var(--text-secondary); font-style:italic;">感想メモを残していません。</span>'}</p>
+                `;
+                timelineContainer.appendChild(item);
+            });
+
+            document.getElementById('detail-modal').classList.add('active');
+            SellaApp.triggerHook('onLogSelected', latestLog);
+        }
+
+        // 基本スペック編集
+        function triggerEditBrandSpec() {
+            const logs = getLogs();
+            const brand = SellaApp.state.selectedBrandName;
+            const brewery = SellaApp.state.selectedBreweryName;
+            const brandLogs = logs.filter(log => log.name === brand && log.brewery === brewery);
+            const latestLog = brandLogs[0];
+
+            if (!latestLog) return;
+            openFormModal('edit', latestLog.id, 'brand');
+        }
+
+        // タイムラインから個別編集
+        function triggerEditSingleLog(id, e) {
+            if (e) e.stopPropagation();
+            openFormModal('edit', id, 'single');
+        }
+
+        // 「もう一度飲む」のスペック自動コピー機能
+        function triggerRepeatDrink() {
+            const logs = getLogs();
+            const brand = SellaApp.state.selectedBrandName;
+            const brewery = SellaApp.state.selectedBreweryName;
+            const brandLogs = logs.filter(log => log.name === brand && log.brewery === brewery);
+            const latestLog = brandLogs[0];
+
+            closeDetailModal();
+            openFormModal();
+
+            // 基本情報のコピー
+            document.getElementById('drink-name').value = latestLog.name;
+            document.getElementById('drink-type').value = latestLog.type;
+            document.getElementById('drink-subtype').value = latestLog.subtype;
+            document.getElementById('drink-brewery').value = latestLog.brewery;
+            document.getElementById('drink-region').value = latestLog.region;
+            
+            // タグのコピー
+            const allTags = Array.from(new Set(brandLogs.flatMap(log => log.tags || [])));
+            document.getElementById('drink-tags').value = allTags.join(' ');
+
+            // 画像配列のコピー
+            if (latestLog.images && latestLog.images.length > 0) {
+                tempUploadedImages = [...latestLog.images];
+                tempCoverImageIndex = latestLog.coverImageIndex || 0;
+                renderFormImageThumbs();
+            } else {
+                tempUploadedImages = [];
+                tempCoverImageIndex = 0;
+                renderFormImageThumbs();
+            }
+
+            adaptFormFields();
+            setRating(4.0);
+            document.getElementById('drink-memo').value = '';
+            
+            // 日付を本日（初期値）にリセット
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('drink-date').value = `${yyyy}-${mm}-${dd}`;
+            
+            console.log(`🔄 リピートスペックを自動転記しました。`);
+        }
+
+        // ==========================================
+        // 各種モーダルの開閉
+        // ==========================================
+        function openFormModal(mode = 'add', logId = null, editType = 'single') {
+            SellaApp.state.currentEditType = editType;
+            // 【v11特製】詳細画面が開いているときに編集を押されたら、詳細画面が「裏」に隠れるのを防ぐために一時非表示にする
+            if (mode === 'edit') {
+                const detailModal = document.getElementById('detail-modal');
+                if (detailModal && detailModal.classList.contains('active')) {
+                    detailModal.classList.remove('active');
+                    SellaApp.state.wasDetailOpen = true; // 復旧フラグをオン
+                }
+            }
+
+            // 登録・編集フォームの変数＆UIクレンジング
+            document.getElementById('edit-log-id').value = '';
+            document.getElementById('drink-name').value = '';
+            document.getElementById('drink-subtype').value = '';
+            document.getElementById('drink-brewery').value = '';
+            document.getElementById('drink-region').value = '';
+            document.getElementById('drink-tags').value = '';
+            document.getElementById('drink-memo').value = '';
+            
+            tempUploadedImages = [];
+            tempCoverImageIndex = 0;
+            renderFormImageThumbs();
+            
+            document.getElementById('image-file-input').value = '';
+            setRating(4);
+
+            // 日付のデフォルト設定（本日）
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('drink-date').value = `${yyyy}-${mm}-${dd}`;
+
+            const title = document.querySelector('#form-modal .modal-title');
+            const submitBtn = document.querySelector('#form-modal button[onclick="saveLog()"]');
+
+            if (mode === 'edit' && logId) {
+                const logs = getLogs();
+                const log = logs.find(l => l.id === logId);
+                if (log) {
+                    document.getElementById('edit-log-id').value = log.id;
+                    document.getElementById('drink-name').value = log.name;
+                    document.getElementById('drink-type').value = log.type;
+                    document.getElementById('drink-subtype').value = log.subtype || '';
+                    document.getElementById('drink-brewery').value = log.brewery || '';
+                    document.getElementById('drink-region').value = log.region || '';
+                    document.getElementById('drink-tags').value = log.tags ? log.tags.join(' ') : '';
+                    document.getElementById('drink-memo').value = log.memo || '';
+                    setRating(Math.round(parseFloat(log.rating)));
+
+                    // 日付のセット
+                    if (log.date) {
+                        const parts = log.date.split('/');
+                        if (parts.length === 3) {
+                            const y = parts[0];
+                            const m = parts[1].padStart(2, '0');
+                            const d = parts[2].padStart(2, '0');
+                            document.getElementById('drink-date').value = `${y}-${m}-${d}`;
+                        }
+                    }
+
+                    // 複数画像のコピー
+                    if (log.images && log.images.length > 0) {
+                        tempUploadedImages = [...log.images];
+                        tempCoverImageIndex = log.coverImageIndex || 0;
+                        renderFormImageThumbs();
+                    }
+
+                    title.innerHTML = `<span>📝</span> ログを編集する`;
+                    submitBtn.innerHTML = `<span>💾</span> 変更を保存する`;
+                }
+            } else {
+                title.innerHTML = `<span>✍️</span> 新しく記録する`;
+                submitBtn.innerHTML = `<span>💾</span> ログを保存する`;
+            }
+
+            adaptFormFields();
+            document.getElementById('form-modal').classList.add('active');
+        }
+
+        function closeFormModal() {
+            document.getElementById('form-modal').classList.remove('active');
+            
+            // 【v11特製】編集を終了して閉じた時、詳細画面から来ていた場合は詳細画面に自動で戻る
+            if (SellaApp.state.wasDetailOpen) {
+                const detailModal = document.getElementById('detail-modal');
+                if (detailModal) {
+                    detailModal.classList.add('active');
+                }
+                SellaApp.state.wasDetailOpen = false; // フラグ初期化
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.remove('active');
+        }
+
+        function adaptFormFields() {
+            const type = document.getElementById('drink-type').value;
+            const subtypeLabel = document.getElementById('label-subtype');
+            const subtypeInput = document.getElementById('drink-subtype');
+            
+            if (type === 'sake') {
+                subtypeLabel.innerText = "特定名称 (例: 純米大吟醸)";
+                subtypeInput.placeholder = "例：純米大吟醸、特別純米";
+            } else if (type === 'wine') {
+                subtypeLabel.innerText = "ワイン種類・格付け";
+                subtypeInput.placeholder = "例：赤（カベルネ）、白、ロゼ";
+            } else if (type === 'whisky') {
+                subtypeLabel.innerText = "熟成年数・製法";
+                subtypeInput.placeholder = "例：12年、シングルモルト";
+            } else {
+                subtypeLabel.innerText = "特定名称 / 詳細";
+                subtypeInput.placeholder = "例：IPA、クラフトジン、焼酎など";
+            }
+        }
+
+        function setRating(rating) {
+            document.getElementById('drink-rating').value = rating;
+            document.getElementById('rating-value-label').innerText = parseFloat(rating).toFixed(1);
+            const stars = document.querySelectorAll('.rating-star');
+            stars.forEach((star, index) => {
+                if (index < rating) {
+                    star.classList.add('selected');
+                } else {
+                    star.classList.remove('selected');
+                }
+            });
+        }
+
+        function switchView(viewId) {
+            const panels = document.querySelectorAll('.view-panel');
+            panels.forEach(p => p.classList.remove('active'));
+            
+            const targetPanel = document.getElementById(`view-${viewId}`);
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+
+            const titleMap = { 'dashboard': 'お酒棚ダッシュボード', 'settings': 'Setting' };
+            document.getElementById('page-title').innerText = titleMap[viewId] || 'Sella';
+
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+            
+            const bottomItems = document.querySelectorAll('.bottom-nav-item');
+            bottomItems.forEach(item => item.classList.remove('active'));
+
+            if (viewId === 'dashboard') {
+                navItems[0].classList.add('active');
+                bottomItems[0].classList.add('active');
+                document.getElementById('search-bar-wrapper').style.display = 'block';
+            } else if (viewId === 'settings') {
+                navItems[1].classList.add('active');
+                bottomItems[3].classList.add('active');
+                document.getElementById('search-bar-wrapper').style.display = 'none';
+            }
+
+            document.querySelector('.right-sidebar').classList.remove('mobile-open');
+        }
+
+        function toggleMobileSidebar() {
+            const sidebar = document.querySelector('.right-sidebar');
+            sidebar.classList.toggle('mobile-open');
+
+            const bottomItems = document.querySelectorAll('.bottom-nav-item');
+            bottomItems.forEach(item => item.classList.remove('active'));
+            if (sidebar.classList.contains('mobile-open')) {
+                bottomItems[2].classList.add('active');
+            } else {
+                switchView('dashboard');
+            }
+        }
+
+        // テーマ切り替え
+        function changeTheme(themeName) {
+            document.documentElement.setAttribute('data-theme', themeName);
+            SellaApp.state.currentTheme = themeName;
+            localStorage.setItem('sella_theme', themeName);
+            SellaApp.triggerHook('onThemeChanged', themeName);
+        }
+
+        // インポート＆エクスポート
+        function exportJSON() {
+            const logs = getLogs();
+            const jsonStr = JSON.stringify(logs, null, 2);
+            navigator.clipboard.writeText(jsonStr).then(() => {
+                alert("バックアップJSONをクリップボードにコピーしました！");
+            }).catch(err => {
+                alert("コピー失敗。手動でコピーしてください。\n\n" + jsonStr);
+            });
+        }
+
+        function importJSON() {
+            const textarea = document.getElementById('import-text');
+            const dataStr = textarea.value.trim();
+            if (!dataStr) {
+                alert("JSONデータを貼り付けてください。");
+                return;
+            }
+
+            try {
+                const parsed = JSON.parse(dataStr);
+                if (Array.isArray(parsed)) {
+                    if (confirm(`読み込んだお酒ログ: ${parsed.length} 件を復元しますか？`)) {
+                        saveLogsToStorage(parsed);
+                        migrateLegacyData();
+                        renderLogs();
+                        textarea.value = '';
+                        alert("データの復元・最適化が完了しました！");
+                        switchView('dashboard');
+                    }
+                } else {
+                    alert("JSONフォーマットが正しくありません。");
+                }
+            } catch (e) {
+                alert("JSONデータの解析に失敗しました。");
+            }
+        }
+
+
+        // ==========================================
+        // 過去の登録タグからサジェスト（自動推薦）する機能
+        // ==========================================
+        function getUniqueTags() {
+            const logs = getLogs();
+            const tagsSet = new Set();
+            logs.forEach(log => {
+                if (log.tags && Array.isArray(log.tags)) {
+                    log.tags.forEach(tag => tagsSet.add(tag));
+                }
+            });
+            // デフォルトの定番タグ候補もマージしておく
+            const defaultTags = ["#フルーティー", "#辛口", "#甘口", "#冷酒推奨", "#常温推奨", "#ぬる燗", "#リピート確定", "#家飲み", "#記念日"];
+            defaultTags.forEach(t => tagsSet.add(t));
+            
+            return Array.from(tagsSet);
+        }
+
+        function showTagSuggestions() {
+            const input = document.getElementById('drink-tags');
+            const container = document.getElementById('tag-suggestions-container');
+            container.innerHTML = '';
+
+            const uniqueTags = getUniqueTags();
+            const val = input.value.trim();
+
+            // 現在入力中の最後のワード（スペース区切り）を判定
+            const words = input.value.split(/\s+/);
+            const lastWord = words[words.length - 1] || '';
+
+            let matchedTags = [];
+            
+            if (!val || !lastWord) {
+                // まだ何も書いていない、またはスペース直後の場合は、過去によく使った/おすすめの代表タグ上位8個を表示
+                matchedTags = uniqueTags.slice(0, 8);
+            } else {
+                // 入力中の文字に部分一致するタグをフィルタリング
+                const cleanLastWord = lastWord.startsWith('#') ? lastWord : '#' + lastWord;
+                matchedTags = uniqueTags.filter(tag => 
+                    tag.toLowerCase().includes(cleanLastWord.toLowerCase()) && 
+                    tag.toLowerCase() !== cleanLastWord.toLowerCase()
+                );
+                
+                // 部分一致候補が少ない場合は、定番タグも含める
+                if (matchedTags.length < 4) {
+                    uniqueTags.forEach(tag => {
+                        if (!matchedTags.includes(tag) && matchedTags.length < 8) {
+                            matchedTags.push(tag);
+                        }
+                    });
+                }
+            }
+
+            // サジェストされたタグチップを画面に並べる
+            matchedTags.forEach(tag => {
+                // 既に完全一致で入力されていない場合のみ表示
+                if (!words.includes(tag)) {
+                    const chip = document.createElement('span');
+                    chip.className = 'tag-suggestion-chip';
+                    chip.innerText = tag;
+                    chip.onclick = () => {
+                        // 入力欄にサジェストしたタグをドッキング
+                        const currentWords = input.value.trim().split(/\s+/);
+                        if (currentWords.length > 0 && currentWords[currentWords.length - 1].startsWith('#')) {
+                            // 入力途中の文字を上書き
+                            currentWords[currentWords.length - 1] = tag;
+                        } else {
+                            // 末尾に追加
+                            currentWords.push(tag);
+                        }
+                        
+                        input.value = currentWords.filter(w => w).join(' ') + ' '; // 次の入力に備えてスペース空ける
+                        input.focus();
+                        showTagSuggestions(); // 再表示
+                    };
+                    container.appendChild(chip);
+                }
+            });
+        }
+    
+
+        // ==========================================
+        // アプリケーション起動時の初期化
+        // ==========================================
+
+        window.onload = function() {
+            
+
+            // 1. 旧キーやレガシーID・複数画像配列化のデータ移行
+            migrateLegacyData();
+
+            // 2. 状態ロードと描画
+            SellaApp.state.logs = getLogs();
+            renderLogs();
+            adaptFormFields();
+
+            // 3. テーマ適用
+            const savedTheme = localStorage.getItem('sella_theme') || 'dark-bar';
+            document.getElementById('theme-selector').value = savedTheme;
+            changeTheme(savedTheme);
+
+            // 4. 写真の日付自動セット設定のロード
+            const autoDateSetting = localStorage.getItem('sella_auto_date') !== 'false';
+            SellaApp.state.autoDateEnabled = autoDateSetting;
+            document.getElementById('setting-auto-date').checked = autoDateSetting;
+
+            console.log("🍺 Sella v10 Initialized & Fixed (v10).");
+        };
+
+        
+
+    </script>
+</body>
+</html>
