@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v21 - AI & Sync Complete)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v22 - Full Edit & Easy API Key)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -149,7 +149,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v21.0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v22.0</div>
         </div>
 
         <!-- 中央カラム：メインコンテンツ -->
@@ -198,13 +198,20 @@
                 <div class="card">
                     <div class="card-title"><span>🤖</span> Gemini AI 設定</div>
                     <div class="form-group">
-                        <label>Gemini API Key</label>
-                        <input type="password" id="setting-gemini-key" placeholder="AI StudioのAPI Keyを入力" onchange="saveGeminiKey(this.value)">
+                        <label style="display:flex; justify-space-between; align-items:center;">
+                            <span>Gemini API Key</span>
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:var(--accent-gold); font-size:11px; text-decoration:none;">🔑 APIキーを取得</a>
+                        </label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="password" id="setting-gemini-key" placeholder="AI StudioのAPI Keyを入力" onchange="saveGeminiKey(this.value)">
+                            <button type="button" class="secondary" onclick="copyGeminiKey()" style="padding:6px 12px; font-size:12px; white-space:nowrap;">📋 コピー</button>
+                            <button type="button" class="secondary" onclick="pasteGeminiKey()" style="padding:6px 12px; font-size:12px; white-space:nowrap;">📥 貼り付け</button>
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label style="display:flex; justify-space-between;">
+                        <label style="display:flex; justify-space-between; align-items:center;">
                             <span>使用するモデル</span>
-                            <a href="javascript:void(0)" onclick="fetchGeminiModels()" style="color:var(--accent-gold); text-decoration:none;">🔄 利用可能なモデル一覧を取得</a>
+                            <a href="javascript:void(0)" onclick="fetchGeminiModels()" style="color:var(--accent-gold); font-size:11px; text-decoration:none;">🔄 利用可能なモデル一覧を取得</a>
                         </label>
                         <select id="setting-gemini-model" onchange="saveGeminiModel(this.value)">
                             <option value="gemini-2.5-flash">gemini-2.5-flash (標準)</option>
@@ -212,6 +219,17 @@
                             <option value="gemini-2.0-flash">gemini-2.0-flash (高速)</option>
                         </select>
                     </div>
+                </div>
+
+                <!-- 🔄 過去ログのAI一括再解析機能 -->
+                <div class="card">
+                    <div class="card-title"><span>🔄</span> 過去ログのAI再解析</div>
+                    <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px; line-height:1.5;">
+                        画像が登録されている過去のログをAIで自動解析し、未入力の銘柄名・酒蔵・特定名称・産地・メモなどを一括補完します。
+                    </p>
+                    <button id="btn-batch-ai" onclick="batchAnalyzePastLogs()" style="width: 100%; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;">
+                        ✨ 画像付き過去ログを一括AI解析
+                    </button>
                 </div>
 
                 <!-- 💾 データ管理 -->
@@ -236,7 +254,7 @@
     <div class="modal-overlay" id="form-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title"><span>✍️</span> お酒のログ入力</div>
+                <div class="modal-title" id="form-modal-title"><span>✍️</span> お酒のログ入力</div>
                 <input type="hidden" id="edit-log-id" value="">
                 <button class="close-btn" onclick="closeFormModal()">×</button>
             </div>
@@ -305,7 +323,7 @@
                         <h2 id="detail-name" style="font-size: 22px; color:var(--accent-gold);"></h2>
                         <p id="detail-brewery-info" style="font-size: 13px; color: var(--text-secondary);"></p>
                     </div>
-                    <button class="secondary" onclick="triggerEditBrandSpec()" style="padding: 6px 12px; font-size: 11px;">📝 基本情報を編集</button>
+                    <button class="secondary" onclick="triggerEditBrandSpec()" style="padding: 6px 12px; font-size: 11px;">📝 全体情報の括編集</button>
                 </div>
 
                 <div class="card" style="padding:14px; margin-bottom: 16px;">
@@ -376,6 +394,32 @@
 
         function saveGeminiKey(val) { localStorage.setItem('sella_gemini_key', val); }
         function saveGeminiModel(val) { localStorage.setItem('sella_gemini_model', val); }
+
+        /* APIキー ワンボタンコピー & 貼り付け機能 */
+        function copyGeminiKey() {
+            const key = document.getElementById('setting-gemini-key').value;
+            if (!key) return alert("コピーするAPI Keyが入力されていません。");
+            navigator.clipboard.writeText(key).then(() => {
+                alert("📋 API Keyをクリップボードにコピーしました！");
+            }).catch(() => {
+                alert("コピーに失敗しました。");
+            });
+        }
+
+        async function pasteGeminiKey() {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text) {
+                    document.getElementById('setting-gemini-key').value = text.trim();
+                    saveGeminiKey(text.trim());
+                    alert("📥 クリップボードからAPI Keyを貼り付けました！");
+                } else {
+                    alert("クリップボードが空です。");
+                }
+            } catch (err) {
+                alert("クリップボードの読み取り権限がありません。手動で貼り付けてください。");
+            }
+        }
 
         /* Google OAuth & アカウント情報表示 */
         function initiateGoogleLogin() {
@@ -495,6 +539,80 @@
             }
         }
 
+        /* 過去ログの一括AI解析処理 */
+        async function batchAnalyzePastLogs() {
+            const key = localStorage.getItem('sella_gemini_key');
+            if (!key) return alert("設定画面でGemini API Keyを登録してください。");
+
+            const logs = getLogs();
+            const targetIndices = [];
+            logs.forEach((log, index) => {
+                if (log.images && log.images.length > 0) {
+                    targetIndices.push(index);
+                }
+            });
+
+            if (targetIndices.length === 0) {
+                return alert("解析可能な画像付きログが見つかりませんでした。");
+            }
+
+            if (!confirm(`画像付きのログ ${targetIndices.length} 件をAIで一括解析しますか？\n（解析結果により既存のデータが補完・更新されます）`)) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-batch-ai');
+            const originalBtnText = btn.innerText;
+            btn.disabled = true;
+
+            const model = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
+            let updatedCount = 0;
+
+            for (let i = 0; i < targetIndices.length; i++) {
+                const idx = targetIndices[i];
+                const log = logs[idx];
+                btn.innerText = `⌛ AI解析中 (${i + 1}/${targetIndices.length})...`;
+
+                try {
+                    const base64Data = log.images[0].split(',')[1];
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [
+                                    { text: "このお酒のラベル画像を解析し、以下の項目をJSON形式で返してください。不明な項目は空文字にしてください。キー名: name(銘柄名), brewery(酒蔵・メーカー名), subtype(特定名称・種類), region(都道府県・産地), memo(味わいや特徴の簡潔な解説)" },
+                                    { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+                                ]
+                            }]
+                        })
+                    });
+
+                    const data = await res.json();
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) {
+                        const jsonMatch = text.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            const result = JSON.parse(jsonMatch[0]);
+                            if (result.name) logs[idx].name = result.name;
+                            if (result.brewery) logs[idx].brewery = result.brewery;
+                            if (result.subtype) logs[idx].subtype = result.subtype;
+                            if (result.region) logs[idx].region = result.region;
+                            if (result.memo && !logs[idx].memo) logs[idx].memo = result.memo;
+                            updatedCount++;
+                        }
+                    }
+                } catch (e) {
+                    console.error(`Log ID ${log.id} の解析に失敗しました:`, e);
+                }
+            }
+
+            saveLogsToStorage(logs);
+            renderLogs();
+            btn.innerText = originalBtnText;
+            btn.disabled = false;
+            alert(`処理が完了しました。${updatedCount} 件のログをAIで解析・更新しました！`);
+        }
+
         /* ログ管理 & 表示 */
         function renderLogs() {
             const logs = getLogs();
@@ -547,6 +665,10 @@
         function showLogDetail(brandName, breweryName) {
             currentBrandKey = { name: brandName, brewery: breweryName };
             const logs = getLogs().filter(l => l.name === brandName && l.brewery === breweryName);
+            if (logs.length === 0) {
+                closeDetailModal();
+                return;
+            }
             const latest = logs[0];
 
             document.getElementById('detail-name').innerText = latest.name;
@@ -570,12 +692,17 @@
                 galleryWrapper.style.display = 'none';
             }
 
-            // タイムライン
+            // タイムライン（個別のフル編集・AI再解析ボタンを含む）
             const tl = document.getElementById('detail-timeline-list');
             tl.innerHTML = logs.map(l => `
-                <div style="background:var(--card-bg); padding:8px 12px; border-left:3px solid var(--accent-amber); border-radius:4px; font-size:12px;">
-                    <div style="display:flex; justify-content:space-between; color:var(--text-secondary); margin-bottom:4px;">
-                        <span>📅 ${l.date}</span><span style="color:var(--accent-amber);">★ ${l.rating}</span>
+                <div style="background:var(--card-bg); padding:10px 12px; border-left:3px solid var(--accent-amber); border-radius:6px; font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; color:var(--text-secondary); margin-bottom:6px;">
+                        <span>📅 ${l.date}</span>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <span style="color:var(--accent-amber); font-weight:bold; margin-right:4px;">★ ${l.rating}</span>
+                            <button class="secondary" onclick="openFormModal('edit', '${l.id}')" style="padding:3px 8px; font-size:11px;">✏️ 編集</button>
+                            <button class="danger" onclick="deleteSingleLog('${l.id}')" style="padding:3px 8px; font-size:11px;">🗑️</button>
+                        </div>
                     </div>
                     <div>${l.memo || 'メモなし'}</div>
                 </div>
@@ -657,6 +784,14 @@
             renderLogs();
         }
 
+        function deleteSingleLog(id) {
+            if (!confirm("このログを削除しますか？")) return;
+            let logs = getLogs().filter(l => l.id !== id);
+            saveLogsToStorage(logs);
+            showLogDetail(currentBrandKey.name, currentBrandKey.brewery);
+            renderLogs();
+        }
+
         /* 画像アップロード補助 */
         function processMultipleImages(input) {
             Array.from(input.files).forEach(file => {
@@ -679,14 +814,16 @@
             `).join('');
         }
 
-        /* 保存 ＆ モーダル制御 */
+        /* 保存 ＆ モーダル制御 (新規登録 & フル過去ログ編集の統合) */
         function saveLog() {
             const name = document.getElementById('drink-name').value.trim();
             if (!name) return alert("銘柄名を入力してください");
 
-            const logs = getLogs();
-            logs.unshift({
-                id: 'log_' + Date.now(),
+            const editId = document.getElementById('edit-log-id').value;
+            let logs = getLogs();
+
+            const logData = {
+                id: editId || ('log_' + Date.now()),
                 name,
                 type: document.getElementById('drink-type').value,
                 subtype: document.getElementById('drink-subtype').value,
@@ -696,17 +833,62 @@
                 date: document.getElementById('drink-date').value || new Date().toISOString().split('T')[0],
                 memo: document.getElementById('drink-memo').value,
                 images: [...tempUploadedImages]
-            });
+            };
+
+            if (editId) {
+                const index = logs.findIndex(l => l.id === editId);
+                if (index !== -1) {
+                    logs[index] = logData;
+                } else {
+                    logs.unshift(logData);
+                }
+            } else {
+                logs.unshift(logData);
+            }
 
             saveLogsToStorage(logs);
             closeFormModal();
+
+            if (document.getElementById('detail-modal').classList.contains('active')) {
+                showLogDetail(logData.name, logData.brewery);
+            }
+
             renderLogs();
         }
 
-        function openFormModal() {
+        function openFormModal(mode = 'add', logId = null) {
             tempUploadedImages = [];
+            document.getElementById('edit-log-id').value = '';
+
+            if (mode === 'edit' && logId) {
+                const logs = getLogs();
+                const log = logs.find(l => l.id === logId);
+                if (log) {
+                    document.getElementById('edit-log-id').value = log.id;
+                    document.getElementById('drink-name').value = log.name || '';
+                    document.getElementById('drink-type').value = log.type || 'sake';
+                    document.getElementById('drink-subtype').value = log.subtype || '';
+                    document.getElementById('drink-brewery').value = log.brewery || '';
+                    document.getElementById('drink-region').value = log.region || '';
+                    document.getElementById('drink-rating').value = log.rating || 4.0;
+                    document.getElementById('drink-date').value = log.date || new Date().toISOString().split('T')[0];
+                    document.getElementById('drink-memo').value = log.memo || '';
+                    tempUploadedImages = log.images ? [...log.images] : [];
+                    document.getElementById('form-modal-title').innerHTML = '<span>✏️</span> お酒のログ編集';
+                }
+            } else {
+                document.getElementById('drink-name').value = '';
+                document.getElementById('drink-type').value = 'sake';
+                document.getElementById('drink-subtype').value = '';
+                document.getElementById('drink-brewery').value = '';
+                document.getElementById('drink-region').value = '';
+                document.getElementById('drink-rating').value = '4.0';
+                document.getElementById('drink-date').value = new Date().toISOString().split('T')[0];
+                document.getElementById('drink-memo').value = '';
+                document.getElementById('form-modal-title').innerHTML = '<span>✍️</span> お酒のログ入力';
+            }
+
             renderFormThumbs();
-            document.getElementById('drink-date').value = new Date().toISOString().split('T')[0];
             document.getElementById('form-modal').classList.add('active');
         }
 
