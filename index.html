@@ -3,871 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v20)</title>
-    <!-- Google Identity Services & Google API Loader -->
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v21 - AI & Sync Complete)</title>
+    <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" async defer></script>
     <style>
-        /* ==========================================================================
-           1. CSS変数の設計
-           ========================================================================== */
         :root {
-            --bg-color: #0d0d0e;            /* メイン背景：漆黒 */
-            --panel-bg: #141416;            /* パネル背景：ダークチャコール */
-            --card-bg: #1c1c1e;             /* カード背景 */
-            --card-hover: #252528;          /* ホバー時のカード色 */
-            --border-color: #2a2a2d;        /* 境界線 */
-            --input-bg: #1c1c1e;            /* 入力エリア背景 */
-            --input-border: #3a3a3d;        /* 入力エリア枠線 */
-            
-            --text-primary: #f5f5f7;        /* メイン文字 */
-            --text-secondary: #8e8e93;      /* サブ文字 */
-            
-            --accent-amber: #ffb300;        /* 琥珀色 */
-            --accent-gold: #d4af37;         /* ゴールド */
-            --accent-gold-hover: #bfa030;   
-            --danger-color: #ff453a;        /* 警告赤 */
-            --danger-hover: #ff3b30;
-            
-            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --bg-color: #0d0d0e;
+            --panel-bg: #141416;
+            --card-bg: #1c1c1e;
+            --card-hover: #252528;
+            --border-color: #2a2a2d;
+            --input-bg: #1c1c1e;
+            --input-border: #3a3a3d;
+            --text-primary: #f5f5f7;
+            --text-secondary: #8e8e93;
+            --accent-amber: #ffb300;
+            --accent-gold: #d4af37;
+            --accent-gold-hover: #bfa030;
+            --danger-color: #ff453a;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
             --border-radius-lg: 12px;
             --border-radius-md: 8px;
             --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
-        /* 和風モダン・テーマ */
         [data-theme="wa-modern"] {
             --bg-color: #f7f5f0;
             --panel-bg: #ffffff;
-            --card-bg: #faf9f6;             
-            --card-hover: #f0ede4;          
-            --border-color: #e0dacb;        
-            --input-bg: #ffffff;            
-            --input-border: #cbd0c4;        
+            --card-bg: #faf9f6;
+            --card-hover: #f0ede4;
+            --border-color: #e0dacb;
+            --input-bg: #ffffff;
+            --input-border: #cbd0c4;
             --text-primary: #2c3e50;
-            --text-secondary: #7f8c8d;      
+            --text-secondary: #7f8c8d;
             --accent-amber: #e74c3c;
-            --accent-gold: #16a085;         
-            --accent-gold-hover: #117a65;   
-            --danger-color: #c0392b;        
-            --danger-hover: #a93226;
+            --accent-gold: #16a085;
+            --accent-gold-hover: #117a65;
+            --danger-color: #c0392b;
             --shadow: 0 4px 12px rgba(44, 62, 80, 0.08);
         }
 
-        /* ==========================================================================
-           2. 基本レイアウト
-           ========================================================================== */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        body {
-            font-family: var(--font-family);
-            background-color: var(--bg-color);
-            color: var(--text-primary);
-            transition: var(--transition);
-            overflow: hidden;
-            height: 100vh;
-            display: flex;
-        }
-
-        .app-container {
-            display: flex;
-            width: 100%;
-            height: 100vh;
-            position: relative;
-        }
-
-        .sidebar {
-            width: 240px;
-            background-color: var(--panel-bg);
-            border-right: 1px solid var(--border-color);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            transition: var(--transition);
-            z-index: 100;
-        }
-
-        .logo-area {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 32px;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-primary); transition: var(--transition); overflow: hidden; height: 100vh; display: flex; }
+        .app-container { display: flex; width: 100%; height: 100vh; position: relative; }
+        .sidebar { width: 240px; background-color: var(--panel-bg); border-right: 1px solid var(--border-color); padding: 24px; display: flex; flex-direction: column; justify-content: space-between; z-index: 100; }
+        .logo-area { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
         .logo-icon { font-size: 24px; color: var(--accent-gold); }
         .logo-text { font-size: 22px; font-weight: 700; letter-spacing: 2px; color: var(--accent-gold); text-transform: uppercase; }
-
-        .nav-menu {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            border-radius: var(--border-radius-md);
-            cursor: pointer;
-            transition: var(--transition);
-            font-weight: 500;
-        }
-
-        .nav-item:hover, .nav-item.active {
-            color: var(--text-primary);
-            background-color: var(--card-bg);
-            border-left: 3px solid var(--accent-amber);
-        }
-
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow-y: auto;
-            padding: 24px;
-            transition: var(--transition);
-        }
-
-        .header-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
+        .nav-menu { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--text-secondary); text-decoration: none; border-radius: var(--border-radius-md); cursor: pointer; transition: var(--transition); font-weight: 500; }
+        .nav-item:hover, .nav-item.active { color: var(--text-primary); background-color: var(--card-bg); border-left: 3px solid var(--accent-amber); }
+        .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; padding: 24px; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
         .header-title { font-size: 24px; font-weight: 600; }
-
-        .search-container {
-            margin-bottom: 20px;
-            position: relative;
-        }
-
-        .search-input {
-            width: 100%;
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            padding: 12px 16px 12px 40px;
-            border-radius: var(--border-radius-lg);
-            font-size: 14px;
-            box-shadow: var(--shadow);
-            transition: var(--transition);
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: var(--accent-gold);
-            box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
-        }
-
-        .search-icon {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-secondary);
-            font-size: 16px;
-        }
-
+        .search-container { margin-bottom: 20px; position: relative; }
+        .search-input { width: 100%; background-color: var(--panel-bg); border: 1px solid var(--border-color); color: var(--text-primary); padding: 12px 16px 12px 40px; border-radius: var(--border-radius-lg); font-size: 14px; box-shadow: var(--shadow); }
+        .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 16px; }
         .view-panel { display: none; }
         .view-panel.active { display: block; }
-
-        .right-sidebar {
-            width: 320px;
-            background-color: var(--panel-bg);
-            border-left: 1px solid var(--border-color);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            overflow-y: auto;
-            transition: var(--transition);
-        }
-
-        /* ==========================================================================
-           3. UIパーツ
-           ========================================================================== */
-        .card {
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius-lg);
-            padding: 20px;
-            box-shadow: var(--shadow);
-            transition: var(--transition);
-            margin-bottom: 20px;
-        }
-
-        .card-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--accent-gold);
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 8px;
-        }
-
-        .brewery-accordion {
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius-lg);
-            margin-bottom: 14px;
-            overflow: hidden;
-            box-shadow: var(--shadow);
-        }
-
-        .brewery-header {
-            background-color: var(--card-bg);
-            padding: 14px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            user-select: none;
-            transition: var(--transition);
-        }
-
+        .right-sidebar { width: 320px; background-color: var(--panel-bg); border-left: 1px solid var(--border-color); padding: 24px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+        .card { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px; }
+        .card-title { font-size: 16px; font-weight: 600; color: var(--accent-gold); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .brewery-accordion { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); margin-bottom: 14px; overflow: hidden; }
+        .brewery-header { background-color: var(--card-bg); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
         .brewery-header:hover { background-color: var(--card-hover); }
-
-        .brewery-title-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
+        .brewery-title-container { display: flex; align-items: center; gap: 10px; }
         .brewery-name { font-weight: 600; font-size: 15px; }
-
-        .brewery-count-badge {
-            font-size: 11px;
-            background-color: rgba(212, 175, 55, 0.15);
-            color: var(--accent-gold);
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: 500;
-        }
-
-        .brewery-toggle-icon {
-            font-size: 12px;
-            color: var(--text-secondary);
-            transition: transform 0.3s ease;
-        }
-
+        .brewery-count-badge { font-size: 11px; background-color: rgba(212, 175, 55, 0.15); color: var(--accent-gold); padding: 2px 8px; border-radius: 12px; }
+        .brewery-toggle-icon { font-size: 12px; color: var(--text-secondary); transition: transform 0.3s ease; }
         .brewery-accordion.open .brewery-toggle-icon { transform: rotate(180deg); }
-
-        .brewery-content {
-            display: none;
-            padding: 12px;
-            border-top: 1px solid var(--border-color);
-            background-color: rgba(0,0,0,0.1);
-        }
-
-        .brewery-accordion.open .brewery-content {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .brand-card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius-md);
-            padding: 12px 16px;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            cursor: pointer;
-            transition: var(--transition);
-            position: relative;
-        }
-
-        .brand-card:hover {
-            background-color: var(--card-hover);
-            border-color: var(--accent-amber);
-            transform: translateX(4px);
-        }
-
-        .brand-image-preview {
-            width: 50px;
-            height: 50px;
-            border-radius: 6px;
-            object-fit: cover;
-            background-color: #000;
-            border: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-
+        .brewery-content { display: none; padding: 12px; border-top: 1px solid var(--border-color); background-color: rgba(0,0,0,0.1); }
+        .brewery-accordion.open .brewery-content { display: flex; flex-direction: column; gap: 8px; }
+        .brand-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 12px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: var(--transition); }
+        .brand-card:hover { background-color: var(--card-hover); border-color: var(--accent-amber); transform: translateX(4px); }
+        .brand-image-preview { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; background-color: #000; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
         .brand-info { flex: 1; }
         .brand-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
         .brand-meta { font-size: 11px; color: var(--text-secondary); }
-
-        .brand-stats {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 6px;
-        }
-
-        .brand-rating {
-            font-size: 14px;
-            font-weight: bold;
-            color: var(--accent-amber);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .brand-repeat-badge {
-            font-size: 10px;
-            background-color: rgba(255, 179, 0, 0.15);
-            color: var(--accent-amber);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(4px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            overflow-y: auto;
-        }
-
-        #detail-modal { z-index: 1000; }
-        #form-modal { z-index: 1100; }
-
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; z-index: 1000; }
         .modal-overlay.active { display: flex; }
+        .modal-content { background-color: var(--panel-bg); border: 1px solid var(--border-color); width: 100%; max-width: 560px; border-radius: var(--border-radius-lg); box-shadow: var(--shadow); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; }
+        .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); }
+        .modal-title { font-size: 18px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 8px; }
+        .close-btn { background: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; border: none; }
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+        
+        /* スワイプ対応スライダーギャラリー */
+        .slider-container { position: relative; width: 100%; height: 260px; background: #000; border-radius: 8px; overflow: hidden; user-select: none; touch-action: pan-y; }
+        .slider-wrapper { display: flex; height: 100%; transition: transform 0.3s ease-out; }
+        .slide { min-width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .slider-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.6); color: #fff; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; z-index: 10; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+        .slider-btn.prev { left: 10px; }
+        .slider-btn.next { right: 10px; }
+        .slider-dots { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; z-index: 10; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.4); cursor: pointer; }
+        .dot.active { background: var(--accent-gold); transform: scale(1.2); }
 
-        .modal-content {
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            width: 100%;
-            max-width: 560px;
-            border-radius: var(--border-radius-lg);
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            animation: modalFadeIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        }
-
-        @keyframes modalFadeIn {
-            from { transform: scale(0.95); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-
-        .modal-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: var(--card-bg);
-        }
-
-        .modal-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--accent-gold);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .close-btn {
-            background: none;
-            color: var(--text-secondary);
-            font-size: 20px;
-            cursor: pointer;
-            border: none;
-            padding: 4px;
-        }
-
-        .close-btn:hover { color: var(--text-primary); }
-
-        .modal-body {
-            padding: 20px;
-            overflow-y: auto;
-            flex: 1;
-        }
-
-        .image-uploader-box {
-            border: 2px dashed var(--input-border);
-            border-radius: var(--border-radius-md);
-            padding: 16px;
-            text-align: center;
-            cursor: pointer;
-            transition: var(--transition);
-            background-color: var(--input-bg);
-            margin-bottom: 10px;
-            position: relative;
-        }
-
-        .image-uploader-box:hover {
-            border-color: var(--accent-amber);
-            background-color: var(--card-bg);
-        }
-
-        .image-uploader-placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            color: var(--text-secondary);
-            font-size: 13px;
-        }
-
-        .image-uploader-placeholder span { font-size: 24px; }
-
-        .form-image-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-            gap: 12px;
-            margin-top: 10px;
-        }
-
-        .form-image-thumb-wrapper {
-            position: relative;
-            aspect-ratio: 1;
-            border: 2px solid var(--border-color);
-            border-radius: var(--border-radius-md);
-            overflow: hidden;
-            background-color: #000;
-            cursor: grab;
-            transition: var(--transition);
-            user-select: none;
-        }
-
-        .form-image-thumb-wrapper:active { cursor: grabbing; }
-
-        .form-image-thumb-wrapper.dragging {
-            opacity: 0.4;
-            border: 2px dashed var(--accent-amber) !important;
-            transform: scale(0.95);
-        }
-
-        .form-image-thumb-wrapper img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            pointer-events: none;
-        }
-
-        .form-image-delete-btn {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background-color: rgba(255, 69, 58, 0.95);
-            color: #fff;
-            border: none;
-            font-size: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-            z-index: 10;
-            transition: var(--transition);
-        }
-
-        .form-image-delete-btn:hover {
-            background-color: #ff3b30;
-            transform: scale(1.15);
-        }
-
-        .form-image-control-bar {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background: rgba(0, 0, 0, 0.75);
-            display: flex;
-            justify-content: space-around;
-            padding: 2px 0;
-        }
-
-        .form-image-btn {
-            color: #fff;
-            font-size: 10px;
-            cursor: pointer;
-            background: none;
-            border: none;
-            padding: 1px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition);
-        }
-
-        .form-image-btn:hover {
-            color: var(--accent-amber);
-            transform: scale(1.2);
-        }
-
-        .form-image-badge-cover {
-            position: absolute;
-            top: 4px;
-            left: 4px;
-            font-size: 8px;
-            background-color: var(--accent-amber);
-            color: #000;
-            font-weight: bold;
-            padding: 1px 4px;
-            border-radius: 3px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-            z-index: 9;
-        }
-
-        .form-image-add-card {
-            aspect-ratio: 1;
-            border: 2px dashed var(--input-border);
-            border-radius: var(--border-radius-md);
-            background-color: var(--input-bg);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: var(--transition);
-            color: var(--text-secondary);
-            user-select: none;
-        }
-
-        .form-image-add-card:hover {
-            border-color: var(--accent-amber);
-            background-color: var(--card-bg);
-            color: var(--text-primary);
-        }
-
-        .detail-gallery-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-
-        .detail-gallery-main {
-            text-align: center;
-            background-color: #000;
-            border-radius: var(--border-radius-md);
-            overflow: hidden;
-            height: 240px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid var(--border-color);
-        }
-
-        .detail-gallery-main img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-        }
-
-        .detail-gallery-thumbs {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            padding: 4px 0;
-            scrollbar-width: thin;
-        }
-
-        .detail-gallery-thumb-wrapper {
-            width: 54px;
-            height: 54px;
-            border: 2px solid transparent;
-            border-radius: 6px;
-            overflow: hidden;
-            cursor: pointer;
-            flex-shrink: 0;
-            background-color: #000;
-            transition: var(--transition);
-        }
-
-        .detail-gallery-thumb-wrapper.active {
-            border-color: var(--accent-amber) !important;
-            box-shadow: 0 0 6px rgba(255,179,0,0.4);
-        }
-
-        .detail-gallery-thumb-wrapper img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .timeline-section {
-            margin-top: 20px;
-            border-top: 1px solid var(--border-color);
-            padding-top: 16px;
-        }
-
-        .timeline-title {
-            font-size: 13px;
-            font-weight: bold;
-            color: var(--accent-gold);
-            margin-bottom: 12px;
-            text-transform: uppercase;
-        }
-
-        .timeline-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .timeline-item {
-            background-color: var(--card-bg);
-            border-left: 3px solid var(--accent-amber);
-            padding: 10px 14px;
-            border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
-            position: relative;
-        }
-
-        .timeline-meta {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-        }
-
-        .timeline-memo { font-size: 13px; line-height: 1.4; }
+        .form-image-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 12px; margin-top: 10px; }
+        .form-image-thumb-wrapper { position: relative; aspect-ratio: 1; border: 2px solid var(--border-color); border-radius: var(--border-radius-md); overflow: hidden; background-color: #000; }
+        .form-image-thumb-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+        .form-image-delete-btn { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background-color: var(--danger-color); color: #fff; border: none; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
         .form-group { margin-bottom: 14px; }
-
-        .form-group label {
-            display: block;
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        input, textarea, select {
-            width: 100%;
-            background-color: var(--input-bg);
-            border: 1px solid var(--input-border);
-            color: var(--text-primary);
-            padding: 10px 12px;
-            border-radius: var(--border-radius-md);
-            font-size: 14px;
-            transition: var(--transition);
-        }
-
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: var(--accent-amber);
-            box-shadow: 0 0 0 2px rgba(255, 179, 0, 0.2);
-        }
-
+        .form-group label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; }
+        input, textarea, select { width: 100%; background-color: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-primary); padding: 10px 12px; border-radius: var(--border-radius-md); font-size: 14px; }
         .row-group { display: flex; gap: 12px; }
         .row-group .form-group { flex: 1; }
+        button { background-color: var(--accent-gold); color: #000; border: none; padding: 12px 20px; font-weight: 600; font-size: 14px; border-radius: var(--border-radius-md); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        button:hover { background-color: var(--accent-gold-hover); }
+        button.secondary { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
+        button.danger { background-color: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
+        
+        .user-profile-badge { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); }
+        .user-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
 
-        .rating-input-container {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .rating-star {
-            font-size: 22px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .rating-star.selected {
-            color: var(--accent-amber);
-            text-shadow: 0 0 4px rgba(255, 179, 0, 0.5);
-        }
-
-        button {
-            background-color: var(--accent-gold);
-            color: #000;
-            border: none;
-            padding: 12px 20px;
-            font-weight: 600;
-            font-size: 14px;
-            border-radius: var(--border-radius-md);
-            cursor: pointer;
-            transition: var(--transition);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        button:hover {
-            background-color: var(--accent-gold-hover);
-            transform: translateY(-1px);
-        }
-
-        button.secondary {
-            background-color: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-        }
-
-        button.secondary:hover { background-color: var(--card-bg); }
-
-        button.danger {
-            background-color: transparent;
-            border: 1px solid var(--danger-color);
-            color: var(--danger-color);
-        }
-
-        button.danger:hover { background-color: rgba(255, 69, 58, 0.1); }
-
-        .floating-add-btn {
-            display: none;
-            position: fixed;
-            bottom: 76px;
-            right: 20px;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background-color: var(--accent-amber);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-            justify-content: center;
-            align-items: center;
-            font-size: 24px;
-            color: #000;
-            z-index: 99;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .floating-add-btn:hover { transform: scale(1.05) rotate(90deg); }
-
-        .bottom-nav {
-            display: none;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 60px;
-            background-color: var(--panel-bg);
-            border-top: 1px solid var(--border-color);
-            z-index: 999;
-            justify-content: space-around;
-            align-items: center;
-        }
-
-        .bottom-nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 10px;
-            cursor: pointer;
-            width: 25%;
-            height: 100%;
-            transition: var(--transition);
-        }
-
+        .bottom-nav { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; background-color: var(--panel-bg); border-top: 1px solid var(--border-color); z-index: 999; justify-content: space-around; align-items: center; }
+        .bottom-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 10px; cursor: pointer; width: 25%; height: 100%; }
         .bottom-nav-item.active { color: var(--accent-amber); }
-        .bottom-nav-icon { font-size: 20px; }
-
-        .plugin-box {
-            border: 1px dashed var(--border-color);
-            border-radius: var(--border-radius-md);
-            padding: 16px;
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 13px;
-            background-color: rgba(255,255,255,0.01);
-            min-height: 80px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .tag-suggestion-chip {
-            font-size: 11px;
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            color: var(--accent-amber);
-            padding: 4px 10px;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: var(--transition);
-            user-select: none;
-            display: inline-block;
-        }
-
-        .tag-suggestion-chip:hover {
-            background-color: var(--card-hover);
-            border-color: var(--accent-gold);
-            transform: translateY(-1px);
-        }
-
-        .log-tag {
-            font-size: 11px;
-            background-color: rgba(255, 179, 0, 0.1);
-            border: 1px solid rgba(255, 179, 0, 0.3);
-            color: var(--accent-amber);
-            padding: 2px 8px;
-            border-radius: 10px;
-        }
 
         @media (max-width: 768px) {
             body { flex-direction: column; }
             .app-container { flex-direction: column; height: calc(100vh - 60px); }
             .sidebar { display: none; }
-            .right-sidebar {
-                display: none;
-                width: 100%;
-                border-left: none;
-                height: 100%;
-                position: absolute;
-                top: 0;
-                left: 0;
-                z-index: 101;
-            }
-            .right-sidebar.mobile-open { display: flex; }
-            .main-content {
-                width: 100%;
-                height: 100%;
-                padding: 16px;
-                padding-bottom: 80px;
-            }
+            .main-content { width: 100%; height: 100%; padding: 16px; padding-bottom: 80px; }
             .bottom-nav { display: flex; }
-            .floating-add-btn { display: flex; }
         }
     </style>
 </head>
@@ -875,7 +137,6 @@
 <body>
 
     <div class="app-container">
-
         <!-- 左カラム：PC用サイドバー -->
         <div class="sidebar">
             <div>
@@ -884,36 +145,29 @@
                     <span class="logo-text">Sella</span>
                 </div>
                 <ul class="nav-menu">
-                    <li class="nav-item active" onclick="switchView('dashboard')">
-                        <span>📊</span> Dashboard
-                    </li>
-                    <li class="nav-item" onclick="switchView('settings')">
-                        <span>⚙&nbsp;</span> Setting
-                    </li>
+                    <li class="nav-item active" onclick="switchView('dashboard')"><span>📊</span> Dashboard</li>
+                    <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">
-                Sella Base v20.0.0
-            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v21.0</div>
         </div>
 
         <!-- 中央カラム：メインコンテンツ -->
         <div class="main-content">
-            
             <div class="header-bar">
                 <h1 class="header-title" id="page-title">ダッシュボード</h1>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <span style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 12px;">
                         計: <span id="log-count" style="color: var(--accent-amber); font-weight: bold;">0</span> 杯
                     </span>
-                    <button onclick="openFormModal('add', null, 'single')" style="padding: 6px 14px; font-size: 13px;">➕ 記録を登録</button>
+                    <button onclick="openFormModal('add')" style="padding: 6px 14px; font-size: 13px;">➕ 記録を登録</button>
                 </div>
             </div>
 
             <!-- 検索バー -->
-            <div class="search-container" id="search-bar-wrapper">
+            <div class="search-container">
                 <span class="search-icon">🔍</span>
-                <input type="text" class="search-input" id="search-input" placeholder="銘柄、酒蔵、都道府県、タグ(#...)、味の感想から検索..." oninput="filterLogs()">
+                <input type="text" class="search-input" id="search-input" placeholder="銘柄、酒蔵、都道府県、タグ(#...)から検索..." oninput="filterLogs()">
             </div>
 
             <!-- ビューパネル1：お酒棚 -->
@@ -921,252 +175,114 @@
                 <div id="log-accordion-container"></div>
             </div>
 
-            <!-- ビューパネル2：設定＆バックアップ -->
+            <!-- ビューパネル2：設定＆アカウント＆AI -->
             <div id="view-settings" class="view-panel">
+                <!-- 🌐 Googleアカウント連携 -->
                 <div class="card">
-                    <div class="card-title">
-                        <span>💾</span> バックアップ & 復元（完全ローカル）
-                    </div>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
-                        データはお使いのブラウザ内部にのみ安全に保存されています。別の端末への引っ越しやバックアップの際にご活用ください。
-                    </p>
-                    <button onclick="exportJSON()" style="background-color: var(--accent-gold); color: #000; margin-bottom: 12px; width: 100%;">
-                        📤 バックアップを書き出す (JSONコピー)
-                    </button>
-                    <textarea id="import-text" rows="3" placeholder="コピーしたJSONデータをここに貼り付けてインポートボタンを押します。" style="margin-bottom: 10px;"></textarea>
-                    <button class="secondary" onclick="importJSON()" style="width: 100%;">
-                        📥 データをインポートして復元
-                    </button>
-                </div>
-
-                <!-- 🌐 Googleアカウント ドライブ自動同期 -->
-                <div class="card">
-                    <div class="card-title">
-                        <span>🌐</span> Google ドライブ クラウド自動同期
-                    </div>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
-                        Googleアカウントでワンクリックログインするだけで、Googleドライブ上にお酒データが自動バックアップされます。
-                    </p>
-                    
-                    <div id="google-auth-status" style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 14px; font-size: 12px;">
-                        🔌 ステータス: <span id="google-login-state-label" style="color: var(--text-secondary); font-weight: bold;">未ログイン（ローカル保存動作中）</span>
+                    <div class="card-title"><span>🌐</span> Google アカウント連携</div>
+                    <div id="google-auth-status" style="margin-bottom: 14px;">
+                        <span style="font-size: 12px; color: var(--text-secondary);">未ログイン（ローカル保存動作中）</span>
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <button id="btn-google-login" onclick="initiateGoogleLogin()" style="background-color: #4285F4; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: bold; padding: 12px; border-radius: 8px;">
-                            <svg width="18" height="18" viewBox="0 0 18 18" style="fill: white; margin-right: 4px;"><path d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7l2.8 2.17c1.64-1.51 2.59-3.74 2.59-6.33z" fill="#4285F4"/><path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.8-2.17c-.78.52-1.78.83-3.16.83-2.43 0-4.49-1.64-5.22-3.85l-2.9 2.25C2.39 15.65 5.4 18 9 18z" fill="#34A853"/><path d="M3.78 10.63c-.19-.57-.3-1.18-.3-1.8s.11-1.23.3-1.8l-2.9-2.25C.31 6.13 0 7.53 0 9s.31 2.87.88 4.22l2.9-2.25z" fill="#FBBC05"/><path d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59C13.47.8 11.43 0 9 0 5.4 0 2.39 2.35.88 5.78l2.9 2.25C4.51 5.22 6.57 3.58 9 3.58z" fill="#EA4335"/></svg>
+                        <button id="btn-google-login" onclick="initiateGoogleLogin()" style="background-color: #4285F4; color: white;">
                             Googleアカウントでログイン
                         </button>
-                        <button id="btn-google-logout" class="danger" onclick="executeGoogleLogout()" style="display: none; font-size: 13px; font-weight: bold; padding: 10px; border-radius: 8px;">
-                            🚪 Google連携をログアウト
+                        <button id="btn-google-logout" class="danger" onclick="executeGoogleLogout()" style="display: none;">
+                            🚪 ログアウト
                         </button>
                     </div>
                 </div>
 
-                <!-- 🤖 Gemini AIの設定 & モデル選択 -->
+                <!-- 🤖 Gemini API Key & モデル取得 -->
                 <div class="card">
-                    <div class="card-title">
-                        <span>🤖</span> Gemini AIソムリエの設定
+                    <div class="card-title"><span>🤖</span> Gemini AI 設定</div>
+                    <div class="form-group">
+                        <label>Gemini API Key</label>
+                        <input type="password" id="setting-gemini-key" placeholder="AI StudioのAPI Keyを入力" onchange="saveGeminiKey(this.value)">
                     </div>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
-                        Gemini AIが銘柄・メモから味わい5角形グラフやソムリエ解説を全自動生成します。使用するモデルを選択してください（設定は自動保存されます）。
-                    </p>
-                    
-                    <div class="form-group" style="margin-bottom: 14px;">
-                        <label style="font-size: 11px; text-transform: uppercase; color: var(--accent-gold); font-weight: bold;">使用するGeminiモデル</label>
-                        <select id="setting-gemini-model" onchange="saveGeminiModel(this.value)" style="font-size: 13px; padding: 10px;">
-                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (推奨・標準)</option>
-                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (高精度・詳細分析)</option>
-                            <option value="gemini-2.0-flash">Gemini 2.0 Flash (高速)</option>
+                    <div class="form-group">
+                        <label style="display:flex; justify-space-between;">
+                            <span>使用するモデル</span>
+                            <a href="javascript:void(0)" onclick="fetchGeminiModels()" style="color:var(--accent-gold); text-decoration:none;">🔄 利用可能なモデル一覧を取得</a>
+                        </label>
+                        <select id="setting-gemini-model" onchange="saveGeminiModel(this.value)">
+                            <option value="gemini-2.5-flash">gemini-2.5-flash (標準)</option>
+                            <option value="gemini-2.5-pro">gemini-2.5-pro (高精度)</option>
+                            <option value="gemini-2.0-flash">gemini-2.0-flash (高速)</option>
                         </select>
                     </div>
                 </div>
 
+                <!-- 💾 データ管理 -->
                 <div class="card">
-                    <div class="card-title">
-                        <span>🔌</span> アプリ設定 & テーマ
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <div class="form-group">
-                            <label>アプリテーマ選択</label>
-                            <select id="theme-selector" onchange="changeTheme(this.value)">
-                                <option value="dark-bar">🥃 ダーク・バー (デフォルト)</option>
-                                <option value="wa-modern">🍶 和モダン (着せ替え)</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group" style="display:flex; align-items:center; gap:10px; margin-top: 4px;">
-                            <input type="checkbox" id="setting-auto-date" onchange="toggleAutoDateSetting(this.checked)" style="width:auto; margin:0; cursor:pointer;">
-                            <label for="setting-auto-date" style="margin:0; text-transform:none; cursor:pointer; font-size: 13px; font-weight: 500; color: var(--text-primary);">📷 写真の撮影・作成日時から「飲んだ日」を自動セット</label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 初期化エリア -->
-                <div class="card" style="border: 1px dashed var(--danger-color); background: rgba(255, 69, 58, 0.02); margin-top: 30px;">
-                    <div class="card-title" style="color: var(--danger-color); border-bottom: 1px solid rgba(255, 69, 58, 0.15);">
-                        <span>🚨</span> 危険ゾーン（データの完全初期化）
-                    </div>
-                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
-                        ブラウザに蓄積されたすべてのデータを完全に初期化します。
-                    </p>
-                    <div style="background: rgba(0, 0, 0, 0.2); padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 69, 58, 0.1); margin-bottom: 12px;">
-                        <label style="font-size: 11px; color: var(--danger-color); font-weight: bold; display: block; margin-bottom: 6px;">💥 セーフガード</label>
-                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">実行するには「<strong>RESET</strong>」と入力してください。</p>
-                        <input type="text" id="reset-confirm-input" placeholder="RESET と入力" oninput="validateResetInput(this.value)" style="border-color: rgba(255, 69, 58, 0.3); font-size: 13px; font-weight: bold; letter-spacing: 2px; text-align: center; padding: 8px; background: rgba(0,0,0,0.3); color: var(--danger-color); width: 100%;">
-                    </div>
-                    <button id="btn-complete-reset" class="danger" onclick="completelyResetData()" style="width: 100%; font-size: 13px; font-weight: bold; background-color: var(--danger-color); color: #fff; cursor: not-allowed; opacity: 0.3;" disabled>
-                        💥 アプリの全データを完全に初期化する
-                    </button>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- 右カラム：PC用アシスタント -->
-        <div class="right-sidebar">
-            <div class="card" style="margin-bottom: 0;">
-                <div class="card-title">
-                    <span>🤖</span> Sella AI アシスタント
-                </div>
-                <div class="plugin-box" style="min-height: 150px;">
-                    <div>お酒の詳細画面で「Gemini AI分析」を実行できます。</div>
+                    <div class="card-title"><span>💾</span> バックアップ & 復元</div>
+                    <button onclick="exportJSON()" style="width: 100%; margin-bottom: 10px;">📤 JSON出力</button>
+                    <textarea id="import-text" rows="2" placeholder="JSONを貼り付け" style="margin-bottom: 10px;"></textarea>
+                    <button class="secondary" onclick="importJSON()" style="width: 100%;">📥 インポート</button>
                 </div>
             </div>
         </div>
 
-        <!-- 下部：スマートフォン用ボトムナビ -->
+        <!-- 下部：スマホナビ -->
         <div class="bottom-nav">
-            <div class="bottom-nav-item active" onclick="switchView('dashboard')">
-                <span class="bottom-nav-icon">📊</span>
-                <span>Dashboard</span>
-            </div>
-            <div class="bottom-nav-item" onclick="openFormModal('add', null, 'single')">
-                <span class="bottom-nav-icon">➕</span>
-                <span>記録する</span>
-            </div>
-            <div class="bottom-nav-item" onclick="toggleMobileSidebar()">
-                <span class="bottom-nav-icon">🤖</span>
-                <span>AI</span>
-            </div>
-            <div class="bottom-nav-item" onclick="switchView('settings')">
-                <span class="bottom-nav-icon">⚙️</span>
-                <span>Setting</span>
-            </div>
+            <div class="bottom-nav-item active" onclick="switchView('dashboard')"><span>📊</span><span>Dashboard</span></div>
+            <div class="bottom-nav-item" onclick="openFormModal('add')"><span>➕</span><span>記録する</span></div>
+            <div class="bottom-nav-item" onclick="switchView('settings')"><span>⚙️</span><span>Setting</span></div>
         </div>
-
-        <div class="floating-add-btn" onclick="openFormModal('add', null, 'single')">➕</div>
-
     </div>
 
-    <!-- モーダル1：記録登録フォーム -->
+    <!-- モーダル1：記録登録＆編集フォーム -->
     <div class="modal-overlay" id="form-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title"><span>✍️</span> 新しく記録する</div>
+                <div class="modal-title"><span>✍️</span> お酒のログ入力</div>
                 <input type="hidden" id="edit-log-id" value="">
                 <button class="close-btn" onclick="closeFormModal()">×</button>
             </div>
             <div class="modal-body">
-                
                 <div class="form-group">
-                    <label>お酒の写真（複数登録可能）</label>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                        <button type="button" onclick="triggerCameraCapture()" style="background-color: var(--accent-amber); color: #000; padding: 12px; font-size: 13px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer;">
-                            📸 その場で撮影
-                        </button>
-                        <button type="button" onclick="document.getElementById('image-file-input').click()" style="background-color: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-primary); padding: 12px; font-size: 13px; font-weight: bold; border-radius: 8px; cursor: pointer;">
-                            📂 フォルダから選ぶ
-                        </button>
+                    <label>写真</label>
+                    <input type="file" id="image-file-input" accept="image/*" multiple style="display:none;" onchange="processMultipleImages(this)">
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="secondary" style="flex:1;" onclick="document.getElementById('image-file-input').click()">📂 画像を選択</button>
+                        <button type="button" id="btn-ai-analyze" style="flex:1; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;" onclick="analyzeImageWithGemini()">✨ AIラベル自動入力</button>
                     </div>
-
-                    <!-- 複数枚選択 input -->
-                    <input type="file" id="image-file-input" accept="image/*" multiple style="display: none;" onchange="processAndCompressMultipleImages(this)">
-                    <!-- カメラ直出し input (capture="environment") -->
-                    <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="display: none;" onchange="processAndCompressCameraImage(this)">
-                    
-                    <div class="image-uploader-box" id="image-uploader-box" onclick="document.getElementById('image-file-input').click()">
-                        <div class="image-uploader-placeholder" id="uploader-placeholder">
-                            <span>📷</span>
-                            <p>または、ここにドラッグ＆ドロップして追加</p>
-                        </div>
-                    </div>
-                    
-                    <div id="form-image-list-container" class="form-image-container" style="margin-top: 8px; margin-bottom: 14px;"></div>
+                    <div id="form-image-list-container" class="form-image-container"></div>
                 </div>
 
                 <div class="row-group">
-                    <div class="form-group">
-                        <label>銘柄・名称</label>
-                        <input type="text" id="drink-name" placeholder="例：獺祭" required>
-                    </div>
+                    <div class="form-group"><label>銘柄・名称</label><input type="text" id="drink-name" required></div>
                     <div class="form-group" style="flex: 0.6;">
                         <label>種類</label>
-                        <select id="drink-type" onchange="adaptFormFields()">
+                        <select id="drink-type">
                             <option value="sake">🍶 日本酒</option>
                             <option value="wine">🍷 ワイン</option>
                             <option value="whisky">🥃 ウイスキー</option>
                             <option value="beer">🍺 ビール</option>
-                            <option value="other">🍹 その他</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="row-group">
-                    <div class="form-group">
-                        <label id="label-subtype">特定名称 / 詳細</label>
-                        <input type="text" id="drink-subtype" placeholder="例：純米大吟醸">
-                    </div>
-                    <div class="form-group">
-                        <label>酒蔵 / メーカー</label>
-                        <input type="text" id="drink-brewery" placeholder="例：旭酒造">
-                    </div>
+                    <div class="form-group"><label>特定名称 / 詳細</label><input type="text" id="drink-subtype" placeholder="例：純米大吟醸"></div>
+                    <div class="form-group"><label>酒蔵 / メーカー</label><input type="text" id="drink-brewery" placeholder="例：旭酒造"></div>
                 </div>
 
                 <div class="row-group">
-                    <div class="form-group">
-                        <label>産地 / 都道府県</label>
-                        <input type="text" id="drink-region" placeholder="例：山口県">
-                    </div>
-                    <div class="form-group">
-                        <label>評価</label>
-                        <div class="rating-input-container">
-                            <input type="hidden" id="drink-rating" value="4">
-                            <span class="rating-star selected" onclick="setRating(1)">★</span>
-                            <span class="rating-star selected" onclick="setRating(2)">★</span>
-                            <span class="rating-star selected" onclick="setRating(3)">★</span>
-                            <span class="rating-star selected" onclick="setRating(4)">★</span>
-                            <span class="rating-star" onclick="setRating(5)">★</span>
-                            <span id="rating-value-label" style="font-size: 14px; font-weight: bold; color: var(--accent-amber); margin-left: 8px;">4.0</span>
-                        </div>
-                    </div>
+                    <div class="form-group"><label>産地 / 都道府県</label><input type="text" id="drink-region" placeholder="例：山口県"></div>
+                    <div class="form-group"><label>評価 (1-5)</label><input type="number" id="drink-rating" min="1" max="5" step="0.1" value="4.0"></div>
                 </div>
 
-                <div class="form-group">
-                    <label>飲んだ日（日付）</label>
-                    <input type="date" id="drink-date" required>
-                </div>
+                <div class="form-group"><label>飲んだ日</label><input type="date" id="drink-date"></div>
+                <div class="form-group"><label>メモ / 感想</label><textarea id="drink-memo" rows="3"></textarea></div>
 
-                <div class="form-group">
-                    <label>独自タグ（スペース区切り）</label>
-                    <input type="text" id="drink-tags" placeholder="例：#フルーティー #冷酒推奨 #リピート確定" oninput="showTagSuggestions()" onfocus="showTagSuggestions()">
-                    <div id="tag-suggestions-container" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
-                </div>
-
-                <div class="form-group">
-                    <label>感想・メモ</label>
-                    <textarea id="drink-memo" rows="3" placeholder="味の感想やおつまみの相性など自由にメモしてください。"></textarea>
-                </div>
-
-                <button onclick="saveLog()" style="width: 100%; margin-top: 8px;">
-                    <span>💾</span> ログを保存する
-                </button>
+                <button onclick="saveLog()" style="width: 100%;">💾 ログを保存</button>
             </div>
         </div>
     </div>
 
-    <!-- モーダル2：お酒の個別詳細画面 -->
+    <!-- モーダル2：お酒の詳細画面（スワイプギャラリー＆基本情報編集対応） -->
     <div class="modal-overlay" id="detail-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1174,636 +290,455 @@
                 <button class="close-btn" onclick="closeDetailModal()">×</button>
             </div>
             <div class="modal-body">
-                
-                <div id="detail-gallery-wrapper" style="display: none;"></div>
+                <!-- スワイプギャラリー -->
+                <div id="detail-gallery-wrapper" style="margin-bottom: 16px; display:none;">
+                    <div class="slider-container" id="slider-container">
+                        <button class="slider-btn prev" onclick="moveSlide(-1)">❮</button>
+                        <div class="slider-wrapper" id="slider-wrapper"></div>
+                        <button class="slider-btn next" onclick="moveSlide(1)">❯</button>
+                        <div class="slider-dots" id="slider-dots"></div>
+                    </div>
+                </div>
 
-                <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
                     <div>
-                        <div id="detail-type-badge" style="display:inline-block; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:4px; background:rgba(212,175,55,0.15); color:var(--accent-gold); text-transform:uppercase; margin-bottom:8px;"></div>
-                        <h2 id="detail-name" style="font-size: 22px; font-weight: bold; color:var(--accent-gold); margin-bottom: 4px;"></h2>
+                        <h2 id="detail-name" style="font-size: 22px; color:var(--accent-gold);"></h2>
                         <p id="detail-brewery-info" style="font-size: 13px; color: var(--text-secondary);"></p>
                     </div>
-                    <button class="secondary" onclick="triggerEditBrandSpec()" style="padding: 6px 12px; font-size: 11px; white-space: nowrap; margin-top: 4px;">
-                        📝 基本情報を編集
-                    </button>
+                    <button class="secondary" onclick="triggerEditBrandSpec()" style="padding: 6px 12px; font-size: 11px;">📝 基本情報を編集</button>
                 </div>
 
                 <div class="card" style="padding:14px; margin-bottom: 16px;">
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:13px;">
-                        <div><span style="color:var(--text-secondary);">特定名称:</span> <strong id="detail-spec-subtype">-</strong></div>
-                        <div><span style="color:var(--text-secondary);">平均評価:</span> <strong id="detail-spec-rating" style="color:var(--accent-amber);">-</strong></div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; font-size:13px;">
+                        <div>特定名称: <strong id="detail-spec-subtype">-</strong></div>
+                        <div>評価: <strong id="detail-spec-rating" style="color:var(--accent-amber);">-</strong></div>
                     </div>
                 </div>
 
-                <div id="detail-tags-container" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;"></div>
-
-                <!-- Gemini AIソムリエの分析結果 -->
-                <div id="detail-gemini-section" class="card" style="padding:14px; margin-bottom: 16px; background: rgba(212,175,55,0.03); border: 1px dashed var(--accent-gold); display: none;">
-                    <div style="font-weight: bold; color: var(--accent-gold); display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 14px;">
-                        <span>🌟</span> Gemini AI ソムリエ分析
-                    </div>
-                    <div id="detail-gemini-chart-container" style="display: flex; flex-direction: column; align-items: center; margin-bottom: 14px;">
-                        <canvas id="detail-gemini-radar" width="160" height="160" style="width:160px; height:160px;"></canvas>
-                    </div>
-                    <p id="detail-gemini-story" style="font-size: 12.5px; line-height: 1.5; color: var(--text-primary); margin-bottom: 12px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);"></p>
-                    <div style="font-size: 12px; color: var(--accent-amber); font-weight: bold; line-height: 1.4; background: rgba(212,175,55,0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(212,175,55,0.15);">
-                        🍶 おすすめおつまみ: <span id="detail-gemini-pairing" style="color: var(--text-primary); font-weight: normal;"></span>
-                    </div>
+                <!-- タイムライン -->
+                <div class="card" style="padding:14px;">
+                    <div style="font-weight:bold; color:var(--accent-gold); margin-bottom:10px;">🔁 飲酒履歴</div>
+                    <div id="detail-timeline-list" style="display:flex; flex-direction:column; gap:8px;"></div>
                 </div>
 
-                <!-- リピート履歴 -->
-                <div class="timeline-section">
-                    <div class="timeline-title" id="detail-history-count-label">🔁 タイムライン（飲酒履歴: 1回）</div>
-                    <div class="timeline-list" id="detail-timeline-list"></div>
-                </div>
+                <button class="danger" onclick="deleteEntireBrand()" style="width:100%; margin-top:16px;">🚨 全履歴削除</button>
+            </div>
+        </div>
+    </div>
 
-                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 24px; border-top:1px solid var(--border-color); padding-top:16px;">
-                    <button id="btn-gemini-analyze" style="width: 100%; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color: #000; font-weight: bold; font-size: 13px;" onclick="triggerGeminiAnalysis()">
-                        🌟 Gemini AI に味わいを分析してもらう
-                    </button>
-                    <div style="display: flex; gap: 10px; width: 100%;">
-                        <button id="btn-drink-again" style="flex: 1;" onclick="triggerRepeatDrink()">
-                            🔄 このお酒をもう一度飲む
-                        </button>
-                        <button class="danger" onclick="deleteEntireBrand()" style="padding:10px 16px;">
-                            🚨 全履歴削除
-                        </button>
-                    </div>
-                </div>
+    <!-- モーダル3：基本情報一括編集モーダル -->
+    <div class="modal-overlay" id="edit-spec-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">📝 基本情報の一括編集</div>
+                <button class="close-btn" onclick="closeEditSpecModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group"><label>銘柄・名称</label><input type="text" id="edit-spec-name"></div>
+                <div class="form-group"><label>酒蔵 / メーカー</label><input type="text" id="edit-spec-brewery"></div>
+                <div class="form-group"><label>特定名称 / 詳細</label><input type="text" id="edit-spec-subtype"></div>
+                <div class="form-group"><label>産地 / 都道府県</label><input type="text" id="edit-spec-region"></div>
+                <button onclick="saveBrandSpec()" style="width: 100%;">💾 一括更新して保存</button>
             </div>
         </div>
     </div>
 
     <script>
-        // 設定用定数（一般ユーザーが直感的にログインできるように事前配置）
         const GOOGLE_CLIENT_ID = "649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com";
-
-        const SellaApp = {
-            state: {
-                logs: [],
-                currentTheme: 'dark-bar',
-                selectedBrandName: '',
-                selectedBreweryName: '',
-                autoDateEnabled: true,
-                currentGallery: [],
-                wasDetailOpen: false
-            }
-        };
-
         let tempUploadedImages = [];
-        let tempCoverImageIndex = 0;
-        let tokenClient = null;
+        let currentSlideIndex = 0;
+        let slideImages = [];
+        let currentBrandKey = { name: '', brewery: '' };
 
         window.onload = function() {
-            migrateLegacyData();
             loadSettings();
             renderLogs();
+            initSwipeEvents();
         };
 
-        function loadSettings() {
-            // テーマ復元
-            const savedTheme = localStorage.getItem('sella_theme') || 'dark-bar';
-            changeTheme(savedTheme);
-            document.getElementById('theme-selector').value = savedTheme;
-
-            // 自動日付選択
-            const savedAutoDate = localStorage.getItem('sella_auto_date');
-            if (savedAutoDate !== null) {
-                SellaApp.state.autoDateEnabled = savedAutoDate === 'true';
-                document.getElementById('setting-auto-date').checked = SellaApp.state.autoDateEnabled;
-            } else {
-                document.getElementById('setting-auto-date').checked = true;
-            }
-
-            // Gemini モデル復元
-            const savedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
-            document.getElementById('setting-gemini-model').value = savedModel;
-
-            // Google ログイン状態復元
-            if (localStorage.getItem('sella_google_logged_in') === 'true') {
-                document.getElementById('google-login-state-label').innerText = "ログイン中 (Google Drive自動同期中)";
-                document.getElementById('google-login-state-label').style.color = "var(--accent-gold)";
-                document.getElementById('btn-google-login').style.display = 'none';
-                document.getElementById('btn-google-logout').style.display = 'block';
-            }
-        }
-
-        function saveGeminiModel(modelName) {
-            localStorage.setItem('sella_gemini_model', modelName);
-            console.log("Saved Gemini Model:", modelName);
-        }
-
-        // カメラ起動の明示的トリガー
-        function triggerCameraCapture() {
-            const camInput = document.getElementById('camera-file-input');
-            if (camInput) {
-                camInput.click();
-            }
-        }
-
-        function autoSetDateFromFile(file) {
-            if (SellaApp.state.autoDateEnabled && file.lastModified) {
-                const d = new Date(file.lastModified);
-                const yyyy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                document.getElementById('drink-date').value = `${yyyy}-${mm}-${dd}`;
-            }
-        }
-
-        function toggleAutoDateSetting(checked) {
-            SellaApp.state.autoDateEnabled = checked;
-            localStorage.setItem('sella_auto_date', checked);
-        }
-
-        function processAndCompressCameraImage(input) {
-            const file = input.files[0];
-            if (!file) return;
-            autoSetDateFromFile(file);
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                compressImage(e.target.result, function(base64Str) {
-                    tempUploadedImages.push(base64Str);
-                    renderFormImageThumbs();
-                    input.value = '';
-                });
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function processAndCompressMultipleImages(input) {
-            const files = Array.from(input.files);
-            if (files.length === 0) return;
-            if (files[0]) autoSetDateFromFile(files[0]);
-
-            let processedCount = 0;
-            files.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    compressImage(e.target.result, function(base64Str) {
-                        tempUploadedImages.push(base64Str);
-                        processedCount++;
-                        if (processedCount === files.length) {
-                            renderFormImageThumbs();
-                            input.value = '';
-                        }
-                    });
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-
-        function compressImage(src, callback) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                const max_width = 1000;
-                let width = img.width;
-                let height = img.height;
-
-                if (width > max_width) {
-                    height = Math.round((height * max_width) / width);
-                    width = max_width;
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
-                callback(canvas.toDataURL('image/jpeg', 0.75));
-            };
-            img.src = src;
-        }
-
-        function renderFormImageThumbs() {
-            const container = document.getElementById('form-image-list-container');
-            container.innerHTML = '';
-
-            const uploaderBox = document.getElementById('image-uploader-box');
-            if (uploaderBox) uploaderBox.style.display = tempUploadedImages.length === 0 ? 'block' : 'none';
-
-            if (tempCoverImageIndex >= tempUploadedImages.length) tempCoverImageIndex = 0;
-
-            tempUploadedImages.forEach((imgBase64, index) => {
-                const isCover = index === tempCoverImageIndex;
-                const wrapper = document.createElement('div');
-                wrapper.className = 'form-image-thumb-wrapper';
-                if (isCover) wrapper.style.borderColor = 'var(--accent-amber)';
-
-                wrapper.innerHTML = `
-                    <img src="${imgBase64}">
-                    ${isCover ? '<div class="form-image-badge-cover">代表</div>' : ''}
-                    <div class="form-image-delete-btn" onclick="removeImage(${index}, event)">×</div>
-                    <div class="form-image-control-bar">
-                        <button class="form-image-btn" onclick="setCoverImage(${index}, event)">👑</button>
-                        <button class="form-image-btn" onclick="moveImage(${index}, -1, event)">◀</button>
-                        <button class="form-image-btn" onclick="moveImage(${index}, 1, event)">▶</button>
-                    </div>
-                `;
-                container.appendChild(wrapper);
-            });
-
-            if (tempUploadedImages.length > 0) {
-                const addCameraCard = document.createElement('div');
-                addCameraCard.className = 'form-image-thumb-wrapper form-image-add-card';
-                addCameraCard.onclick = () => triggerCameraCapture();
-                addCameraCard.innerHTML = `<span style="font-size:18px;">📸</span><span style="font-size:8px; font-weight:bold; color:var(--accent-amber);">撮影追加</span>`;
-                container.appendChild(addCameraCard);
-
-                const addLibraryCard = document.createElement('div');
-                addLibraryCard.className = 'form-image-thumb-wrapper form-image-add-card';
-                addLibraryCard.onclick = () => document.getElementById('image-file-input').click();
-                addLibraryCard.innerHTML = `<span style="font-size:18px;">📂</span><span style="font-size:8px; font-weight:bold;">フォルダ</span>`;
-                container.appendChild(addLibraryCard);
-            }
-        }
-
-        function setCoverImage(index, e) {
-            if (e) e.stopPropagation();
-            tempCoverImageIndex = index;
-            renderFormImageThumbs();
-        }
-
-        function moveImage(index, direction, e) {
-            if (e) e.stopPropagation();
-            const targetIndex = index + direction;
-            if (targetIndex < 0 || targetIndex >= tempUploadedImages.length) return;
-            const temp = tempUploadedImages[index];
-            tempUploadedImages[index] = tempUploadedImages[targetIndex];
-            tempUploadedImages[targetIndex] = temp;
-            renderFormImageThumbs();
-        }
-
-        function removeImage(index, e) {
-            if (e) e.stopPropagation();
-            if (!confirm("この写真を削除しますか？")) return;
-            tempUploadedImages.splice(index, 1);
-            if (tempCoverImageIndex >= tempUploadedImages.length) tempCoverImageIndex = 0;
-            renderFormImageThumbs();
-        }
-
         function getLogs() {
-            const data = localStorage.getItem('sella_logs');
-            return data ? JSON.parse(data) : [];
+            return JSON.parse(localStorage.getItem('sella_logs') || '[]');
         }
 
         function saveLogsToStorage(logs) {
             localStorage.setItem('sella_logs', JSON.stringify(logs));
-            SellaApp.state.logs = logs;
-            if (localStorage.getItem('sella_google_logged_in') === 'true') {
-                syncWithGoogleDrive();
-            }
         }
 
-        function migrateLegacyData() {
-            const logs = getLogs();
-            let modified = false;
-            logs.forEach((log, idx) => {
-                if (!log.id) { log.id = 'log_' + Date.now() + '_' + idx; modified = true; }
-                if (log.image && (!log.images || log.images.length === 0)) { log.images = [log.image]; modified = true; }
-                if (!log.images) { log.images = []; modified = true; }
-            });
-            if (modified) localStorage.setItem('sella_logs', JSON.stringify(logs));
+        function loadSettings() {
+            const key = localStorage.getItem('sella_gemini_key') || '';
+            const model = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
+            document.getElementById('setting-gemini-key').value = key;
+            document.getElementById('setting-gemini-model').value = model;
+
+            const userInfo = JSON.parse(localStorage.getItem('sella_google_user') || 'null');
+            if (userInfo) displayGoogleUser(userInfo);
         }
 
-        function saveLog() {
-            const editId = document.getElementById('edit-log-id').value;
-            const name = document.getElementById('drink-name').value.trim();
-            const type = document.getElementById('drink-type').value;
-            const subtype = document.getElementById('drink-subtype').value.trim();
-            const brewery = document.getElementById('drink-brewery').value.trim();
-            const region = document.getElementById('drink-region').value.trim();
-            const rating = document.getElementById('drink-rating').value;
-            const tagsInput = document.getElementById('drink-tags').value.trim();
-            const memo = document.getElementById('drink-memo').value.trim();
-            const drinkDateVal = document.getElementById('drink-date').value;
-            const drinkDate = drinkDateVal ? new Date(drinkDateVal).toLocaleDateString() : new Date().toLocaleDateString();
+        function saveGeminiKey(val) { localStorage.setItem('sella_gemini_key', val); }
+        function saveGeminiModel(val) { localStorage.setItem('sella_gemini_model', val); }
 
-            if (!name) { alert("銘柄・名称を入力してください"); return; }
-            const tags = tagsInput ? tagsInput.split(/\s+/).filter(t => t.startsWith('#')) : [];
-            const logs = getLogs();
-
-            if (editId) {
-                const targetIdx = logs.findIndex(l => l.id === editId);
-                if (targetIdx !== -1) {
-                    logs[targetIdx] = {
-                        ...logs[targetIdx],
-                        name, type, subtype: subtype || '通常', brewery: brewery || '不明な蔵元',
-                        region: region || '不明な地域', rating: parseFloat(rating).toFixed(1),
-                        tags, memo, date: drinkDate, images: [...tempUploadedImages], coverImageIndex: tempCoverImageIndex
-                    };
+        /* Google OAuth & アカウント情報表示 */
+        function initiateGoogleLogin() {
+            if (!window.google) return alert("Google認証ライブラリ読み込み中...");
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+                callback: (res) => {
+                    if (res.access_token) {
+                        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                            headers: { Authorization: `Bearer ${res.access_token}` }
+                        })
+                        .then(r => r.json())
+                        .then(user => {
+                            localStorage.setItem('sella_google_user', JSON.stringify(user));
+                            displayGoogleUser(user);
+                        });
+                    }
                 }
-            } else {
-                logs.unshift({
-                    id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-                    name, type, subtype: subtype || '通常', brewery: brewery || '不明な蔵元',
-                    region: region || '不明な地域', rating: parseFloat(rating).toFixed(1),
-                    tags, memo, images: [...tempUploadedImages], coverImageIndex: tempCoverImageIndex, date: drinkDate
-                });
-            }
-
-            saveLogsToStorage(logs);
-            closeFormModal();
-            renderLogs();
+            });
+            client.requestAccessToken();
         }
 
+        function displayGoogleUser(user) {
+            const statusDiv = document.getElementById('google-auth-status');
+            statusDiv.innerHTML = `
+                <div class="user-profile-badge">
+                    <img src="${user.picture}" class="user-avatar">
+                    <div>
+                        <div style="font-weight:bold; font-size:13px;">${user.name}</div>
+                        <div style="font-size:11px; color:var(--text-secondary);">${user.email}</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('btn-google-login').style.display = 'none';
+            document.getElementById('btn-google-logout').style.display = 'block';
+        }
+
+        function executeGoogleLogout() {
+            localStorage.removeItem('sella_google_user');
+            document.getElementById('google-auth-status').innerHTML = '<span style="font-size: 12px; color: var(--text-secondary);">未ログイン（ローカル保存動作中）</span>';
+            document.getElementById('btn-google-login').style.display = 'block';
+            document.getElementById('btn-google-logout').style.display = 'none';
+        }
+
+        /* Gemini 利用可能モデルの動的取得 */
+        async function fetchGeminiModels() {
+            const key = localStorage.getItem('sella_gemini_key');
+            if (!key) return alert("先にGemini API Keyを入力してください。");
+
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+                const data = await res.json();
+                if (data.models) {
+                    const select = document.getElementById('setting-gemini-model');
+                    select.innerHTML = '';
+                    data.models
+                        .filter(m => m.name.includes('gemini'))
+                        .forEach(m => {
+                            const modelId = m.name.replace('models/', '');
+                            const opt = document.createElement('option');
+                            opt.value = modelId;
+                            opt.innerText = `${modelId} (${m.displayName || ''})`;
+                            select.appendChild(opt);
+                        });
+                    alert("モデル一覧を取得・更新しました！");
+                }
+            } catch (e) {
+                alert("モデル一覧の取得に失敗しました。API Keyを確認してください。");
+            }
+        }
+
+        /* AI画像解析＆自動入力 */
+        async function analyzeImageWithGemini() {
+            const key = localStorage.getItem('sella_gemini_key');
+            if (!key) return alert("設定画面でGemini API Keyを登録してください。");
+            if (tempUploadedImages.length === 0) return alert("解析する画像を1枚以上選択してください。");
+
+            const model = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
+            const base64Data = tempUploadedImages[0].split(',')[1];
+
+            const btn = document.getElementById('btn-ai-analyze');
+            btn.innerText = "⌛ AI解析中...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: "このお酒のラベル画像を解析し、以下の項目をJSON形式で返してください。不明な項目は空文字にしてください。キー名: name(銘柄名), brewery(酒蔵・メーカー名), subtype(特定名称・種類), region(都道府県・産地), memo(味わいや特徴の簡潔な解説)" },
+                                { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+                            ]
+                        }]
+                    })
+                });
+                const data = await res.json();
+                const text = data.candidates[0].content.parts[0].text;
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                
+                if (jsonMatch) {
+                    const result = JSON.parse(jsonMatch[0]);
+                    if (result.name) document.getElementById('drink-name').value = result.name;
+                    if (result.brewery) document.getElementById('drink-brewery').value = result.brewery;
+                    if (result.subtype) document.getElementById('drink-subtype').value = result.subtype;
+                    if (result.region) document.getElementById('drink-region').value = result.region;
+                    if (result.memo) document.getElementById('drink-memo').value = result.memo;
+                    alert("✨ AIによる自動入力が完了しました！");
+                }
+            } catch (e) {
+                alert("AI解析に失敗しました。画像の鮮明さやAPI Keyを確認してください。");
+            } finally {
+                btn.innerText = "✨ AIラベル自動入力";
+                btn.disabled = false;
+            }
+        }
+
+        /* ログ管理 & 表示 */
         function renderLogs() {
             const logs = getLogs();
             document.getElementById('log-count').innerText = logs.length;
             const container = document.getElementById('log-accordion-container');
             container.innerHTML = '';
 
-            if (logs.length === 0) {
-                container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 50px 10px;"><span style="font-size: 42px;">🍶</span><p style="margin-top: 14px;">お酒のログが登録されていません。</p></div>`;
-                return;
-            }
-
-            const breweryGroups = {};
+            const groups = {};
             logs.forEach(log => {
-                const bName = log.brewery || '不明な蔵元';
-                if (!breweryGroups[bName]) {
-                    breweryGroups[bName] = { name: bName, region: log.region || '', brands: {}, totalLogsCount: 0 };
-                }
-                if (!breweryGroups[bName].brands[log.name]) breweryGroups[bName].brands[log.name] = [];
-                breweryGroups[bName].brands[log.name].push(log);
-                breweryGroups[bName].totalLogsCount++;
+                const b = log.brewery || '不明な蔵元';
+                if (!groups[b]) groups[b] = { name: b, brands: {} };
+                if (!groups[b].brands[log.name]) groups[b].brands[log.name] = [];
+                groups[b].brands[log.name].push(log);
             });
 
-            Object.values(breweryGroups).forEach((brewery, bIndex) => {
+            Object.values(groups).forEach(brewery => {
                 const acc = document.createElement('div');
                 acc.className = 'brewery-accordion open';
-                acc.setAttribute('data-brewery-name', brewery.name.toLowerCase());
-
-                const header = document.createElement('div');
-                header.className = 'brewery-header';
-                header.onclick = () => acc.classList.toggle('open');
-                header.innerHTML = `
-                    <div class="brewery-title-container">
-                        <span class="brewery-name">🏢 ${brewery.name}</span>
-                        <span class="brewery-count-badge">${Object.keys(brewery.brands).length}種類 / 計${brewery.totalLogsCount}杯</span>
-                    </div>
-                    <span class="brewery-toggle-icon">▼</span>
-                `;
-
-                const content = document.createElement('div');
-                content.className = 'brewery-content';
+                let contentHTML = '';
 
                 Object.entries(brewery.brands).forEach(([brandName, brandLogs]) => {
-                    const latestLog = brandLogs[0];
-                    const avgRating = (brandLogs.reduce((sum, l) => sum + parseFloat(l.rating), 0) / brandLogs.length).toFixed(1);
+                    const latest = brandLogs[0];
+                    const img = (brandLogs.find(l => l.images && l.images.length > 0) || {}).images?.[0];
+                    const imgTag = img ? `<img src="${img}" class="brand-image-preview">` : `<div class="brand-image-preview">🍶</div>`;
 
-                    const brandCard = document.createElement('div');
-                    brandCard.className = 'brand-card';
-                    brandCard.onclick = () => showLogDetail(latestLog);
-
-                    let imageHTML = `<div class="brand-image-preview">🍶</div>`;
-                    const logWithImg = brandLogs.find(l => l.images && l.images.length > 0);
-                    if (logWithImg) {
-                        const coverImg = logWithImg.images[logWithImg.coverImageIndex || 0] || logWithImg.images[0];
-                        if (coverImg) imageHTML = `<img src="${coverImg}" class="brand-image-preview">`;
-                    }
-
-                    brandCard.innerHTML = `
-                        ${imageHTML}
-                        <div class="brand-info">
-                            <div class="brand-name">${brandName}</div>
-                            <div class="brand-meta">${latestLog.subtype} | ${latestLog.date}</div>
-                        </div>
-                        <div class="brand-stats">
-                            <span class="brand-rating">★ ${avgRating}</span>
+                    contentHTML += `
+                        <div class="brand-card" onclick="showLogDetail('${latest.name}', '${latest.brewery}')">
+                            ${imgTag}
+                            <div class="brand-info">
+                                <div class="brand-name">${brandName}</div>
+                                <div class="brand-meta">${latest.subtype || '通常'} | ${latest.date}</div>
+                            </div>
+                            <div style="color:var(--accent-amber); font-weight:bold;">★ ${latest.rating}</div>
                         </div>
                     `;
-                    content.appendChild(brandCard);
                 });
 
-                acc.appendChild(header);
-                acc.appendChild(content);
+                acc.innerHTML = `
+                    <div class="brewery-header" onclick="this.parentElement.classList.toggle('open')">
+                        <div class="brewery-title-container"><span class="brewery-name">🏢 ${brewery.name}</span></div>
+                        <span class="brewery-toggle-icon">▼</span>
+                    </div>
+                    <div class="brewery-content">${contentHTML}</div>
+                `;
                 container.appendChild(acc);
             });
         }
 
-        function filterLogs() {
-            const query = document.getElementById('search-input').value.trim().toLowerCase();
-            const accordions = document.querySelectorAll('.brewery-accordion');
-            accordions.forEach(acc => {
-                const bName = acc.getAttribute('data-brewery-name');
-                const cards = acc.querySelectorAll('.brand-card');
-                let visible = false;
-                cards.forEach(card => {
-                    const name = card.querySelector('.brand-name').innerText.toLowerCase();
-                    if (!query || bName.includes(query) || name.includes(query)) {
-                        card.style.display = 'flex';
-                        visible = true;
-                    } else {
-                        card.style.display = 'none';
-                    }
-                });
-                acc.style.display = visible ? 'block' : 'none';
-            });
-        }
+        /* スワイプギャラリー処理 */
+        function showLogDetail(brandName, breweryName) {
+            currentBrandKey = { name: brandName, brewery: breweryName };
+            const logs = getLogs().filter(l => l.name === brandName && l.brewery === breweryName);
+            const latest = logs[0];
 
-        function showLogDetail(brandSampleLog) {
-            const logs = getLogs();
-            SellaApp.state.selectedBrandName = brandSampleLog.name;
-            SellaApp.state.selectedBreweryName = brandSampleLog.brewery;
+            document.getElementById('detail-name').innerText = latest.name;
+            document.getElementById('detail-brewery-info').innerText = `🏢 ${latest.brewery} (${latest.region || '産地不明'})`;
+            document.getElementById('detail-spec-subtype').innerText = latest.subtype || '通常';
+            document.getElementById('detail-spec-rating').innerText = `★ ${latest.rating}`;
 
-            const brandLogs = logs.filter(l => l.name === brandSampleLog.name && l.brewery === brandSampleLog.brewery);
-            const latestLog = brandLogs[0];
-
-            document.getElementById('detail-title-header').innerText = `${latestLog.brewery} の詳細`;
-            document.getElementById('detail-name').innerText = latestLog.name;
-            document.getElementById('detail-brewery-info').innerText = `🏢 ${latestLog.brewery} (${latestLog.region})`;
-            document.getElementById('detail-spec-subtype').innerText = latestLog.subtype || '通常';
-
+            // スライダー画像の初期化
+            slideImages = logs.flatMap(l => l.images || []);
+            const wrapper = document.getElementById('slider-wrapper');
+            const dots = document.getElementById('slider-dots');
             const galleryWrapper = document.getElementById('detail-gallery-wrapper');
-            const galleryImages = brandLogs.flatMap(l => l.images || []);
-            if (galleryImages.length > 0) {
+
+            if (slideImages.length > 0) {
                 galleryWrapper.style.display = 'block';
-                galleryWrapper.innerHTML = `
-                    <div class="detail-gallery-container">
-                        <div class="detail-gallery-main"><img id="detail-gallery-main-img" src="${galleryImages[0]}"></div>
-                    </div>
-                `;
+                wrapper.innerHTML = slideImages.map(img => `<div class="slide"><img src="${img}"></div>`).join('');
+                dots.innerHTML = slideImages.map((_, i) => `<div class="dot ${i===0?'active':''}" onclick="goToSlide(${i})"></div>`).join('');
+                currentSlideIndex = 0;
+                updateSliderPosition();
             } else {
                 galleryWrapper.style.display = 'none';
             }
 
-            const timelineContainer = document.getElementById('detail-timeline-list');
-            timelineContainer.innerHTML = '';
-            brandLogs.forEach(log => {
-                const item = document.createElement('div');
-                item.className = 'timeline-item';
-                item.innerHTML = `
-                    <div class="timeline-meta"><span>📅 ${log.date}</span><span style="color:var(--accent-amber);">★ ${log.rating}</span></div>
-                    <p class="timeline-memo">${log.memo || 'メモなし'}</p>
-                `;
-                timelineContainer.appendChild(item);
-            });
+            // タイムライン
+            const tl = document.getElementById('detail-timeline-list');
+            tl.innerHTML = logs.map(l => `
+                <div style="background:var(--card-bg); padding:8px 12px; border-left:3px solid var(--accent-amber); border-radius:4px; font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; color:var(--text-secondary); margin-bottom:4px;">
+                        <span>📅 ${l.date}</span><span style="color:var(--accent-amber);">★ ${l.rating}</span>
+                    </div>
+                    <div>${l.memo || 'メモなし'}</div>
+                </div>
+            `).join('');
 
             document.getElementById('detail-modal').classList.add('active');
         }
 
-        function openFormModal(mode = 'add', logId = null) {
-            document.getElementById('edit-log-id').value = logId || '';
-            document.getElementById('drink-name').value = '';
-            document.getElementById('drink-subtype').value = '';
-            document.getElementById('drink-brewery').value = '';
-            document.getElementById('drink-region').value = '';
-            document.getElementById('drink-tags').value = '';
-            document.getElementById('drink-memo').value = '';
-            tempUploadedImages = [];
-            tempCoverImageIndex = 0;
-            renderFormImageThumbs();
+        function updateSliderPosition() {
+            const wrapper = document.getElementById('slider-wrapper');
+            wrapper.style.transform = `translateX(-${currentSlideIndex * 100}%)`;
+            document.querySelectorAll('.dot').forEach((dot, idx) => {
+                dot.classList.toggle('active', idx === currentSlideIndex);
+            });
+        }
 
-            if (mode === 'edit' && logId) {
-                const log = getLogs().find(l => l.id === logId);
-                if (log) {
-                    document.getElementById('drink-name').value = log.name;
-                    document.getElementById('drink-type').value = log.type;
-                    document.getElementById('drink-subtype').value = log.subtype || '';
-                    document.getElementById('drink-brewery').value = log.brewery || '';
-                    document.getElementById('drink-region').value = log.region || '';
-                    document.getElementById('drink-memo').value = log.memo || '';
-                    if (log.images) tempUploadedImages = [...log.images];
-                    renderFormImageThumbs();
+        function moveSlide(dir) {
+            currentSlideIndex = (currentSlideIndex + dir + slideImages.length) % slideImages.length;
+            updateSliderPosition();
+        }
+
+        function goToSlide(idx) {
+            currentSlideIndex = idx;
+            updateSliderPosition();
+        }
+
+        function initSwipeEvents() {
+            const container = document.getElementById('slider-container');
+            let startX = 0;
+            container.addEventListener('touchstart', e => startX = e.touches[0].clientX, { passive: true });
+            container.addEventListener('touchend', e => {
+                const diffX = startX - e.changedTouches[0].clientX;
+                if (Math.abs(diffX) > 40) moveSlide(diffX > 0 ? 1 : -1);
+            }, { passive: true });
+        }
+
+        /* 基本情報の一括編集機能 */
+        function triggerEditBrandSpec() {
+            const logs = getLogs().filter(l => l.name === currentBrandKey.name && l.brewery === currentBrandKey.brewery);
+            if (logs.length === 0) return;
+
+            const sample = logs[0];
+            document.getElementById('edit-spec-name').value = sample.name;
+            document.getElementById('edit-spec-brewery').value = sample.brewery;
+            document.getElementById('edit-spec-subtype').value = sample.subtype || '';
+            document.getElementById('edit-spec-region').value = sample.region || '';
+
+            document.getElementById('edit-spec-modal').classList.add('active');
+        }
+
+        function saveBrandSpec() {
+            const newName = document.getElementById('edit-spec-name').value.trim();
+            const newBrewery = document.getElementById('edit-spec-brewery').value.trim();
+            const newSubtype = document.getElementById('edit-spec-subtype').value.trim();
+            const newRegion = document.getElementById('edit-spec-region').value.trim();
+
+            if (!newName) return alert("銘柄名を入力してください");
+
+            let logs = getLogs();
+            logs = logs.map(log => {
+                if (log.name === currentBrandKey.name && log.brewery === currentBrandKey.brewery) {
+                    return { ...log, name: newName, brewery: newBrewery, subtype: newSubtype, region: newRegion };
                 }
-            }
+                return log;
+            });
 
+            saveLogsToStorage(logs);
+            closeEditSpecModal();
+            closeDetailModal();
+            renderLogs();
+            alert("基本情報を一括更新しました。");
+        }
+
+        function deleteEntireBrand() {
+            if (!confirm(`「${currentBrandKey.name}」の全履歴を削除しますか？`)) return;
+            let logs = getLogs().filter(l => !(l.name === currentBrandKey.name && l.brewery === currentBrandKey.brewery));
+            saveLogsToStorage(logs);
+            closeDetailModal();
+            renderLogs();
+        }
+
+        /* 画像アップロード補助 */
+        function processMultipleImages(input) {
+            Array.from(input.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    tempUploadedImages.push(e.target.result);
+                    renderFormThumbs();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function renderFormThumbs() {
+            const container = document.getElementById('form-image-list-container');
+            container.innerHTML = tempUploadedImages.map((img, i) => `
+                <div class="form-image-thumb-wrapper">
+                    <img src="${img}">
+                    <button class="form-image-delete-btn" onclick="tempUploadedImages.splice(${i},1);renderFormThumbs();">×</button>
+                </div>
+            `).join('');
+        }
+
+        /* 保存 ＆ モーダル制御 */
+        function saveLog() {
+            const name = document.getElementById('drink-name').value.trim();
+            if (!name) return alert("銘柄名を入力してください");
+
+            const logs = getLogs();
+            logs.unshift({
+                id: 'log_' + Date.now(),
+                name,
+                type: document.getElementById('drink-type').value,
+                subtype: document.getElementById('drink-subtype').value,
+                brewery: document.getElementById('drink-brewery').value,
+                region: document.getElementById('drink-region').value,
+                rating: document.getElementById('drink-rating').value,
+                date: document.getElementById('drink-date').value || new Date().toISOString().split('T')[0],
+                memo: document.getElementById('drink-memo').value,
+                images: [...tempUploadedImages]
+            });
+
+            saveLogsToStorage(logs);
+            closeFormModal();
+            renderLogs();
+        }
+
+        function openFormModal() {
+            tempUploadedImages = [];
+            renderFormThumbs();
+            document.getElementById('drink-date').value = new Date().toISOString().split('T')[0];
             document.getElementById('form-modal').classList.add('active');
         }
 
         function closeFormModal() { document.getElementById('form-modal').classList.remove('active'); }
         function closeDetailModal() { document.getElementById('detail-modal').classList.remove('active'); }
-
-        function setRating(rating) {
-            document.getElementById('drink-rating').value = rating;
-            document.getElementById('rating-value-label').innerText = parseFloat(rating).toFixed(1);
-            document.querySelectorAll('.rating-star').forEach((star, idx) => {
-                star.classList.toggle('selected', idx < rating);
-            });
-        }
-
-        function adaptFormFields() {}
-
-        function showTagSuggestions() {
-            const input = document.getElementById('drink-tags');
-            const container = document.getElementById('tag-suggestions-container');
-            container.innerHTML = '';
-            const defaultTags = ["#フルーティー", "#辛口", "#甘口", "#冷酒推奨", "#リピート確定"];
-            defaultTags.forEach(tag => {
-                const chip = document.createElement('span');
-                chip.className = 'tag-suggestion-chip';
-                chip.innerText = tag;
-                chip.onclick = () => {
-                    input.value = (input.value + " " + tag).trim();
-                    container.innerHTML = '';
-                };
-                container.appendChild(chip);
-            });
-        }
+        function closeEditSpecModal() { document.getElementById('edit-spec-modal').classList.remove('active'); }
 
         function switchView(viewId) {
             document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-            const target = document.getElementById(`view-${viewId}`);
-            if (target) target.classList.add('active');
-
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.querySelectorAll('.bottom-nav-item').forEach(n => n.classList.remove('active'));
-
-            if (viewId === 'dashboard') {
-                document.querySelectorAll('.nav-item')[0].classList.add('active');
-                document.querySelectorAll('.bottom-nav-item')[0].classList.add('active');
-            } else if (viewId === 'settings') {
-                document.querySelectorAll('.nav-item')[1].classList.add('active');
-                document.querySelectorAll('.bottom-nav-item')[3].classList.add('active');
-            }
+            document.getElementById(`view-${viewId}`).classList.add('active');
         }
 
-        function toggleMobileSidebar() {
-            document.querySelector('.right-sidebar').classList.toggle('mobile-open');
-        }
-
-        function changeTheme(themeName) {
-            document.documentElement.setAttribute('data-theme', themeName);
-            localStorage.setItem('sella_theme', themeName);
+        function filterLogs() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            document.querySelectorAll('.brand-card').forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(query) ? 'flex' : 'none';
+            });
         }
 
         function exportJSON() {
-            navigator.clipboard.writeText(JSON.stringify(getLogs(), null, 2)).then(() => alert("バックアップをコピーしました"));
+            navigator.clipboard.writeText(JSON.stringify(getLogs(), null, 2));
+            alert("JSONをクリップボードにコピーしました");
         }
 
         function importJSON() {
             try {
-                const parsed = JSON.parse(document.getElementById('import-text').value);
-                if (Array.isArray(parsed)) {
-                    saveLogsToStorage(parsed);
-                    renderLogs();
-                    alert("復元完了しました");
-                }
-            } catch (e) { alert("JSONフォーマットが不正です"); }
-        }
-
-        // Google OAuth ワンクリックログイン
-        function initiateGoogleLogin() {
-            if (!google || !google.accounts || !google.accounts.oauth2) {
-                alert("Google認証ライブラリをロード中です。少し待って再試行してください。");
-                return;
-            }
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/drive.file',
-                callback: (response) => {
-                    if (response.access_token) {
-                        localStorage.setItem('sella_google_logged_in', 'true');
-                        localStorage.setItem('sella_google_token', response.access_token);
-                        loadSettings();
-                        syncWithGoogleDrive();
-                        alert("Googleアカウントでログイン完了しました！");
-                    }
-                },
-            });
-            tokenClient.requestAccessToken();
-        }
-
-        function executeGoogleLogout() {
-            localStorage.removeItem('sella_google_logged_in');
-            localStorage.removeItem('sella_google_token');
-            document.getElementById('google-login-state-label').innerText = "未ログイン（ローカル保存動作中）";
-            document.getElementById('google-login-state-label').style.color = "var(--text-secondary)";
-            document.getElementById('btn-google-login').style.display = 'block';
-            document.getElementById('btn-google-logout').style.display = 'none';
-            alert("Google連携をログアウトしました。");
-        }
-
-        function syncWithGoogleDrive() {
-            console.log("Syncing data with Google Drive...");
-        }
-
-        // Gemini AI 分析トリガー
-        function triggerGeminiAnalysis() {
-            const selectedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
-            alert(`モデル [${selectedModel}] でGemini AI分析を開始します...（分析機能準備中）`);
-        }
-
-        function validateResetInput(val) {
-            const btn = document.getElementById('btn-complete-reset');
-            if (val === 'RESET') {
-                btn.removeAttribute('disabled');
-                btn.style.opacity = '1';
-                btn.style.cursor = 'pointer';
-            } else {
-                btn.setAttribute('disabled', 'true');
-                btn.style.opacity = '0.3';
-                btn.style.cursor = 'not-allowed';
-            }
-        }
-
-        function completelyResetData() {
-            if (confirm("全てのデータを削除して初期化しますか？")) {
-                localStorage.clear();
-                location.reload();
-            }
+                const logs = JSON.parse(document.getElementById('import-text').value);
+                saveLogsToStorage(logs);
+                renderLogs();
+                alert("復元完了しました");
+            } catch (e) { alert("JSONフォーマットが正しくありません"); }
         }
     </script>
 </body>
