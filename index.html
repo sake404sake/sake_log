@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v25.0.0 - Type Category & Simplified UI)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v27 - Gestures & Settings Sync)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- JSZip (ZIPファイルの作成・解凍用ライブラリ) -->
@@ -54,15 +54,19 @@
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-primary); transition: var(--transition); overflow: hidden; height: 100vh; display: flex; }
         .app-container { display: flex; width: 100%; height: 100vh; position: relative; }
-        .sidebar { width: 240px; background-color: var(--panel-bg); border-right: 1px solid var(--border-color); padding: 24px; display: flex; flex-direction: column; justify-content: space-between; z-index: 100; }
+        
+        /* サイドバー */
+        .sidebar { width: 240px; background-color: var(--panel-bg); border-right: 1px solid var(--border-color); padding: 24px; display: flex; flex-direction: column; justify-content: space-between; z-index: 100; transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
         .logo-area { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
         .logo-icon { font-size: 24px; color: var(--accent-gold); }
         .logo-text { font-size: 22px; font-weight: 700; letter-spacing: 2px; color: var(--accent-gold); text-transform: uppercase; }
         .nav-menu { list-style: none; display: flex; flex-direction: column; gap: 8px; }
         .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--text-secondary); text-decoration: none; border-radius: var(--border-radius-md); cursor: pointer; transition: var(--transition); font-weight: 500; }
         .nav-item:hover, .nav-item.active { color: var(--text-primary); background-color: var(--card-bg); border-left: 3px solid var(--accent-amber); }
+        
         .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; padding: 24px; position: relative; }
         
+        /* Pull to Refresh スタイル (Settingページも含め高速反応) */
         .ptr-indicator {
             display: flex;
             align-items: center;
@@ -91,7 +95,7 @@
         @keyframes ptr-spin { to { transform: rotate(360deg); } }
 
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-        .header-title { font-size: 24px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+        .header-title { font-size: 24px; font-weight: 600; white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; }
         .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
         .header-actions button { white-space: nowrap; flex-shrink: 0; }
 
@@ -103,7 +107,6 @@
         .card { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px; }
         .card-title { font-size: 16px; font-weight: 600; color: var(--accent-gold); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
         
-        /* アコーディオン（お酒の種類グループ） */
         .brewery-accordion { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); margin-bottom: 14px; overflow: hidden; }
         .brewery-header { background-color: var(--card-bg); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
         .brewery-header:hover { background-color: var(--card-hover); }
@@ -114,7 +117,6 @@
         .brewery-content { display: none; padding: 12px; border-top: 1px solid var(--border-color); background-color: rgba(0,0,0,0.1); }
         .brewery-accordion.open .brewery-content { display: flex; flex-direction: column; gap: 8px; }
         
-        /* 銘柄カード */
         .brand-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 12px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: var(--transition); }
         .brand-card:hover { background-color: var(--card-hover); border-color: var(--accent-amber); transform: translateX(4px); }
         .brand-image-preview { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; background-color: #000; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
@@ -122,8 +124,10 @@
         .brand-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .brand-subname { font-size: 13px; color: var(--accent-amber); font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .brand-meta { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+        .brand-stats { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+        .brand-rating { font-size: 14px; font-weight: bold; color: var(--accent-amber); display: flex; align-items: center; gap: 4px; }
+        .brand-repeat-badge { font-size: 10px; background-color: rgba(255, 179, 0, 0.15); color: var(--accent-amber); padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 
-        /* 詳細項目 */
         .detail-item {
             display: flex;
             flex-direction: column;
@@ -161,6 +165,70 @@
         .form-image-thumb-wrapper img { width: 100%; height: 100%; object-fit: cover; }
         .form-image-delete-btn { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background-color: var(--danger-color); color: #fff; border: none; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; }
 
+        .form-image-control-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: space-around;
+            padding: 2px 0;
+        }
+
+        .form-image-btn {
+            color: #fff;
+            font-size: 10px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .form-image-btn:hover {
+            color: var(--accent-amber);
+            transform: scale(1.2);
+        }
+
+        .form-image-badge-cover {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: var(--accent-amber);
+            color: #000;
+            font-size: 8px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            z-index: 9;
+        }
+
+        .form-image-add-card {
+            aspect-ratio: 1;
+            border: 2px dashed var(--input-border);
+            border-radius: var(--border-radius-md);
+            background-color: var(--input-bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+            color: var(--text-secondary);
+            user-select: none;
+        }
+
+        .form-image-add-card:hover {
+            border-color: var(--accent-amber);
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+        }
+
         .form-group { margin-bottom: 14px; position: relative; }
         .form-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .form-group label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
@@ -191,39 +259,55 @@
         button { background-color: var(--accent-gold); color: #000; border: none; padding: 12px 20px; font-weight: 600; font-size: 14px; border-radius: var(--border-radius-md); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
         button:hover { background-color: var(--accent-gold-hover); }
         button.secondary { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
+        button.secondary:hover { background-color: var(--card-bg); }
         button.danger { background-color: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
+        button.danger:hover { background-color: rgba(255, 69, 58, 0.1); }
 
-        .bottom-nav { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; background-color: var(--panel-bg); border-top: 1px solid var(--border-color); z-index: 999; justify-content: space-around; align-items: center; }
-        .bottom-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 10px; cursor: pointer; width: 25%; height: 100%; }
-        .bottom-nav-item.active { color: var(--accent-amber); }
-
-        .ai-info-box {
-            background-color: var(--ai-bg);
-            border: 1px dashed var(--accent-amber);
-            color: var(--ai-color);
-            padding: 10px 12px;
-            border-radius: var(--border-radius-md);
-            font-size: 12px;
-            margin-top: 6px;
-            line-height: 1.5;
-        }
-
+        /* モバイル用のCSS (スワイプサイドメニュー & ボトムナビ完全撤廃) */
         @media (max-width: 768px) {
             body { flex-direction: column; }
-            .app-container { flex-direction: column; height: calc(100vh - 60px); }
-            .sidebar { display: none; }
-            .main-content { width: 100%; height: 100%; padding: 16px; padding-bottom: 80px; }
-            .bottom-nav { display: flex; }
+            .app-container { flex-direction: column; height: auto !important; min-height: 100vh; display: block; }
+            
+            /* 左サイドバーをモバイルでは非表示＆スライド形式に */
+            .sidebar {
+                display: flex !important;
+                position: fixed !important;
+                top: 0;
+                left: 0;
+                height: 100vh !important;
+                width: 260px !important;
+                transform: translateX(-100%);
+                transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+                z-index: 10000 !important;
+                box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+            }
+            .sidebar.mobile-open {
+                transform: translateX(0) !important;
+            }
+
+            .main-content {
+                width: 100%;
+                height: auto !important;
+                padding: 16px;
+                padding-bottom: 40px !important;
+            }
             .row-group { flex-direction: column; gap: 0; }
+            
+            #btn-mobile-menu {
+                display: inline-flex !important;
+            }
         }
     </style>
 </head>
 
 <body>
 
+    <!-- 暗色スワイプメニュー用オーバーレイ -->
+    <div id="menu-overlay-element" onclick="closeMobileMenu()" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); opacity:0; pointer-events:none; transition:opacity 0.3s ease; z-index:9999;"></div>
+
     <div class="app-container">
-        <!-- PC用サイドバー -->
-        <div class="sidebar">
+        <!-- PC用サイドバー (モバイルではスライドインメニュー) -->
+        <div class="sidebar" id="sidebar-element">
             <div>
                 <div class="logo-area">
                     <span class="logo-icon">🍶</span>
@@ -234,7 +318,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v25.0.0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v27.0</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -246,7 +330,11 @@
             </div>
 
             <div class="header-bar">
-                <h1 class="header-title" id="page-title">ダッシュボード</h1>
+                <h1 class="header-title" id="page-title">
+                    <!-- ハンバーガーメニューボタン (モバイルのみ表示) -->
+                    <button id="btn-mobile-menu" onclick="openMobileMenu()" style="background:none; border:none; color:var(--text-primary); font-size:24px; padding:4px 8px; cursor:pointer; display:none; align-items:center; justify-content:center; margin-right:12px; transition:var(--transition);">☰</button>
+                    ダッシュボード
+                </h1>
                 <div class="header-actions">
                     <span style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 12px; white-space: nowrap;">
                         計: <span id="log-count" style="color: var(--accent-amber); font-weight: bold;">0</span> 杯
@@ -257,7 +345,7 @@
             </div>
 
             <!-- 検索バー -->
-            <div class="search-container">
+            <div class="search-container" id="search-bar-wrapper">
                 <span class="search-icon">🔍</span>
                 <input type="text" class="search-input" id="search-input" placeholder="銘柄、詳細、酒蔵、都道府県、タグ(#...)から検索..." oninput="filterLogs()">
             </div>
@@ -273,19 +361,19 @@
                     <div class="card-title"><span>ℹ️</span> アプリ情報</div>
                     <div style="font-size: 13px; color: var(--text-primary); display: flex; flex-direction: column; gap: 6px;">
                         <div><strong>アプリ名:</strong> Sella - お酒ログ管理 & アルバム</div>
-                        <div><strong>バージョン:</strong> v25.0.0 (Design & Synchronize Pro)</div>
+                        <div><strong>バージョン:</strong> v27.0 (Gestures & Settings Sync)</div>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-title"><span>🌐</span> Google アカウント連携プラグイン</div>
-                    <div id="google-auth-status" style="margin-bottom: 14px;">
+                    <div id="google-auth-status" style="margin-bottom: 14px; line-height: 1.4;">
                         <span style="font-size: 12px; color: var(--text-secondary);">未ログイン（ローカル保存動作中）</span>
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         <button id="btn-google-login" onclick="initiateGoogleLogin()" style="background-color: #4285F4; color: white;">
-                            Googleアカウントでログイン（自動クラウド同期）
+                            Googleアカウントでログイン（同期・設定自動移行）
                         </button>
                         <button id="btn-google-logout" class="danger" onclick="executeGoogleLogout()" style="display: none;">
                             🚪 ログアウト
@@ -332,21 +420,14 @@
                 <div class="card">
                     <div class="card-title"><span>💾</span> バックアップ & 復元</div>
                     <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px; line-height:1.5;">
-                        画像データを含む全てのログ（完全データ）をZIPファイルとして出力・復元できます。
+                        画像データとアプリ設定を含む全ての情報（完全データ）をZIPファイルとして出力・復元できます。
                     </p>
-                    <button onclick="exportZipBackup()" style="width: 100%; margin-bottom: 12px;">📤 Zipバックアップを出力 (写真込)</button>
+                    <button onclick="exportZipBackup()" style="width: 100%; margin-bottom: 12px;">📤 Zipバックアップを出力 (写真・設定込)</button>
                     
                     <input type="file" id="import-zip-file" accept=".zip" style="display: none;" onchange="importZipBackup(this)">
                     <button class="secondary" onclick="document.getElementById('import-zip-file').click()" style="width: 100%;">📥 Zipアップロードでリストア</button>
                 </div>
             </div>
-        </div>
-
-        <!-- 下部：スマホナビ -->
-        <div class="bottom-nav">
-            <div class="bottom-nav-item active" onclick="switchView('dashboard')"><span>📊</span><span>Dashboard</span></div>
-            <div class="bottom-nav-item" onclick="openFormModal('add')"><span>➕</span><span>記録する</span></div>
-            <div class="bottom-nav-item" onclick="switchView('settings')"><span>⚙️</span><span>Setting</span></div>
         </div>
     </div>
 
@@ -362,11 +443,9 @@
                 <div class="form-group">
                     <label>写真 (自動軽量化・撮影日取得対応)</label>
                     <input type="file" id="image-file-input" accept="image/*" multiple style="display:none;" onchange="processMultipleImages(this)">
-                    <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="display:none;" onchange="processMultipleImages(this)">
                     
-                    <!-- すっきり整理された写真登録ボタン -->
-                    <div style="display: flex; gap: 10px; margin-bottom: 8px;">
-                        <button type="button" class="secondary" style="flex:1;" onclick="triggerCameraCapture()">📸 その場で撮影</button>
+                    <!-- 📸 重複を撤廃し整理した写真ボタンエリア -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                         <button type="button" class="secondary" style="flex:1;" onclick="triggerFileInput()">📂 フォルダから選ぶ</button>
                         <button type="button" id="btn-ai-analyze" style="flex:1; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;" onclick="analyzeImageWithGemini()">✨ AIラベル自動入力</button>
                     </div>
@@ -391,7 +470,7 @@
                             <label>詳細・商品名</label>
                             <button type="button" class="btn-revert-field" id="revert-btn-drink-subname" onclick="revertField('drink-subname')">↩️ 戻す</button>
                         </div>
-                        <input type="text" id="drink-subname" placeholder="例: 酒未来, 備前雄町, No.6 S-type">
+                        <input type="text" id="drink-subname" placeholder="例: No.6 S-type, 純米吟醸 備前雄町">
                     </div>
                 </div>
 
@@ -401,7 +480,7 @@
                             <label>酒蔵・メーカー</label>
                             <button type="button" class="btn-revert-field" id="revert-btn-drink-brewery" onclick="revertField('drink-brewery')">↩️ 戻す</button>
                         </div>
-                        <input type="text" id="drink-brewery">
+                        <input type="text" id="drink-brewery" placeholder="例: 宮泉銘醸">
                     </div>
                     <div class="form-group" style="flex: 0.6;">
                         <label>種類</label>
@@ -421,7 +500,7 @@
                             <label>都道府県・産地</label>
                             <button type="button" class="btn-revert-field" id="revert-btn-drink-region" onclick="revertField('drink-region')">↩️ 戻す</button>
                         </div>
-                        <input type="text" id="drink-region">
+                        <input type="text" id="drink-region" placeholder="例: 福島県">
                     </div>
                     <div class="form-group">
                         <div class="form-label-row">
@@ -448,12 +527,12 @@
 
                 <div class="form-group">
                     <label>タグ (スペース区切り)</label>
-                    <input type="text" id="drink-tags" placeholder="#純米吟醸 #限定酒">
+                    <input type="text" id="drink-tags" placeholder="#フルーティー #冷酒推奨">
                 </div>
 
                 <div class="form-group">
                     <label>感想メモ</label>
-                    <textarea id="drink-comment" rows="3"></textarea>
+                    <textarea id="drink-comment" rows="3" placeholder="味の感想やおつまみの相性など..."></textarea>
                 </div>
 
                 <div class="form-group">
@@ -464,8 +543,9 @@
                     <textarea id="drink-ai-info" rows="2" placeholder="AIが抽出したお酒の豆知識や特徴がここに記録されます"></textarea>
                 </div>
 
-                <div style="display: flex; gap: 10px; margin-top: 20px;" id="form-submit-container">
-                    <!-- 保存・更新ボタンが動的に分離生成されます -->
+                <!-- 🔁 動的保存ボタンコンテナ -->
+                <div id="form-save-btn-container" style="margin-top: 20px;">
+                    <!-- JSで新規登録ボタン、または一括・個別保存ボタンが並んで挿入されます -->
                 </div>
             </div>
         </div>
@@ -488,30 +568,27 @@
     </div>
 
     <script>
+        // 設定用定数 (OAuth用)
         const GOOGLE_CLIENT_ID = "649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com";
+        
         let logs = [];
         let tempUploadedImages = [];
+        let tempCoverImageIndex = 0;
         let currentSlideIndexes = {};
         let originalFieldValues = {};
-
-        // ズーム・スワイプ変数
-        let lbScale = 1;
-        let lbTranslateX = 0;
-        let lbTranslateY = 0;
-        let lbStartDist = 0;
-        let lbStartScale = 1;
-        let lbIsDragging = false;
-        let lbStartX = 0, lbStartY = 0;
 
         window.onload = async function() {
             loadSavedSettings();
             loadLogsFromLocalStorage();
             checkGoogleAuthStatus();
             initPullToRefresh();
+            initSwipeMenu();
             await fetchGeminiModels(true);
         };
 
-        /* 📱 引っ張って更新（PTR）の高速・軽快化（全画面対応） */
+        /* ----------------------------------------------------
+         * 引っ張って更新（PTR）の高速・軽快化（全画面対応）
+         * ---------------------------------------------------- */
         function initPullToRefresh() {
             const mainContent = document.getElementById('main-content');
             const ptrIndicator = document.getElementById('ptr-indicator');
@@ -569,7 +646,7 @@
                     checkGoogleAuthStatus();
                     await fetchGeminiModels(true);
                     
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    await new Promise(resolve => setTimeout(resolve, 250));
 
                     ptrIndicator.style.height = '0px';
                     ptrIndicator.style.opacity = '0';
@@ -586,28 +663,111 @@
             });
         }
 
+        /* 📱 スマホ用スライドサイドメニュー ＆ スワイプジェスチャー */
+        let menuTouchStartX = 0;
+        let menuTouchStartY = 0;
+
+        function initSwipeMenu() {
+            document.addEventListener('touchstart', (e) => {
+                const sidebar = document.getElementById('sidebar-element');
+                if (!sidebar) return;
+                const isClosed = !sidebar.classList.contains('mobile-open');
+                const clientX = e.touches[0].clientX;
+                
+                // メニューが閉じているときは画面の左端（50px以内）からのスワイプのみ検知
+                if (isClosed && clientX > 50) return;
+                
+                menuTouchStartX = clientX;
+                menuTouchStartY = e.touches[0].clientY;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (menuTouchStartX === 0) return;
+                
+                const diffX = e.touches[0].clientX - menuTouchStartX;
+                const diffY = e.touches[0].clientY - menuTouchStartY;
+
+                if (Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+                    const sidebar = document.getElementById('sidebar-element');
+                    const isClosed = !sidebar.classList.contains('mobile-open');
+
+                    if (isClosed && diffX > 60) {
+                        openMobileMenu();
+                        menuTouchStartX = 0; // 重複発動を遮断
+                    } else if (!isClosed && diffX < -60) {
+                        closeMobileMenu();
+                        menuTouchStartX = 0;
+                    }
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', () => {
+                menuTouchStartX = 0;
+                menuTouchStartY = 0;
+            });
+        }
+
+        function openMobileMenu() {
+            const sidebar = document.getElementById('sidebar-element');
+            const overlay = document.getElementById('menu-overlay-element');
+            if (sidebar) sidebar.classList.add('mobile-open');
+            if (overlay) overlay.classList.add('active');
+        }
+
+        function closeMobileMenu() {
+            const sidebar = document.getElementById('sidebar-element');
+            const overlay = document.getElementById('menu-overlay-element');
+            if (sidebar) sidebar.classList.remove('mobile-open');
+            if (overlay) overlay.classList.remove('active');
+        }
+
+        // switchView 時にも自動的にメニューを閉じる
+        function switchView(viewId) {
+            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+            const targetPanel = document.getElementById(`view-${viewId}`);
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+
+            const menuNavs = document.querySelectorAll('.nav-item');
+            if (viewId === 'dashboard') {
+                if (menuNavs[0]) menuNavs[0].classList.add('active');
+                document.getElementById('search-bar-wrapper').style.display = 'block';
+                document.getElementById('page-title').innerHTML = `
+                    <button id="btn-mobile-menu" onclick="openMobileMenu()" style="background:none; border:none; color:var(--text-primary); font-size:24px; padding:4px 8px; cursor:pointer; display:none; align-items:center; justify-content:center; margin-right:12px; transition:var(--transition);">☰</button>
+                    ダッシュボード
+                `;
+            } else {
+                if (menuNavs[1]) menuNavs[1].classList.add('active');
+                document.getElementById('search-bar-wrapper').style.display = 'none';
+                document.getElementById('page-title').innerHTML = `
+                    <button id="btn-mobile-menu" onclick="openMobileMenu()" style="background:none; border:none; color:var(--text-primary); font-size:24px; padding:4px 8px; cursor:pointer; display:none; align-items:center; justify-content:center; margin-right:12px; transition:var(--transition);">☰</button>
+                    設定
+                `;
+            }
+
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) mainContent.scrollTop = 0;
+
+            closeMobileMenu();
+        }
+
+        function toggleAccordion(accElement) {
+            accElement.classList.toggle('open');
+        }
+
         function triggerFileInput() {
             const fileInput = document.getElementById('image-file-input');
             if (fileInput) fileInput.click();
         }
 
-        function triggerCameraCapture() {
-            const cameraInput = document.getElementById('camera-file-input');
-            if (cameraInput) cameraInput.click();
-        }
-
-        function formatDateLocal(date) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        }
-
         function loadSavedSettings() {
-            const savedKey = localStorage.getItem("sella_gemini_key");
-            const savedModel = localStorage.getItem("sella_gemini_model");
-            if (savedKey) document.getElementById('setting-gemini-key').value = savedKey;
-            if (savedModel) document.getElementById('setting-gemini-model').value = savedModel;
+            const savedKey = localStorage.getItem("sella_gemini_key") || "";
+            const savedModel = localStorage.getItem("sella_gemini_model") || "gemini-2.5-flash";
+            document.getElementById('setting-gemini-key').value = savedKey;
+            document.getElementById('setting-gemini-model').value = savedModel;
         }
 
         function saveGeminiKey(val) {
@@ -724,127 +884,107 @@
             }
         }
 
-        function switchView(viewName) {
-            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.querySelectorAll('.bottom-nav-item').forEach(n => n.classList.remove('active'));
-
-            document.getElementById(`view-${viewName}`).classList.add('active');
-            
-            const mainContent = document.getElementById('main-content');
-            if (mainContent) mainContent.scrollTop = 0;
-
-            if (viewName === 'dashboard') {
-                document.getElementById('page-title').textContent = 'ダッシュボード';
-            } else {
-                document.getElementById('page-title').textContent = '設定';
-            }
-        }
-
-        /* 🍶 お酒の種類 ＞ 銘柄での二重アコーディオン大別化システム */
+        /* ----------------------------------------------------
+         * 2. お酒の種類（大別）による完璧なアコーディオン仕分け
+         * ---------------------------------------------------- */
         function renderLogs(logsToRender = logs) {
             document.getElementById('log-count').textContent = logsToRender.length;
             const container = document.getElementById('log-accordion-container');
             container.innerHTML = "";
 
             if (logsToRender.length === 0) {
-                container.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-secondary);"><span style="font-size:32px;">🍶</span><p style="margin-top:10px;">お酒のログが登録されていません。</p></div>`;
+                container.innerHTML = `
+                    <div style="text-align: center; color: var(--text-secondary); padding: 50px 10px;">
+                        <span style="font-size: 42px;">🍶</span>
+                        <p style="margin-top: 14px; font-size: 14px;">お酒のログが登録されていません。<br>「記録を登録」から最初の一杯を記録しましょう！</p>
+                    </div>
+                `;
                 return;
             }
 
-            // 1. お酒の種類ごとにグループ化
+            // お酒の種類（type）ごとにグループ化
             const typeGroups = {
-                sake: { label: "🍶 日本酒", logs: [] },
-                wine: { label: "🍷 ワイン", logs: [] },
-                whisky: { label: "🥃 ウイスキー", logs: [] },
-                beer: { label: "🍺 ビール", logs: [] },
-                other: { label: "🍹 その他", logs: [] }
+                sake: { name: '🍶 日本酒', logs: {} },
+                wine: { name: '🍷 ワイン', logs: {} },
+                whisky: { name: '🥃 ウイスキー', logs: {} },
+                beer: { name: '🍺 ビール', logs: {} },
+                other: { name: '🍹 その他' , logs: {} }
             };
 
             logsToRender.forEach(log => {
                 const t = log.type || 'sake';
-                if (typeGroups[t]) {
-                    typeGroups[t].logs.push(log);
-                } else {
-                    typeGroups['other'].logs.push(log);
+                const group = typeGroups[t] || typeGroups['other'];
+                const brandKey = log.name ? log.name.trim() : "不明な銘柄";
+                if (!group.logs[brandKey]) {
+                    group.logs[brandKey] = [];
                 }
+                group.logs[brandKey].push(log);
             });
 
-            let activeAccordionAdded = false;
-
-            Object.entries(typeGroups).forEach(([typeKey, typeGroup]) => {
-                if (typeGroup.logs.length === 0) return;
+            Object.entries(typeGroups).forEach(([typeKey, group], index) => {
+                const brandNames = Object.keys(group.logs).sort((a,b) => a.localeCompare(b, 'ja'));
+                if (brandNames.length === 0) return;
 
                 const accordion = document.createElement('div');
-                // 最初の有意義なグループだけデフォルトで開く
-                accordion.className = `brewery-accordion ${!activeAccordionAdded ? 'open' : ''}`;
-                activeAccordionAdded = true;
+                accordion.className = `brewery-accordion open`; // デフォルトですべて展開
+                accordion.id = `type-acc-${typeKey}`;
                 
                 const header = document.createElement('div');
                 header.className = 'brewery-header';
-                header.onclick = () => accordion.classList.toggle('open');
+                header.onclick = () => toggleAccordion(accordion);
 
-                const titleContainer = document.createElement('div');
-                titleContainer.className = 'brewery-title-container';
-                
-                // ユニークな銘柄数をカウント
-                const uniqueBrands = new Set(typeGroup.logs.map(l => l.name));
-                titleContainer.innerHTML = `
+                let totalCount = 0;
+                brandNames.forEach(b => totalCount += group.logs[b].length);
+
+                header.innerHTML = `
+                    <div class="brewery-title-container">
+                        <span class="brewery-name">${group.name}</span>
+                        <span class="brewery-count-badge">${brandNames.length}種類 / 計${totalCount}杯</span>
+                    </div>
                     <span class="brewery-toggle-icon">▼</span>
-                    <span class="brewery-name">${typeGroup.label}</span>
-                    <span style="font-size:11px; color:var(--text-secondary); flex-shrink:0;">(${uniqueBrands.size}種類 / 計${typeGroup.logs.length}杯)</span>
                 `;
-                header.appendChild(titleContainer);
 
                 const content = document.createElement('div');
                 content.className = 'brewery-content';
 
-                // 各種類の中で、さらに銘柄（name）ごとにグループ化
-                const brandGroups = {};
-                typeGroup.logs.forEach(log => {
-                    const brandName = log.name || "不明な銘柄";
-                    if (!brandGroups[brandName]) brandGroups[brandName] = [];
-                    brandGroups[brandName].push(log);
-                });
+                brandNames.forEach(brandName => {
+                    const brandLogs = group.logs[brandName];
+                    const latestLog = brandLogs[0];
+                    const repeatCount = brandLogs.length;
 
-                // 銘柄名で50音ソートして表示
-                const sortedBrands = Object.keys(brandGroups).sort((a, b) => a.localeCompare(b, 'ja'));
-
-                sortedBrands.forEach(brandName => {
-                    const brandLogs = brandGroups[brandName];
-                    const latest = brandLogs[0];
-                    const avgRating = (brandLogs.reduce((sum, l) => sum + parseFloat(l.rating || 0), 0) / brandLogs.length).toFixed(1);
+                    // 平均評価
+                    const totalRating = brandLogs.reduce((sum, l) => sum + parseFloat(l.rating || 4), 0);
+                    const avgRating = (totalRating / repeatCount).toFixed(1);
 
                     const card = document.createElement('div');
                     card.className = 'brand-card';
-                    card.onclick = () => openDetailModal(latest.id);
+                    card.onclick = () => showLogDetail(latestLog.name, latestLog.brewery);
 
-                    const firstImage = brandLogs.flatMap(l => l.images || []).find(img => img);
-                    const imgThumb = firstImage 
-                        ? `<img src="${firstImage}" class="brand-image-preview">`
-                        : `<div class="brand-image-preview">${typeKey === 'sake' ? '🍶' : (typeKey === 'wine' ? '🍷' : (typeKey === 'whisky' ? '🥃' : (typeKey === 'beer' ? '🍺' : '🍹')))}</div>`;
+                    // 代表（カバー）画像の決定
+                    let imageHTML = `<div class="brand-image-preview">🍶</div>`;
+                    const logWithImg = brandLogs.find(l => l.images && l.images.length > 0);
+                    if (logWithImg) {
+                        const coverIdx = logWithImg.coverImageIndex || 0;
+                        const coverImg = logWithImg.images[coverIdx] || logWithImg.images[0];
+                        if (coverImg) {
+                            imageHTML = `<img src="${coverImg}" class="brand-image-preview">`;
+                        }
+                    }
 
-                    // すべての異なるサブネーム（詳細商品名）を抽出してバッジのように表示
-                    const subnames = Array.from(new Set(brandLogs.map(l => l.subname).filter(Boolean)));
-                    const subnameHtml = subnames.length > 0 
-                        ? `<div class="brand-subname" style="font-size:12px; color:var(--accent-amber); margin-top:2px;">${subnames.map(s => escapeHtml(s)).join(', ')}</div>` 
-                        : '';
-
-                    const tags = Array.from(new Set(brandLogs.flatMap(l => l.tags || [])));
-                    const tagsHtml = tags.length > 0
-                        ? `<div style="font-size:11px; margin-top:4px;">${tags.map(t => `<span style="color:var(--accent-gold); margin-right:4px;">#${escapeHtml(t)}</span>`).join('')}</div>`
-                        : '';
+                    const repeatBadge = repeatCount > 1 ? `<span class="brand-repeat-badge">🔁 リピート ${repeatCount}回</span>` : '';
 
                     card.innerHTML = `
-                        ${imgThumb}
+                        ${imageHTML}
                         <div class="brand-info">
-                            <div class="brand-name" style="font-size:15px; font-weight:700;">${escapeHtml(brandName)}</div>
-                            ${subnameHtml}
-                            <div class="brand-meta" style="font-size:11px; color:var(--text-secondary); margin-top:2px;">
-                                ${escapeHtml(latest.brewery || '酒蔵未登録')} | ${escapeHtml(latest.region || '産地未設定')} | ${escapeHtml(latest.class || '特定名称未設定')}<br>
-                                📅 最新: ${latest.date} | ⭐ 平均: ${avgRating} (${brandLogs.length}回)
-                                ${tagsHtml}
+                            <div class="brand-name">${escapeHtml(brandName)}</div>
+                            ${latestLog.subname ? `<div class="brand-subname">${escapeHtml(latestLog.subname)}</div>` : ''}
+                            <div class="brand-meta">
+                                ${escapeHtml(latestLog.brewery || '不明なメーカー')} | ${escapeHtml(latestLog.region || '産地未設定')} | 📅 ${latestLog.date}
                             </div>
+                        </div>
+                        <div class="brand-stats">
+                            <span class="brand-rating">★ ${avgRating}</span>
+                            ${repeatBadge}
                         </div>
                     `;
                     content.appendChild(card);
@@ -873,8 +1013,8 @@
             renderLogs(filtered);
         }
 
-        /* 📸 画像の軽量化圧縮処理 */
-        function compressImage(file, maxWidth = 600, quality = 0.4) {
+        /* 📸 高画質なリサイズ圧縮処理 (お酒の文字をクッキリ保つ) */
+        function compressImage(file, maxWidth = 1500, quality = 0.85) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
                 const img = new Image();
@@ -1016,30 +1156,56 @@
             }
         }
 
+        /* 👑 スマホでの ontouchstart 競合を解消したサムネイル描画 */
         function renderFormThumbs() {
             const container = document.getElementById('form-image-list-container');
             container.innerHTML = "";
+            if (tempCoverImageIndex >= tempUploadedImages.length) tempCoverImageIndex = 0;
+
             tempUploadedImages.forEach((imgBase64, idx) => {
+                const isCover = idx === tempCoverImageIndex;
                 const wrapper = document.createElement('div');
                 wrapper.className = 'form-image-thumb-wrapper';
                 wrapper.onclick = () => openLightbox(imgBase64);
+                if (isCover) wrapper.style.borderColor = 'var(--accent-amber)';
 
-                const img = document.createElement('img');
-                img.src = imgBase64;
-
-                const delBtn = document.createElement('button');
-                delBtn.className = 'form-image-delete-btn';
-                delBtn.innerHTML = '✕';
-                delBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    tempUploadedImages.splice(idx, 1);
-                    renderFormThumbs();
-                };
-
-                wrapper.appendChild(img);
-                wrapper.appendChild(delBtn);
+                wrapper.innerHTML = `
+                    <img src="${imgBase64}">
+                    ${isCover ? '<div class="form-image-badge-cover">代表</div>' : ''}
+                    <button class="form-image-delete-btn" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation(); tempUploadedImages.splice(${idx}, 1); renderFormThumbs();">✕</button>
+                    <div class="form-image-control-bar" ontouchstart="event.stopPropagation()">
+                        <button class="form-image-btn" title="代表に指定" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation(); tempCoverImageIndex = ${idx}; renderFormThumbs();">👑</button>
+                        <button class="form-image-btn" title="左へ移動" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation(); moveImage(${idx}, -1)">◀</button>
+                        <button class="form-image-btn" title="右へ移動" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation(); moveImage(${idx}, 1)">▶</button>
+                    </div>
+                `;
                 container.appendChild(wrapper);
             });
+
+            // ➕ 「写真追加」インラインカード
+            if (tempUploadedImages.length > 0) {
+                const addBtn = document.createElement('div');
+                addBtn.className = 'form-image-thumb-wrapper form-image-add-card';
+                addBtn.onclick = () => triggerFileInput();
+                addBtn.innerHTML = `<span style="font-size:18px;">📸</span><span style="font-size:8px; font-weight:bold; color:var(--accent-amber);">写真追加</span>`;
+                container.appendChild(addBtn);
+            }
+        }
+
+        function moveImage(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= tempUploadedImages.length) return;
+            const temp = tempUploadedImages[index];
+            tempUploadedImages[index] = tempUploadedImages[targetIndex];
+            tempUploadedImages[targetIndex] = temp;
+
+            if (tempCoverImageIndex === index) {
+                tempCoverImageIndex = targetIndex;
+            } else if (tempCoverImageIndex === targetIndex) {
+                tempCoverImageIndex = index;
+            }
+
+            renderFormThumbs();
         }
 
         async function analyzeImageWithGemini() {
@@ -1065,14 +1231,14 @@
                     };
                 });
 
-                const promptText = `提供されたお酒のボトルまたはラベル画像から、以下の情報をJSONフォーマットで厳密に抽出・推測してください。
+                const promptText = `提供されたお酒のボトルまたはラベル画像から、以下の情報をJSONフォーマットで抽出・推測してください。
 情報が見つからない・不明な場合は null を設定してください。
 
 - name: 銘柄の大別・ブランド名 (例: 写楽, 新政, 十四代)
 - subname: 詳細・商品仕様・サブネーム (例: 酒未来, 備前雄町, No.6 S-type)
 - brewery: 酒蔵または製造メーカー名 (例: 宮泉銘醸)
-- region: 都道府県または産地 (例: 福島県, フランス)
-- class: 特定名称や格付 (例: 純米吟醸, 赤ワイン)
+- region: 都道府県または産地 (例: 福島県)
+- class: 特定名称や格付 (例: 純米吟醸, 純米大吟醸, 赤ワイン)
 - ai_info: このお酒の特徴、おすすめの飲み方、歴史などの豆知識 (150文字程度)
 
 出力形式:
@@ -1244,19 +1410,20 @@
             alert(`✨ 過去ログの一括AI補完解析が完了しました（${updatedCount} 件更新）。`);
         }
 
-        /* 💾 新規登録と編集で「一括更新」か「個別保存」かを明示的にボタン分離 */
+        /* ✍️ 新規追加 ＆ 編集用 ２つの物理保存ボタン分離処理 */
         function openFormModal(mode, id = null) {
             tempUploadedImages = [];
+            tempCoverImageIndex = 0;
             originalFieldValues = {};
             document.getElementById('ai-revert-bar').style.display = 'none';
-            ['drink-name', 'drink-subname', 'drink-brewery', 'drink-region', 'drink-class', 'drink-ai-info'].forEach(fid => {
-                const el = document.getElementById(fid);
+            ['drink-name', 'drink-subname', 'drink-brewery', 'drink-region', 'drink-class', 'drink-ai-info'].forEach(id => {
+                const el = document.getElementById(id);
                 el.classList.remove('ai-updated-input');
-                const revertBtn = document.getElementById(`revert-btn-${fid}`);
+                const revertBtn = document.getElementById(`revert-btn-${id}`);
                 if (revertBtn) revertBtn.style.display = 'none';
             });
 
-            const submitContainer = document.getElementById('form-submit-container');
+            const btnContainer = document.getElementById('form-save-btn-container');
 
             if (mode === 'add') {
                 document.getElementById('form-modal-title').innerHTML = '<span>✍️</span> お酒のログ入力';
@@ -1274,10 +1441,9 @@
                 document.getElementById('drink-comment').value = '';
                 document.getElementById('drink-ai-info').value = '';
 
-                // 新規追加時のシンプルな保存ボタン
-                submitContainer.innerHTML = `
-                    <button type="button" class="secondary" onclick="closeFormModal()" style="flex:1;">キャンセル</button>
-                    <button type="button" onclick="saveLogFromForm(false)" style="flex:2;">💾 ログを保存する</button>
+                // 新規ボタンのみ表示
+                btnContainer.innerHTML = `
+                    <button onclick="saveLogFromForm('new')" style="width: 100%;">💾 ログを保存する</button>
                 `;
             } else if (mode === 'edit' && id) {
                 const item = logs.find(l => l.id === id);
@@ -1299,12 +1465,14 @@
                 document.getElementById('drink-ai-info').value = item.ai_info || '';
 
                 if (item.images) tempUploadedImages = [...item.images];
+                tempCoverImageIndex = item.coverImageIndex || 0;
 
-                // 編集モード：一括変更ボタンと個別変更ボタンを完全に分離して提示
-                submitContainer.innerHTML = `
-                    <button type="button" class="secondary" onclick="closeFormModal()" style="flex:1;">キャンセル</button>
-                    <button type="button" onclick="saveLogFromForm(true)" style="flex:1.5; background:var(--accent-gold); color:#000; font-weight:bold;">🔁 リピートすべて一括更新</button>
-                    <button type="button" onclick="saveLogFromForm(false)" style="flex:1.5; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-primary);">💾 この日の記録のみ変更</button>
+                // 🔁 「一括」と「この日のみ」のボタンを最初から2つ表示
+                btnContainer.innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <button onclick="saveLogFromForm('all')" style="width: 100%; background: var(--accent-amber); color: #000;">🔁 過去リピートも含めて一括更新</button>
+                        <button onclick="saveLogFromForm('single')" class="secondary" style="width: 100%;">💾 この日の記録のみ変更</button>
+                    </div>
                 `;
             }
 
@@ -1316,8 +1484,7 @@
             document.getElementById('form-modal').classList.remove('active');
         }
 
-        /* 💾 ログ保存処理 (一括・個別の分岐に対応) */
-        function saveLogFromForm(isBatchUpdate = false) {
+        function saveLogFromForm(saveMode) {
             const name = document.getElementById('drink-name').value.trim();
             const date = document.getElementById('drink-date').value;
 
@@ -1330,7 +1497,7 @@
             const editId = document.getElementById('edit-log-id').value;
 
             const logData = {
-                id: editId ? editId : Date.now().toString(),
+                id: editId ? editId : 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
                 name: name,
                 subname: document.getElementById('drink-subname').value.trim(),
                 type: document.getElementById('drink-type').value,
@@ -1342,16 +1509,15 @@
                 tags: tags,
                 comment: document.getElementById('drink-comment').value.trim(),
                 ai_info: document.getElementById('drink-ai-info').value.trim(),
-                images: tempUploadedImages
+                images: tempUploadedImages,
+                coverImageIndex: tempCoverImageIndex
             };
 
             if (editId) {
-                const idx = logs.findIndex(l => l.id === editId);
-                if (idx !== -1) {
-                    const oldLog = logs[idx];
-                    
-                    if (isBatchUpdate) {
-                        // 一括変更：過去の同名お酒スペックも合わせて全更新
+                if (saveMode === 'all') {
+                    // スペック一括更新
+                    const oldLog = logs.find(l => l.id === editId);
+                    if (oldLog) {
                         logs.forEach(l => {
                             if (l.name === oldLog.name && l.brewery === oldLog.brewery) {
                                 l.name = name;
@@ -1362,9 +1528,9 @@
                             }
                         });
                     }
-                    
-                    logs[idx] = logData;
                 }
+                const idx = logs.findIndex(l => l.id === editId);
+                if (idx !== -1) logs[idx] = logData;
             } else {
                 logs.unshift(logData);
             }
@@ -1372,40 +1538,50 @@
             saveLogsToLocalStorage();
             closeFormModal();
             if (editId) closeDetailModal();
+            alert("保存が完了しました！");
         }
 
-        /* 詳細モーダル閲覧（デザイン美装化対応） */
         function openDetailModal(id) {
             const item = logs.find(l => l.id === id);
             if (!item) return;
 
-            const fullTitle = item.subname ? `${item.name} (${item.subname})` : item.name;
+            showLogDetail(item.name, item.brewery);
+        }
+
+        function showLogDetail(brandName, breweryName) {
+            const brandLogs = logs.filter(l => l.name === brandName && l.brewery === breweryName);
+            if (brandLogs.length === 0) return closeDetailModal();
+
+            const latest = brandLogs[0];
+            const fullTitle = latest.subname ? `${latest.name} (${latest.subname})` : latest.name;
             document.getElementById('detail-title').textContent = fullTitle;
             const body = document.getElementById('detail-body');
 
+            // タイムラインカルーセルの画像全集約
+            slideImages = brandLogs.flatMap(l => l.images || []);
             let imagesSliderHtml = "";
-            if (item.images && item.images.length > 0) {
-                currentSlideIndexes[item.id] = 0;
-                const slidesHtml = item.images.map(img => `
+            if (slideImages.length > 0) {
+                currentSlideIndexes[latest.id] = 0;
+                const slidesHtml = slideImages.map((img, i) => `
                     <div class="slide" onclick="openLightbox('${img}')">
                         <img src="${img}">
                     </div>
                 `).join('');
 
-                const dotsHtml = item.images.length > 1 ? `
+                const dotsHtml = slideImages.length > 1 ? `
                     <div class="slider-dots">
-                        ${item.images.map((_, i) => `<div class="dot ${i === 0 ? 'active' : ''}" onclick="goToSlide('${item.id}', ${i})"></div>`).join('')}
+                        ${slideImages.map((_, i) => `<div class="dot ${i === 0 ? 'active' : ''}" onclick="goToSlide('${latest.id}', ${i})"></div>`).join('')}
                     </div>
                 ` : '';
 
-                const navBtnsHtml = item.images.length > 1 ? `
-                    <button class="slider-btn prev" onclick="moveSlide('${item.id}', -1)">❮</button>
-                    <button class="slider-btn next" onclick="moveSlide('${item.id}', 1)">❯</button>
+                const navBtnsHtml = slideImages.length > 1 ? `
+                    <button class="slider-btn prev" onclick="moveSlide('${latest.id}', -1)">❮</button>
+                    <button class="slider-btn next" onclick="moveSlide('${latest.id}', 1)">❯</button>
                 ` : '';
 
                 imagesSliderHtml = `
-                    <div class="slider-container" id="slider-${item.id}">
-                        <div class="slider-wrapper" id="wrapper-${item.id}">
+                    <div class="slider-container" id="slider-${latest.id}">
+                        <div class="slider-wrapper" id="wrapper-${latest.id}">
                             ${slidesHtml}
                         </div>
                         ${navBtnsHtml}
@@ -1414,76 +1590,73 @@
                 `;
             }
 
-            const brandLogs = logs.filter(l => l.name === item.name && l.brewery === item.brewery);
-
-            const tagsHtml = (item.tags && item.tags.length > 0)
-                ? item.tags.map(t => `<span style="color:var(--accent-gold); margin-right:6px;">#${escapeHtml(t)}</span>`).join('')
+            const tagsSet = new Set(brandLogs.flatMap(l => l.tags || []));
+            const tagsHtml = tagsSet.size > 0
+                ? Array.from(tagsSet).map(t => `<span style="color:var(--accent-gold); margin-right:6px;">#${escapeHtml(t)}</span>`).join('')
                 : 'なし';
 
-            const aiBoxHtml = item.ai_info ? `
+            const aiBoxHtml = latest.ai_info ? `
                 <div class="ai-info-box">
-                    <strong>🤖 AI豆知識・解説:</strong><br>${escapeHtml(item.ai_info)}
+                    <strong>🤖 AI豆知識・解説:</strong><br>${escapeHtml(latest.ai_info)}
                 </div>
             ` : '';
 
-            // タイムライン履歴の描画
-            let timelineHtml = brandLogs.map(l => {
-                const subnameLabel = l.subname ? `<span style="color:var(--accent-amber); font-weight:bold;">${escapeHtml(l.subname)}</span>` : '<span style="color:var(--text-secondary); font-style:italic;">仕様登録なし</span>';
-                return `
-                <div style="background:var(--card-bg); border:1px solid var(--border-color); padding:10px 12px; border-left:4px solid var(--accent-amber); border-radius:6px; font-size:12px; margin-bottom:8px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span>📅 ${l.date}</span>
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <span style="color:var(--accent-amber); font-weight:bold; margin-right:4px;">★ ${parseFloat(l.rating || 4).toFixed(1)}</span>
-                            <button onclick="openFormModal('edit', '${l.id}')" style="padding:3px 8px; font-size:11px;">✏️ 編集</button>
-                            <button class="danger" onclick="deleteLog('${l.id}')" style="padding:3px 6px; font-size:11px;">🗑️</button>
+            // リピート履歴リスト
+            const timelineHtml = brandLogs.map(l => `
+                <div style="background:var(--card-bg); border:1px solid var(--border-color); padding:14px; border-left:4px solid var(--accent-amber); border-radius:8px; margin-bottom: 10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:12px; color:var(--text-secondary); font-weight:600;">📅 ${l.date}</span>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <span style="color:var(--accent-amber); font-weight:bold; font-size:13px;">★ ${l.rating}</span>
+                            <button onclick="openFormModal('edit', '${l.id}')" style="padding:4px 10px; font-size:12px;">✏️ 編集</button>
+                            <button class="danger" onclick="deleteLog('${l.id}')" style="padding:4px 8px; font-size:12px;">🗑️</button>
                         </div>
                     </div>
-                    <div style="margin-bottom:4px;"><strong>仕様:</strong> ${subnameLabel}</div>
-                    <div style="color:var(--text-primary); white-space:pre-wrap;">${escapeHtml(l.comment || 'メモなし')}</div>
+                    ${l.comment ? `<div style="font-size:13px; line-height:1.4;">💬 <strong>感想:</strong> ${escapeHtml(l.comment)}</div>` : ''}
                 </div>
-                `;
-            }).join('');
+            `).join('');
 
             body.innerHTML = `
                 ${imagesSliderHtml}
                 <div style="margin-top:16px; display:flex; flex-direction:column; gap:10px;">
                     <div class="detail-item">
                         <span class="detail-label">🍶 銘柄</span>
-                        <span class="detail-value" style="font-size:17px; font-weight:700; color:var(--accent-amber);">${escapeHtml(item.name)}</span>
+                        <span class="detail-value" style="font-size:17px; font-weight:700; color:var(--accent-amber);">${escapeHtml(latest.name)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">🏷️ 詳細・商品名</span>
+                        <span class="detail-value">${escapeHtml(latest.subname || '未設定')}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">🏭 酒蔵・メーカー</span>
-                        <span class="detail-value">${escapeHtml(item.brewery || '未設定')}</span>
+                        <span class="detail-value">${escapeHtml(latest.brewery || '未設定')}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">📍 都道府県・産地</span>
-                        <span class="detail-value">${escapeHtml(item.region || '未設定')}</span>
+                        <span class="detail-value">${escapeHtml(latest.region || '未設定')}</span>
                     </div>
                     <div class="detail-item">
-                        <span class="detail-label">🏷️ 最新仕様</span>
-                        <span class="detail-value">${escapeHtml(item.subname || '未設定')}</span>
+                        <span class="detail-label">❄️ 特定名称/格付</span>
+                        <span class="detail-value">${escapeHtml(latest.class || '未設定')}</span>
                     </div>
                     <div class="detail-item">
-                        <span class="detail-label">❄️ 種類/特定名称</span>
-                        <span class="detail-value">${escapeHtml(item.class || '未設定')}</span>
+                        <span class="detail-label">⭐ 平均評価</span>
+                        <span class="detail-value" style="color:var(--accent-amber); font-weight:bold;">★ ${latest.rating} (計 ${brandLogs.length} 回リピート)</span>
                     </div>
                     <div class="detail-item">
-                        <span class="detail-label">🏷️ 全体タグ</span>
+                        <span class="detail-label">🏷️ タグ</span>
                         <span class="detail-value">${tagsHtml}</span>
                     </div>
                     ${aiBoxHtml}
                     
-                    <div class="card" style="padding:14px; margin-top:10px;">
-                        <div style="font-weight:bold; color:var(--accent-gold); margin-bottom:12px;">🔁 飲酒履歴・タイムライン (${brandLogs.length}回)</div>
-                        <div id="detail-timeline-list" style="max-height: 240px; overflow-y: auto;">
-                            ${timelineHtml}
-                        </div>
+                    <div style="margin-top: 14px;">
+                        <strong style="font-size: 13px; color: var(--accent-gold); display: block; margin-bottom: 8px;">🔁 タイムライン（飲酒履歴）</strong>
+                        ${timelineHtml}
                     </div>
                 </div>
-                <div style="display:flex; gap:10px; margin-top:20px;">
-                    <button class="danger" onclick="deleteEntireBrand('${item.name}', '${item.brewery}')" style="flex:1;">🚨 この銘柄の全履歴削除</button>
-                    <button onclick="openFormModal('add')" style="flex:1.5;">➕ 新しいリピートを記録</button>
+                <div style="display:flex; gap:10px; margin-top:20px; border-top:1px solid var(--border-color); padding-top:16px;">
+                    <button class="danger" onclick="deleteEntireBrand('${escapeHtml(latest.name)}', '${escapeHtml(latest.brewery)}')" style="flex:1;">🚨 全履歴一括削除</button>
+                    <button onclick="closeDetailModal()" class="secondary" style="flex:1;">閉じる</button>
                 </div>
             `;
 
@@ -1495,12 +1668,10 @@
         }
 
         function moveSlide(id, dir) {
-            const item = logs.find(l => l.id === id);
-            if (!item || !item.images) return;
             let idx = currentSlideIndexes[id] || 0;
             idx += dir;
-            if (idx < 0) idx = item.images.length - 1;
-            if (idx >= item.images.length) idx = 0;
+            if (idx < 0) idx = slideImages.length - 1;
+            if (idx >= slideImages.length) idx = 0;
             goToSlide(id, idx);
         }
 
@@ -1529,21 +1700,27 @@
         }
 
         function deleteLog(id) {
-            if (!confirm("この日の記録を削除しますか？")) return;
+            if (!confirm("このログ（1回分）を削除しますか？")) return;
+            const target = logs.find(l => l.id === id);
             logs = logs.filter(l => l.id !== id);
             saveLogsToLocalStorage();
-            closeDetailModal();
+            if (target) {
+                showLogDetail(target.name, target.brewery);
+            } else {
+                closeDetailModal();
+            }
         }
 
-        function deleteEntireBrand(name, brewery) {
-            if (!confirm(`「${name}」のこれまでの全ての記録（すべてのリピートログ）を完全に削除しますか？`)) return;
-            logs = logs.filter(l => !(l.name === name && l.brewery === brewery));
+        function deleteEntireBrand(brandName, breweryName) {
+            if (!confirm(`「${breweryName} - ${brandName}」の全履歴（すべてのリピートログ）を完全に削除しますか？
+この操作は戻せません。`)) return;
+            logs = logs.filter(l => !(l.name === brandName && l.brewery === breweryName));
             saveLogsToLocalStorage();
             closeDetailModal();
         }
 
         /* ----------------------------------------------------
-         * Zipバックアップ & リストア機能 (画像ファイルを分離して構造化)
+         * 【完全対応】設定（APIキー等）も一緒に同梱するZIPバックアップ
          * ---------------------------------------------------- */
         async function exportZipBackup() {
             if (typeof JSZip === 'undefined') {
@@ -1552,6 +1729,14 @@
             try {
                 const zip = new JSZip();
                 const imgFolder = zip.folder("images");
+
+                // アプリ設定情報をパッケージ
+                const settings = {
+                    gemini_key: localStorage.getItem("sella_gemini_key") || "",
+                    gemini_model: localStorage.getItem("sella_gemini_model") || "gemini-2.5-flash",
+                    theme: localStorage.getItem("sella_theme") || "dark-bar",
+                    auto_date: localStorage.getItem("sella_auto_date") || "true"
+                };
 
                 const exportLogs = logs.map((log) => {
                     const logCopy = { ...log };
@@ -1577,7 +1762,12 @@
                     return logCopy;
                 });
 
-                zip.file("sella_backup.json", JSON.stringify(exportLogs, null, 2));
+                const backupPackage = {
+                    logs: exportLogs,
+                    settings: settings
+                };
+
+                zip.file("sella_backup.json", JSON.stringify(backupPackage, null, 2));
 
                 const content = await zip.generateAsync({ type: "blob" });
                 const url = URL.createObjectURL(content);
@@ -1616,39 +1806,62 @@
                 }
 
                 const jsonText = await jsonFile.async("string");
-                const imported = JSON.parse(jsonText);
+                const parsedData = JSON.parse(jsonText);
 
-                if (Array.isArray(imported)) {
-                    if (confirm(`現在のデータに上書きして ${imported.length} 件のログ（写真含め全データ）を復元しますか？`)) {
-                        for (const item of imported) {
-                            if (item.images && item.images.length > 0) {
-                                const restoredImages = [];
-                                for (const imgPath of item.images) {
-                                    if (typeof imgPath === 'string' && !imgPath.startsWith('data:image')) {
-                                        const cleanPath = imgPath.replace(/^\/+/, '');
-                                        const imgFile = zipContent.file(cleanPath) || zipContent.file(cleanPath.replace('images/', ''));
-                                        if (imgFile) {
-                                            const base64 = await imgFile.async("base64");
-                                            const ext = cleanPath.split('.').pop().toLowerCase();
-                                            const mime = (ext === 'png') ? 'image/png' : (ext === 'webp' ? 'image/webp' : 'image/jpeg');
-                                            restoredImages.push(`data:${mime};base64,${base64}`);
-                                        } else {
-                                            restoredImages.push(imgPath);
-                                        }
+                let importedLogs = [];
+                let importedSettings = null;
+
+                if (Array.isArray(parsedData)) {
+                    // 旧形式の配列直接
+                    importedLogs = parsedData;
+                } else if (parsedData && Array.isArray(parsedData.logs)) {
+                    // 新形式の設定同梱型
+                    importedLogs = parsedData.logs;
+                    importedSettings = parsedData.settings;
+                } else {
+                    alert("無効なバックアップデータ形式です。");
+                    input.value = "";
+                    return;
+                }
+
+                if (confirm(`現在のデータに上書きして ${importedLogs.length} 件のログ（写真・アプリ設定含む）を復元しますか？`)) {
+                    // 画像ファイル参照（images/xxx.jpg）を Base64 に展開復元
+                    for (const item of importedLogs) {
+                        if (item.images && item.images.length > 0) {
+                            const restoredImages = [];
+                            for (const imgPath of item.images) {
+                                if (typeof imgPath === 'string' && !imgPath.startsWith('data:image')) {
+                                    const cleanPath = imgPath.replace(/^\/+/, '');
+                                    const imgFile = zipContent.file(cleanPath) || zipContent.file(cleanPath.replace('images/', ''));
+                                    if (imgFile) {
+                                        const base64 = await imgFile.async("base64");
+                                        const ext = cleanPath.split('.').pop().toLowerCase();
+                                        const mime = (ext === 'png') ? 'image/png' : (ext === 'webp' ? 'image/webp' : 'image/jpeg');
+                                        restoredImages.push(`data:${mime};base64,${base64}`);
                                     } else {
                                         restoredImages.push(imgPath);
                                     }
+                                } else {
+                                    restoredImages.push(imgPath);
                                 }
-                                item.images = restoredImages;
                             }
+                            item.images = restoredImages;
                         }
-
-                        logs = imported;
-                        saveLogsToLocalStorage();
-                        alert("✅ ZIPファイルからの全データ復元が完了しました。");
                     }
-                } else {
-                    alert("無効なバックアップデータ形式です。");
+
+                    // 設定値の復元
+                    if (importedSettings) {
+                        if (importedSettings.gemini_key) localStorage.setItem("sella_gemini_key", importedSettings.gemini_key);
+                        if (importedSettings.gemini_model) localStorage.setItem("sella_gemini_model", importedSettings.gemini_model);
+                        if (importedSettings.theme) localStorage.setItem("sella_theme", importedSettings.theme);
+                        if (importedSettings.auto_date) localStorage.setItem("sella_auto_date", importedSettings.auto_date);
+                    }
+
+                    logs = importedLogs;
+                    saveLogsToLocalStorage();
+                    loadSavedSettings(); // UI再表示
+                    alert("✅ アプリ設定・全写真データの完全リストアが完了しました！");
+                    location.reload();
                 }
             } catch (e) {
                 alert("ZIPファイルの読み込みエラー: " + e.message);
@@ -1657,7 +1870,9 @@
             }
         }
 
-        /* 🌐 Google Auth & AppDataFolder 連携・同期システム */
+        /* ----------------------------------------------------
+         * Google アカウント連携 & ログイン後のデータ移動・同期 (設定値も対象)
+         * ---------------------------------------------------- */
         function checkGoogleAuthStatus() {
             const statusEl = document.getElementById('google-auth-status');
             const loginBtn = document.getElementById('btn-google-login');
@@ -1668,7 +1883,7 @@
 
             if (savedToken) {
                 const emailText = savedEmail ? ` (${escapeHtml(savedEmail)})` : '';
-                if (statusEl) statusEl.innerHTML = `<span style="font-size: 12px; color: #34c759; font-weight: 600;">🟢 Google連携・同期動作中${emailText}</span>`;
+                if (statusEl) statusEl.innerHTML = `<span style="font-size: 12px; color: #34c759; font-weight: 600;">🟢 Google連携済み${emailText}</span>`;
                 if (loginBtn) loginBtn.style.display = 'none';
                 if (logoutBtn) logoutBtn.style.display = 'inline-flex';
             } else {
@@ -1714,7 +1929,7 @@
 
                             checkGoogleAuthStatus();
                             
-                            // ログイン後、ローカルデータをGoogle Drive (AppData) に自動移行して統合
+                            // サインイン前にローカルにあった情報をGoogle Drive (AppData) に自動移行・統合
                             await syncLocalDataToGoogleDrive(response.access_token, true);
                         }
                     },
@@ -1722,12 +1937,13 @@
 
                 client.requestAccessToken();
             } catch (e) {
-                alert("Googleログインの起動に失敗しました: " + e.message);
+                alert("Google認証の起動に失敗しました: " + e.message);
             }
         }
 
         async function syncLocalDataToGoogleDrive(token, showNotice = false) {
             try {
+                // AppDataFolder内のお酒ログファイルを検索
                 const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'sella_logs.json'", {
                     headers: { Authorization: `Bearer ${token}` }
                 });
@@ -1736,24 +1952,43 @@
 
                 let localLogs = JSON.parse(localStorage.getItem('sella_logs') || '[]');
                 let driveLogs = [];
+                let driveSettings = null;
 
                 if (fileId) {
                     const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     if (fileRes.ok) {
-                        driveLogs = await fileRes.json();
+                        const rawData = await fileRes.json();
+                        if (Array.isArray(rawData)) {
+                            driveLogs = rawData;
+                        } else if (rawData && Array.isArray(rawData.logs)) {
+                            driveLogs = rawData.logs;
+                            driveSettings = rawData.settings;
+                        }
                     }
                 }
 
-                // ローカルとクラウドのデータをマージ
+                // ローカルの未保存データとDrive側の既存データをID重複排除しながらマージ
                 const logMap = new Map();
                 driveLogs.forEach(item => logMap.set(item.id, item));
                 localLogs.forEach(item => logMap.set(item.id, item));
                 const mergedLogs = Array.from(logMap.values());
 
-                const metadata = { name: 'sella_logs.json', parents: ['appDataFolder'] };
-                const fileContent = JSON.stringify(mergedLogs, null, 2);
+                // 設定情報もパッケージ
+                const settings = {
+                    gemini_key: localStorage.getItem("sella_gemini_key") || "",
+                    gemini_model: localStorage.getItem("sella_gemini_model") || "gemini-2.5-flash",
+                    theme: localStorage.getItem("sella_theme") || "dark-bar",
+                    auto_date: localStorage.getItem("sella_auto_date") || "true"
+                };
+
+                const backupPackage = {
+                    logs: mergedLogs,
+                    settings: settings
+                };
+
+                const fileContent = JSON.stringify(backupPackage, null, 2);
 
                 if (fileId) {
                     await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
@@ -1765,6 +2000,7 @@
                         body: fileContent
                     });
                 } else {
+                    const metadata = { name: 'sella_logs.json', parents: ['appDataFolder'] };
                     const form = new FormData();
                     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                     form.append('file', new Blob([fileContent], { type: 'application/json' }));
@@ -1775,17 +2011,26 @@
                     });
                 }
 
+                // クラウド側の設定を復元・ローカルに反映
+                if (driveSettings) {
+                    if (driveSettings.gemini_key) localStorage.setItem("sella_gemini_key", driveSettings.gemini_key);
+                    if (driveSettings.gemini_model) localStorage.setItem("sella_gemini_model", driveSettings.gemini_model);
+                    if (driveSettings.theme) localStorage.setItem("sella_theme", driveSettings.theme);
+                    if (driveSettings.auto_date) localStorage.setItem("sella_auto_date", driveSettings.auto_date);
+                    loadSavedSettings();
+                }
+
                 logs = mergedLogs;
                 localStorage.setItem('sella_logs', JSON.stringify(logs));
                 renderLogs();
 
                 if (showNotice) {
-                    alert("✅ Googleアカウントとの接続およびクラウドデータの自動同期を完了しました！");
+                    alert("✅ サインイン前にローカルにあったデータ・写真・各種アプリ設定をGoogleアカウントへ安全に同期・統合しました！");
                 }
             } catch (e) {
                 console.error("Google Drive 同期エラー:", e);
                 if (showNotice) {
-                    alert("⚠️ クラウド同期中にエラーが発生しました: " + e.message);
+                    alert("⚠️ Google Driveへのデータ移動中にエラーが発生しました: " + e.message);
                 }
             }
         }
