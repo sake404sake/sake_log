@@ -493,7 +493,7 @@
         };
 
         /* ----------------------------------------------------
-         * 引っ張って更新（PTR）の高速・軽快化＆Settingページ無効化
+         * 引っ張って更新（PTR）の高速・軽快化（全画面対応）
          * ---------------------------------------------------- */
         function initPullToRefresh() {
             const mainContent = document.getElementById('main-content');
@@ -507,13 +507,6 @@
             const threshold = 60;
 
             mainContent.addEventListener('touchstart', (e) => {
-                // Settingページが開かれている場合はPTRを起動しない
-                const isDashboard = document.getElementById('view-dashboard').classList.contains('active');
-                if (!isDashboard) {
-                    isPulling = false;
-                    return;
-                }
-
                 if (mainContent.scrollTop <= 0) {
                     touchStartY = e.touches[0].clientY;
                     isPulling = true;
@@ -1433,7 +1426,7 @@
         }
 
         /* ----------------------------------------------------
-         * Zipバックアップ & リストア機能 (画像Base64含め全保存)
+         * Zipバックアップ & リストア機能 (画像ファイルを分離して構造化)
          * ---------------------------------------------------- */
         async function exportZipBackup() {
             if (typeof JSZip === 'undefined') {
@@ -1441,9 +1434,34 @@
             }
             try {
                 const zip = new JSZip();
-                // 写真データ(Base64)を含む logs 配列全データを sella_backup.json として格納
-                const jsonStr = JSON.stringify(logs, null, 2);
-                zip.file("sella_backup.json", jsonStr);
+                const imgFolder = zip.folder("images");
+
+                // バックアップ用JSONデータの作成（画像をファイル参照形式へ置換）
+                const exportLogs = logs.map((log) => {
+                    const logCopy = { ...log };
+                    if (logCopy.images && logCopy.images.length > 0) {
+                        logCopy.images = logCopy.images.map((imgBase64, imgIdx) => {
+                            if (typeof imgBase64 === 'string' && imgBase64.startsWith('data:image')) {
+                                const matches = imgBase64.match(/^data:(image\/\w+);base64,(.+)$/);
+                                let ext = 'jpg';
+                                let base64Data = imgBase64;
+                                if (matches) {
+                                    ext = matches[1].split('/')[1] || 'jpg';
+                                    base64Data = matches[2];
+                                } else {
+                                    base64Data = imgBase64.replace(/^data:image\/\w+;base64,/, '');
+                                }
+                                const fileName = `img_${log.id}_${imgIdx}.${ext}`;
+                                imgFolder.file(fileName, base64Data, { base64: true });
+                                return `images/${fileName}`;
+                            }
+                            return imgBase64;
+                        });
+                    }
+                    return logCopy;
+                });
+
+                zip.file("sella_backup.json", JSON.stringify(exportLogs, null, 2));
 
                 const content = await zip.generateAsync({ type: "blob" });
                 const url = URL.createObjectURL(content);
@@ -1486,6 +1504,30 @@
 
                 if (Array.isArray(imported)) {
                     if (confirm(`現在のデータに上書きして ${imported.length} 件のログ（写真含め全データ）を復元しますか？`)) {
+                        // 画像ファイル参照（images/xxx.jpg）を Base64 に展開復元
+                        for (const item of imported) {
+                            if (item.images && item.images.length > 0) {
+                                const restoredImages = [];
+                                for (const imgPath of item.images) {
+                                    if (typeof imgPath === 'string' && !imgPath.startsWith('data:image')) {
+                                        const cleanPath = imgPath.replace(/^\/+/, '');
+                                        const imgFile = zipContent.file(cleanPath) || zipContent.file(cleanPath.replace('images/', ''));
+                                        if (imgFile) {
+                                            const base64 = await imgFile.async("base64");
+                                            const ext = cleanPath.split('.').pop().toLowerCase();
+                                            const mime = (ext === 'png') ? 'image/png' : (ext === 'webp' ? 'image/webp' : 'image/jpeg');
+                                            restoredImages.push(`data:${mime};base64,${base64}`);
+                                        } else {
+                                            restoredImages.push(imgPath);
+                                        }
+                                    } else {
+                                        restoredImages.push(imgPath);
+                                    }
+                                }
+                                item.images = restoredImages;
+                            }
+                        }
+
                         logs = imported;
                         saveLogsToLocalStorage();
                         alert("✅ ZIPファイルからの全データ復元が完了しました。");
