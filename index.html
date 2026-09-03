@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v23 - Enhanced AI & UX)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v25 - Compression & Exif Fixed)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -85,10 +85,10 @@
         .brand-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
         .brand-meta { font-size: 11px; color: var(--text-secondary); }
 
-        /* モーダル重なり順（z-index）調整：フォーム modal を最前面へ */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
         #detail-modal { z-index: 1000; }
         #form-modal { z-index: 1200; }
+        #lightbox-modal { z-index: 1500; background: rgba(0,0,0,0.92); padding: 0; }
         .modal-overlay.active { display: flex; }
         .modal-content { background-color: var(--panel-bg); border: 1px solid var(--border-color); width: 100%; max-width: 560px; border-radius: var(--border-radius-lg); box-shadow: var(--shadow); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; }
         .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); }
@@ -96,10 +96,9 @@
         .close-btn { background: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; border: none; }
         .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
         
-        /* スライダーギャラリー */
         .slider-container { position: relative; width: 100%; height: 240px; background: #000; border-radius: 8px; overflow: hidden; user-select: none; touch-action: pan-y; }
         .slider-wrapper { display: flex; height: 100%; transition: transform 0.3s ease-out; }
-        .slide { min-width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .slide { min-width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; cursor: zoom-in; }
         .slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
         .slider-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.6); color: #fff; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; z-index: 10; font-size: 18px; display: flex; align-items: center; justify-content: center; }
         .slider-btn.prev { left: 10px; }
@@ -109,9 +108,9 @@
         .dot.active { background: var(--accent-gold); transform: scale(1.2); }
 
         .form-image-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
-        .form-image-thumb-wrapper { position: relative; aspect-ratio: 1; border: 2px solid var(--border-color); border-radius: var(--border-radius-md); overflow: hidden; background-color: #000; }
+        .form-image-thumb-wrapper { position: relative; aspect-ratio: 1; border: 2px solid var(--border-color); border-radius: var(--border-radius-md); overflow: hidden; background-color: #000; cursor: zoom-in; }
         .form-image-thumb-wrapper img { width: 100%; height: 100%; object-fit: cover; }
-        .form-image-delete-btn { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background-color: var(--danger-color); color: #fff; border: none; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .form-image-delete-btn { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background-color: var(--danger-color); color: #fff; border: none; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; }
 
         .form-group { margin-bottom: 14px; position: relative; }
         .form-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
@@ -119,7 +118,6 @@
         
         input, textarea, select { width: 100%; background-color: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-primary); padding: 10px 12px; border-radius: var(--border-radius-md); font-size: 14px; transition: var(--transition); }
         
-        /* AI自動入力ハイライト表示スタイル */
         .ai-updated-input {
             border-color: var(--accent-amber) !important;
             background-color: var(--ai-bg) !important;
@@ -189,7 +187,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v23.0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v25.0</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -217,7 +215,6 @@
 
             <!-- ビューパネル2：設定＆アカウント＆AI -->
             <div id="view-settings" class="view-panel">
-                <!-- 🌐 Googleアカウント連携 -->
                 <div class="card">
                     <div class="card-title"><span>🌐</span> Google アカウント連携</div>
                     <div id="google-auth-status" style="margin-bottom: 14px;">
@@ -234,7 +231,6 @@
                     </div>
                 </div>
 
-                <!-- 🤖 Gemini API Key & モデル取得 -->
                 <div class="card">
                     <div class="card-title"><span>🤖</span> Gemini AI 設定</div>
                     <div class="form-group">
@@ -261,18 +257,16 @@
                     </div>
                 </div>
 
-                <!-- 🔄 過去ログのAI一括再解析機能 -->
                 <div class="card">
                     <div class="card-title"><span>🔄</span> 過去ログのAI再解析</div>
                     <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px; line-height:1.5;">
-                        画像が登録されている過去のログをAIで自動解析し、空欄部分のみ（銘柄名・酒蔵・特定名称・産地・AI豆知識）を補完します。既存の入力内容や日付・感想は上書きされません。
+                        画像が登録されている過去のログをAIで自動解析し、空欄部分のみ（銘柄名・酒蔵・特定名称・産地・AI豆知識）を補完します。
                     </p>
                     <button id="btn-batch-ai" onclick="batchAnalyzePastLogs()" style="width: 100%; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;">
                         ✨ 画像付き過去ログを一括AI解析
                     </button>
                 </div>
 
-                <!-- 💾 データ管理 -->
                 <div class="card">
                     <div class="card-title"><span>💾</span> バックアップ & 復元</div>
                     <button onclick="exportJSON()" style="width: 100%; margin-bottom: 10px;">📤 JSON出力</button>
@@ -290,7 +284,7 @@
         </div>
     </div>
 
-    <!-- モーダル1：記録登録＆編集フォーム（最前面 z-index: 1200） -->
+    <!-- モーダル1：記録登録＆編集フォーム -->
     <div class="modal-overlay" id="form-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -300,7 +294,7 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>写真</label>
+                    <label>写真 (自動軽量化・撮影日取得対応)</label>
                     <input type="file" id="image-file-input" accept="image/*" multiple style="display:none;" onchange="processMultipleImages(this)">
                     <div style="display: flex; gap: 10px; margin-bottom: 8px;">
                         <button type="button" class="secondary" style="flex:1;" onclick="document.getElementById('image-file-input').click()">📂 画像を選択</button>
@@ -364,11 +358,10 @@
                 </div>
 
                 <div class="form-group">
-                    <label>飲んだ日</label>
+                    <label>飲んだ日 (写真から自動設定可能)</label>
                     <input type="date" id="drink-date">
                 </div>
 
-                <!-- 個人の感想とAI豆知識・情報を明確に分離 -->
                 <div class="form-group">
                     <label>💬 個人の感想・メモ</label>
                     <textarea id="drink-memo" rows="3" placeholder="味わいや一緒に食べた料理、シチュエーションなど..."></textarea>
@@ -387,7 +380,7 @@
         </div>
     </div>
 
-    <!-- モーダル2：お酒の詳細画面（z-index: 1000） -->
+    <!-- モーダル2：お酒の詳細画面 -->
     <div class="modal-overlay" id="detail-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -395,7 +388,6 @@
                 <button class="close-btn" onclick="closeDetailModal()">×</button>
             </div>
             <div class="modal-body">
-                <!-- スワイプギャラリー -->
                 <div id="detail-gallery-wrapper" style="margin-bottom: 16px; display:none;">
                     <div class="slider-container" id="slider-container">
                         <button class="slider-btn prev" onclick="moveSlide(-1)">❮</button>
@@ -417,7 +409,6 @@
                     </div>
                 </div>
 
-                <!-- タイムライン（個別のログ編集がわかりやすいカード形式） -->
                 <div class="card" style="padding:14px;">
                     <div style="font-weight:bold; color:var(--accent-gold); margin-bottom:12px;">🔁 飲酒履歴</div>
                     <div id="detail-timeline-list" style="display:flex; flex-direction:column; gap:12px;"></div>
@@ -428,20 +419,43 @@
         </div>
     </div>
 
+    <!-- モーダル3：ライトボックス -->
+    <div class="modal-overlay" id="lightbox-modal">
+        <button class="close-btn" onclick="closeLightbox()" style="position: absolute; top: 16px; right: 20px; font-size: 32px; color: #fff; z-index: 1510;">×</button>
+        
+        <div id="lightbox-zoom-controls" style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 1510; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); padding: 8px 16px; border-radius: 30px; border: 1px solid var(--border-color);">
+            <button type="button" class="secondary" onclick="zoomLightbox(0.3)" style="color:#fff; border-color:#555; padding: 6px 14px; font-size: 13px;">🔍＋</button>
+            <button type="button" class="secondary" onclick="zoomLightbox(-0.3)" style="color:#fff; border-color:#555; padding: 6px 14px; font-size: 13px;">🔍−</button>
+            <button type="button" class="secondary" onclick="resetLightboxZoom()" style="color:#fff; border-color:#555; padding: 6px 14px; font-size: 13px;">🔄 リセット</button>
+        </div>
+
+        <div id="lightbox-container" style="width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;">
+            <img id="lightbox-img" src="" style="max-width: 90vw; max-height: 85vh; object-fit: contain; transition: transform 0.1s ease-out; cursor: grab; user-select: none;">
+        </div>
+    </div>
+
     <script>
         const GOOGLE_CLIENT_ID = "649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com";
         let tempUploadedImages = [];
         let currentSlideIndex = 0;
         let slideImages = [];
         let currentBrandKey = { name: '', brewery: '' };
-        
-        // AI自動入力前の値を記憶する状態ホルダー
         let preAiState = {};
+
+        // ズーム変数
+        let lbScale = 1;
+        let lbTranslateX = 0;
+        let lbTranslateY = 0;
+        let lbStartDist = 0;
+        let lbStartScale = 1;
+        let lbIsDragging = false;
+        let lbStartX = 0, lbStartY = 0;
 
         window.onload = function() {
             loadSettings();
             renderLogs();
             initSwipeEvents();
+            initLightboxEvents();
         };
 
         function getLogs() {
@@ -449,7 +463,13 @@
         }
 
         function saveLogsToStorage(logs) {
-            localStorage.setItem('sella_logs', JSON.stringify(logs));
+            try {
+                localStorage.setItem('sella_logs', JSON.stringify(logs));
+                return true;
+            } catch (e) {
+                alert("⚠️ 保存エラー: 画像データ量が大きすぎるため保存できませんでした。不要な画像を削除するか枚数を減らしてください。");
+                return false;
+            }
         }
 
         function loadSettings() {
@@ -465,7 +485,6 @@
         function saveGeminiKey(val) { localStorage.setItem('sella_gemini_key', val); }
         function saveGeminiModel(val) { localStorage.setItem('sella_gemini_model', val); }
 
-        /* APIキー コピー & 貼り付け */
         function copyGeminiKey() {
             const key = document.getElementById('setting-gemini-key').value;
             if (!key) return alert("コピーするAPI Keyが入力されていません。");
@@ -486,7 +505,6 @@
             }
         }
 
-        /* Google OAuth */
         function initiateGoogleLogin() {
             if (!window.google) return alert("Google認証ライブラリ読み込み中...");
             const client = google.accounts.oauth2.initTokenClient({
@@ -530,7 +548,6 @@
             document.getElementById('btn-google-logout').style.display = 'none';
         }
 
-        /* Dynamic Gemini Models */
         async function fetchGeminiModels() {
             const key = localStorage.getItem('sella_gemini_key');
             if (!key) return alert("先にGemini API Keyを入力してください。");
@@ -557,7 +574,115 @@
             }
         }
 
-        /* ✨ AI画像解析（非破壊・色分け・元に戻す対応・AI情報独立） */
+        /* 📸 画像の軽量化圧縮処理 (localStorage溢れ防止) */
+        function compressImage(file, maxWidth = 1000, quality = 0.7) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let width = img.width;
+                        let height = img.height;
+                        if (width > maxWidth || height > maxWidth) {
+                            if (width > height) {
+                                height = Math.round((height * maxWidth) / width);
+                                width = maxWidth;
+                            } else {
+                                width = Math.round((width * maxWidth) / height);
+                                height = maxWidth;
+                            }
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        /* 📅 画像Exifの撮影日時（DateTimeOriginal）抽出 */
+        function getExifDate(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const buffer = e.target.result;
+                    const view = new DataView(buffer);
+                    if (view.byteLength < 2 || view.getUint16(0, false) !== 0xFFD8) return resolve(null);
+                    
+                    let offset = 2;
+                    const length = view.byteLength;
+                    while (offset < length) {
+                        if (offset + 4 > length) break;
+                        const marker = view.getUint16(offset, false);
+                        offset += 2;
+                        if (marker === 0xFFE1) {
+                            if (view.getUint32(offset + 2, false) !== 0x45786966) return resolve(null);
+                            const little = view.getUint16(offset + 8, false) === 0x4949;
+                            let ifdOffset = offset + 8 + view.getUint32(offset + 12, little);
+                            const tags = view.getUint16(ifdOffset, little);
+                            ifdOffset += 2;
+                            for (let i = 0; i < tags; i++) {
+                                const tagOffset = ifdOffset + (i * 12);
+                                if (tagOffset + 12 > length) break;
+                                if (view.getUint16(tagOffset, little) === 0x9003) { // DateTimeOriginal
+                                    const valOffset = offset + 8 + view.getUint32(tagOffset + 8, little);
+                                    let dateStr = "";
+                                    for (let j = 0; j < 10; j++) {
+                                        dateStr += String.fromCharCode(view.getUint8(valOffset + j));
+                                    }
+                                    const parts = dateStr.split(":");
+                                    if (parts.length === 3) {
+                                        return resolve(`${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`);
+                                    }
+                                }
+                            }
+                        } else if ((marker & 0xFF00) !== 0xFF00) {
+                            break;
+                        } else {
+                            offset += view.getUint16(offset, false);
+                        }
+                    }
+                    resolve(null);
+                };
+                reader.readAsArrayBuffer(file.slice(0, 128 * 1024));
+            });
+        }
+
+        /* 複数画像処理 (自動リサイズ圧縮 & 撮影日取得) */
+        async function processMultipleImages(input) {
+            const files = Array.from(input.files);
+            if (files.length === 0) return;
+
+            // 最初に見つかった写真の撮影日時（Exif）を取得
+            let photoDate = null;
+            for (const file of files) {
+                photoDate = await getExifDate(file);
+                if (!photoDate && file.lastModified) {
+                    const d = new Date(file.lastModified);
+                    photoDate = d.toISOString().split('T')[0];
+                }
+                if (photoDate) break;
+            }
+
+            if (photoDate) {
+                document.getElementById('drink-date').value = photoDate;
+            }
+
+            // 画像を圧縮変換して配列に追加
+            for (const file of files) {
+                const compressedBase64 = await compressImage(file);
+                tempUploadedImages.push(compressedBase64);
+            }
+            renderFormThumbs();
+            input.value = ""; // リセット
+        }
+
+        /* ✨ AI画像解析 */
         async function analyzeImageWithGemini() {
             const key = localStorage.getItem('sella_gemini_key');
             if (!key) return alert("設定画面でGemini API Keyを登録してください。");
@@ -570,12 +695,9 @@
             btn.innerText = "⌛ AI解析中...";
             btn.disabled = true;
 
-            // AI実行前のフォーム状態を保存（Undo用）
             const fields = ['drink-name', 'drink-subtype', 'drink-brewery', 'drink-region', 'drink-ai-memo'];
             preAiState = {};
-            fields.forEach(f => {
-                preAiState[f] = document.getElementById(f).value;
-            });
+            fields.forEach(f => { preAiState[f] = document.getElementById(f).value; });
 
             try {
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
@@ -599,7 +721,6 @@
                         const result = JSON.parse(jsonMatch[0]);
                         let updatedAny = false;
 
-                        // AI回答がある部分のみ上書きし、ハイライト＋「戻す」ボタンを表示
                         const map = {
                             'drink-name': result.name,
                             'drink-brewery': result.brewery,
@@ -622,7 +743,7 @@
 
                         if (updatedAny) {
                             document.getElementById('ai-revert-bar').style.display = 'flex';
-                            alert("✨ AI解析結果を入力しました！（変更された項目はハイライトされています）");
+                            alert("✨ AI解析結果を入力しました！");
                         } else {
                             alert("画像から新しい情報を読み取れませんでした。");
                         }
@@ -636,7 +757,6 @@
             }
         }
 
-        /* 個別・一括 Undo（元に戻す）機能 */
         function revertField(fieldId) {
             if (preAiState[fieldId] !== undefined) {
                 const input = document.getElementById(fieldId);
@@ -652,7 +772,6 @@
             document.getElementById('ai-revert-bar').style.display = 'none';
         }
 
-        /* 過去ログの一括AI解析（日付・感想は維持） */
         async function batchAnalyzePastLogs() {
             const key = localStorage.getItem('sella_gemini_key');
             if (!key) return alert("設定画面でGemini API Keyを登録してください。");
@@ -664,7 +783,7 @@
             });
 
             if (targetIndices.length === 0) return alert("解析可能な画像付きログが見つかりませんでした。");
-            if (!confirm(`画像付きのログ ${targetIndices.length} 件をAIで一括解析しますか？\n（未入力の銘柄名・酒蔵・AI豆知識のみ補完され、既存の感想や日付は上書きされません）`)) return;
+            if (!confirm(`画像付きのログ ${targetIndices.length} 件をAIで一括解析しますか？`)) return;
 
             const btn = document.getElementById('btn-batch-ai');
             const originalBtnText = btn.innerText;
@@ -699,7 +818,6 @@
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         if (jsonMatch) {
                             const result = JSON.parse(jsonMatch[0]);
-                            // 空欄の項目のみを補完（非破壊）
                             if (result.name && !logs[idx].name) logs[idx].name = result.name;
                             if (result.brewery && !logs[idx].brewery) logs[idx].brewery = result.brewery;
                             if (result.subtype && !logs[idx].subtype) logs[idx].subtype = result.subtype;
@@ -709,7 +827,7 @@
                         }
                     }
                 } catch (e) {
-                    console.error(`Log ID ${log.id} の解析エラー:`, e);
+                    console.error(`Log ID ${log.id} 解析エラー:`, e);
                 }
             }
 
@@ -780,7 +898,6 @@
             document.getElementById('detail-spec-subtype').innerText = latest.subtype || '通常';
             document.getElementById('detail-spec-rating').innerText = `★ ${latest.rating}`;
 
-            // ギャラリー
             slideImages = logs.flatMap(l => l.images || []);
             const wrapper = document.getElementById('slider-wrapper');
             const dots = document.getElementById('slider-dots');
@@ -788,7 +905,7 @@
 
             if (slideImages.length > 0) {
                 galleryWrapper.style.display = 'block';
-                wrapper.innerHTML = slideImages.map(img => `<div class="slide"><img src="${img}"></div>`).join('');
+                wrapper.innerHTML = slideImages.map(img => `<div class="slide" onclick="openLightbox('${img}')"><img src="${img}"></div>`).join('');
                 dots.innerHTML = slideImages.map((_, i) => `<div class="dot ${i===0?'active':''}" onclick="goToSlide(${i})"></div>`).join('');
                 currentSlideIndex = 0;
                 updateSliderPosition();
@@ -796,7 +913,6 @@
                 galleryWrapper.style.display = 'none';
             }
 
-            // タイムライン：個別のログ編集が目立つデザイン
             const tl = document.getElementById('detail-timeline-list');
             tl.innerHTML = logs.map(l => `
                 <div style="background:var(--card-bg); border:1px solid var(--border-color); padding:14px; border-left:4px solid var(--accent-amber); border-radius:8px;">
@@ -804,7 +920,7 @@
                         <span style="font-size:12px; color:var(--text-secondary); font-weight:600;">📅 ${l.date}</span>
                         <div style="display:flex; gap:8px; align-items:center;">
                             <span style="color:var(--accent-amber); font-weight:bold; font-size:13px;">★ ${l.rating}</span>
-                            <button onclick="openFormModal('edit', '${l.id}')" style="padding:4px 10px; font-size:12px;">✏️ 編集する</button>
+                            <button onclick="openFormModal('edit', '${l.id}')" style="padding:4px 10px; font-size:12px;">✏️ 編集</button>
                             <button class="danger" onclick="deleteSingleLog('${l.id}')" style="padding:4px 8px; font-size:12px;">🗑️</button>
                         </div>
                     </div>
@@ -860,29 +976,17 @@
             renderLogs();
         }
 
-        /* 画像アップロード補助 */
-        function processMultipleImages(input) {
-            Array.from(input.files).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    tempUploadedImages.push(e.target.result);
-                    renderFormThumbs();
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-
         function renderFormThumbs() {
             const container = document.getElementById('form-image-list-container');
             container.innerHTML = tempUploadedImages.map((img, i) => `
-                <div class="form-image-thumb-wrapper">
+                <div class="form-image-thumb-wrapper" onclick="openLightbox('${img}')">
                     <img src="${img}">
-                    <button class="form-image-delete-btn" onclick="tempUploadedImages.splice(${i},1);renderFormThumbs();">×</button>
+                    <button class="form-image-delete-btn" onclick="event.stopPropagation(); tempUploadedImages.splice(${i},1); renderFormThumbs();">×</button>
                 </div>
             `).join('');
         }
 
-        /* 保存処理（銘柄情報変更時に一括適用するかダイアログで確認） */
+        /* 💾 保存処理 (エラーハンドリング機能付き) */
         function saveLog() {
             const name = document.getElementById('drink-name').value.trim();
             if (!name) return alert("銘柄名を入力してください");
@@ -912,9 +1016,8 @@
             if (editId) {
                 const oldLog = logs.find(l => l.id === editId);
                 
-                // 銘柄基本情報が変更された場合、他ログも一括で変更するか確認
                 if (oldLog && (oldLog.name !== newName || oldLog.brewery !== newBrewery || oldLog.subtype !== newSubtype || oldLog.region !== newRegion)) {
-                    if (confirm("銘柄名や酒蔵などの基本情報が変更されています。\n「" + oldLog.name + "」の他の過去ログも一括更新しますか？\n\n[OK] 一括更新する / [キャンセル] このログのみ変更")) {
+                    if (confirm("銘柄名や酒蔵などの基本情報が変更されています。\n「" + oldLog.name + "」の他の過去ログも一括更新しますか？")) {
                         logs.forEach(l => {
                             if (l.name === oldLog.name && l.brewery === oldLog.brewery) {
                                 l.name = newName;
@@ -933,14 +1036,113 @@
                 logs.unshift(logData);
             }
 
-            saveLogsToStorage(logs);
-            closeFormModal();
+            // ローカルストレージ保存（成功した場合のみモーダルを閉じる）
+            if (saveLogsToStorage(logs)) {
+                closeFormModal();
 
-            if (document.getElementById('detail-modal').classList.contains('active')) {
-                showLogDetail(logData.name, logData.brewery);
+                if (document.getElementById('detail-modal').classList.contains('active')) {
+                    showLogDetail(logData.name, logData.brewery);
+                }
+
+                renderLogs();
             }
+        }
 
-            renderLogs();
+        /* ライトボックス機能 */
+        function openLightbox(src) {
+            const img = document.getElementById('lightbox-img');
+            img.src = src;
+            resetLightboxZoom();
+            document.getElementById('lightbox-modal').classList.add('active');
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox-modal').classList.remove('active');
+        }
+
+        function updateLightboxTransform() {
+            const img = document.getElementById('lightbox-img');
+            img.style.transform = `translate(${lbTranslateX}px, ${lbTranslateY}px) scale(${lbScale})`;
+        }
+
+        function zoomLightbox(delta) {
+            lbScale = Math.max(0.5, Math.min(6, lbScale + delta));
+            updateLightboxTransform();
+        }
+
+        function resetLightboxZoom() {
+            lbScale = 1;
+            lbTranslateX = 0;
+            lbTranslateY = 0;
+            updateLightboxTransform();
+        }
+
+        function initLightboxEvents() {
+            const container = document.getElementById('lightbox-container');
+            const img = document.getElementById('lightbox-img');
+
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                zoomLightbox(e.deltaY < 0 ? 0.2 : -0.2);
+            }, { passive: false });
+
+            container.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    lbStartDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    lbStartScale = lbScale;
+                } else if (e.touches.length === 1) {
+                    lbIsDragging = true;
+                    lbStartX = e.touches[0].clientX - lbTranslateX;
+                    lbStartY = e.touches[0].clientY - lbTranslateY;
+                }
+            }, { passive: true });
+
+            container.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2) {
+                    const dist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    if (lbStartDist > 0) {
+                        lbScale = Math.max(0.5, Math.min(6, lbStartScale * (dist / lbStartDist)));
+                        updateLightboxTransform();
+                    }
+                } else if (e.touches.length === 1 && lbIsDragging && lbScale > 1) {
+                    lbTranslateX = e.touches[0].clientX - lbStartX;
+                    lbTranslateY = e.touches[0].clientY - lbStartY;
+                    updateLightboxTransform();
+                }
+            }, { passive: true });
+
+            container.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) lbStartDist = 0;
+                if (e.touches.length === 0) lbIsDragging = false;
+            });
+
+            img.addEventListener('mousedown', (e) => {
+                if (lbScale > 1) {
+                    lbIsDragging = true;
+                    lbStartX = e.clientX - lbTranslateX;
+                    lbStartY = e.clientY - lbTranslateY;
+                    img.style.cursor = 'grabbing';
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (lbIsDragging && lbScale > 1) {
+                    lbTranslateX = e.clientX - lbStartX;
+                    lbTranslateY = e.clientY - lbStartY;
+                    updateLightboxTransform();
+                }
+            });
+
+            window.addEventListener('mouseup', () => {
+                lbIsDragging = false;
+                img.style.cursor = 'grab';
+            });
         }
 
         /* モーダル制御 */
@@ -950,7 +1152,6 @@
             document.getElementById('edit-log-id').value = '';
             document.getElementById('ai-revert-bar').style.display = 'none';
 
-            // 入力ハイライト＆復元ボタンのリセット
             const fieldIds = ['drink-name', 'drink-subtype', 'drink-brewery', 'drink-region', 'drink-ai-memo'];
             fieldIds.forEach(f => {
                 const input = document.getElementById(f);
@@ -990,8 +1191,6 @@
             }
 
             renderFormThumbs();
-            
-            // 最前面に表示されるよう active クラス付与
             document.getElementById('form-modal').classList.add('active');
         }
 
