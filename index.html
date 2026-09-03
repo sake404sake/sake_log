@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.3 - Design Update)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.4 - Model Auto Fetch Update)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -115,7 +115,6 @@
         .brand-subname { font-size: 13px; color: var(--accent-amber); font-weight: 500; margin-bottom: 4px; }
         .brand-meta { font-size: 11px; color: var(--text-secondary); }
 
-        /* 詳細画面用の視認性向上スタイル */
         .detail-item {
             display: flex;
             flex-direction: column;
@@ -235,7 +234,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.3</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.4</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -270,7 +269,7 @@
             <!-- ビューパネル2：設定＆アカウント＆AI -->
             <div id="view-settings" class="view-panel">
                 <div class="card">
-                    <div class="card-title"><span>🌐</span> Google アカウント連携</div>
+                    <div class="card-title"><span>🌐</span> Google アカウント連携プラグイン</div>
                     <div id="google-auth-status" style="margin-bottom: 14px;">
                         <span style="font-size: 12px; color: var(--text-secondary);">未ログイン（ローカル保存動作中）</span>
                     </div>
@@ -301,7 +300,7 @@
                     <div class="form-group">
                         <div class="form-label-row">
                             <label>使用するモデル</label>
-                            <a href="javascript:void(0)" onclick="fetchGeminiModels()" style="color:var(--accent-gold); font-size:11px; text-decoration:none;">🔄 利用可能なモデル一覧を取得</a>
+                            <a href="javascript:void(0)" onclick="fetchGeminiModels(false)" style="color:var(--accent-gold); font-size:11px; text-decoration:none;">🔄 利用可能なモデル一覧を再取得</a>
                         </div>
                         <select id="setting-gemini-model" onchange="saveGeminiModel(this.value)">
                             <option value="gemini-2.5-flash">gemini-2.5-flash (標準)</option>
@@ -312,7 +311,7 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-title"><span>🔄</span> 過去ログのAI再解析</div>
+                    <div class="card-title"><span>🔄</span> 過去ログのAI再解析プラグイン</div>
                     <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px; line-height:1.5;">
                         画像が登録されている過去のログをAIで自動解析し、空欄部分のみ（銘柄名・詳細・酒蔵・特定名称・産地・AI豆知識）を補完します。
                     </p>
@@ -351,7 +350,7 @@
                     <label>写真 (自動軽量化・撮影日取得対応)</label>
                     <input type="file" id="image-file-input" accept="image/*" multiple style="display:none;" onchange="processMultipleImages(this)">
                     <div style="display: flex; gap: 10px; margin-bottom: 8px;">
-                        <button type="button" class="secondary" style="flex:1;" onclick="document.getElementById('image-file-input').click()">📂 画像を選択</button>
+                        <button type="button" class="secondary" style="flex:1;" onclick="triggerFileInput()">📂 画像を選択</button>
                         <button type="button" id="btn-ai-analyze" style="flex:1; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;" onclick="analyzeImageWithGemini()">✨ AIラベル自動入力</button>
                     </div>
                     <div id="ai-revert-bar" style="display:none; justify-content:space-between; align-items:center; background:var(--ai-bg); padding:6px 10px; border-radius:6px; margin-bottom:8px; border:1px solid var(--accent-amber);">
@@ -477,14 +476,16 @@
         let currentSlideIndexes = {};
         let originalFieldValues = {};
 
-        window.onload = function() {
+        window.onload = async function() {
             loadSavedSettings();
             loadLogsFromLocalStorage();
             checkGoogleAuthStatus();
             initPullToRefresh();
+            // 起動時にAPIキーが登録されている場合、最新のモデル一覧を自動取得し前回選択を復元
+            await fetchGeminiModels(true);
         };
 
-        /* 📱 引っ張って更新 (Pull-to-Refresh) 機能の実装 */
+        /* 📱 引っ張って更新 (Pull-to-Refresh) 機能 */
         function initPullToRefresh() {
             const mainContent = document.getElementById('main-content');
             const ptrIndicator = document.getElementById('ptr-indicator');
@@ -494,7 +495,7 @@
             let touchStartY = 0;
             let touchMoveY = 0;
             let isPulling = false;
-            const threshold = 70; // 更新発動閾値(px)
+            const threshold = 70;
 
             mainContent.addEventListener('touchstart', (e) => {
                 if (mainContent.scrollTop <= 0) {
@@ -531,10 +532,9 @@
                     ptrText.textContent = "更新中...";
                     ptrSpinner.style.display = "inline-block";
 
-                    // ログ再読み込み・描画の実行
                     loadLogsFromLocalStorage();
+                    await fetchGeminiModels(true);
                     
-                    // フィードバックアニメーション用のわずかな遅延
                     await new Promise(resolve => setTimeout(resolve, 600));
 
                     ptrIndicator.style.height = '0px';
@@ -548,6 +548,11 @@
                 touchStartY = 0;
                 touchMoveY = 0;
             });
+        }
+
+        function triggerFileInput() {
+            const fileInput = document.getElementById('image-file-input');
+            if (fileInput) fileInput.click();
         }
 
         function formatDateLocal(date) {
@@ -565,11 +570,17 @@
         }
 
         function saveGeminiKey(val) {
-            localStorage.setItem("sella_gemini_key", val.trim());
+            const trimmed = val.trim();
+            localStorage.setItem("sella_gemini_key", trimmed);
+            if (trimmed) {
+                fetchGeminiModels(true);
+            }
         }
 
         function saveGeminiModel(val) {
-            localStorage.setItem("sella_gemini_model", val);
+            if (val) {
+                localStorage.setItem("sella_gemini_model", val);
+            }
         }
 
         function copyGeminiKey() {
@@ -595,9 +606,15 @@
             }
         }
 
-        async function fetchGeminiModels() {
+        /* 🤖 モデルリストを動的取得 & 前回使用モデルを自動記憶・選択復元 */
+        async function fetchGeminiModels(isAuto = false) {
             const apiKey = document.getElementById('setting-gemini-key').value.trim();
-            if (!apiKey) return alert("先にあらかじめ Gemini API Key を入力してください。");
+            if (!apiKey) {
+                if (!isAuto) alert("先にあらかじめ Gemini API Key を入力してください。");
+                return;
+            }
+
+            const savedModel = localStorage.getItem("sella_gemini_model");
 
             try {
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
@@ -609,17 +626,38 @@
                 
                 const validModels = data.models.filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"));
                 
+                let modelFound = false;
                 validModels.forEach(m => {
                     const cleanName = m.name.replace('models/', '');
                     const opt = document.createElement('option');
                     opt.value = cleanName;
                     opt.textContent = `${cleanName} (${m.displayName || ''})`;
+                    if (savedModel && cleanName === savedModel) {
+                        opt.selected = true;
+                        modelFound = true;
+                    }
                     modelSelect.appendChild(opt);
                 });
 
-                alert("🔄 利用可能なモデル一覧を取得し、ドロップダウンを更新しました。");
+                if (modelFound) {
+                    modelSelect.value = savedModel;
+                } else if (savedModel) {
+                    const opt = document.createElement('option');
+                    opt.value = savedModel;
+                    opt.textContent = `${savedModel} (保存済み)`;
+                    opt.selected = true;
+                    modelSelect.prepend(opt);
+                } else if (modelSelect.options.length > 0) {
+                    saveGeminiModel(modelSelect.value);
+                }
+
+                if (!isAuto) {
+                    alert("🔄 利用可能なモデル一覧を取得し、ドロップダウンを更新しました。");
+                }
             } catch (e) {
-                alert("モデル一覧の取得に失敗しました: " + e.message);
+                if (!isAuto) {
+                    alert("モデル一覧の取得に失敗しました: " + e.message);
+                }
             }
         }
 
@@ -791,7 +829,6 @@
             });
         }
 
-        /* 📅 画像Exifの撮影日時抽出 */
         function getExifDate(file) {
             return new Promise((resolve) => {
                 if (!file || !file.type.includes('jpeg')) return resolve(null);
@@ -853,7 +890,6 @@
             });
         }
 
-        /* 複数画像処理 */
         async function processMultipleImages(input) {
             try {
                 const files = Array.from(input.files || []);
@@ -884,7 +920,7 @@
                 renderFormThumbs();
 
                 if (failedCount > 0) {
-                    alert(`⚠️ ${failedCount}枚の画像を取り込めませんでした。\n（JPEG/PNG形式でお試しいただくか、写真アプリで選択してください。）`);
+                    alert(`⚠️ ${failedCount}枚の画像を取り込めませんでした。`);
                 }
             } catch (e) {
                 console.error(e);
@@ -1389,16 +1425,52 @@
             }
         }
 
+        /* 🌐 Google Auth & Plugin 起動マネージャー */
+        function checkGoogleAuthStatus() {
+            const statusEl = document.getElementById('google-auth-status');
+            const loginBtn = document.getElementById('btn-google-login');
+            const logoutBtn = document.getElementById('btn-google-logout');
+
+            const savedToken = localStorage.getItem('sella_gdrive_token');
+            if (savedToken) {
+                if (statusEl) statusEl.innerHTML = '<span style="font-size: 12px; color: #34c759; font-weight: 600;">🟢 Google連携済み (トークン有効)</span>';
+                if (loginBtn) loginBtn.style.display = 'none';
+                if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+            } else {
+                if (statusEl) statusEl.innerHTML = '<span style="font-size: 12px; color: var(--text-secondary);">未ログイン（ローカル保存動作中）</span>';
+                if (loginBtn) loginBtn.style.display = 'inline-flex';
+                if (logoutBtn) logoutBtn.style.display = 'none';
+            }
+        }
+
         function initiateGoogleLogin() {
-            alert("Google Drive同期・ログイン機能の初期化処理を実行します（GSI認証連携）");
+            if (typeof google === 'undefined' || !google.accounts) {
+                alert("Google認証ライブラリ(GSI)がまだ読み込まれていないか、初期化中です。ネットワーク接続を確認して再試行してください。");
+                return;
+            }
+            
+            try {
+                const client = google.accounts.oauth2.initTokenClient({
+                    client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
+                    scope: 'https://www.googleapis.com/auth/drive.appdata',
+                    callback: (response) => {
+                        if (response.access_token) {
+                            localStorage.setItem('sella_gdrive_token', response.access_token);
+                            checkGoogleAuthStatus();
+                            alert("✅ Googleアカウントとの連携を開始しました。");
+                        }
+                    },
+                });
+                client.requestAccessToken();
+            } catch (e) {
+                alert("Google認証プラグインの起動手順:\nGoogle Cloud ConsoleでClient IDを取得して割り当てることで認証連携が有効になります。");
+            }
         }
 
         function executeGoogleLogout() {
-            alert("ログアウトしました。");
-        }
-
-        function checkGoogleAuthStatus() {
-            // ステータス表示ダミー
+            localStorage.removeItem('sella_gdrive_token');
+            checkGoogleAuthStatus();
+            alert("🚪 ログアウトしました。");
         }
 
         function escapeHtml(str) {
