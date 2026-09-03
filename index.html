@@ -1447,7 +1447,7 @@
             }
         }
 
-        /* 🌐 Google Auth & Plugin 起動マネージャー (毎回アカウント選択画面を強制表示する修正) */
+        /* 🌐 Google Auth & Plugin 起動マネージャー */
         function checkGoogleAuthStatus() {
             const statusEl = document.getElementById('google-auth-status');
             const loginBtn = document.getElementById('btn-google-login');
@@ -1478,8 +1478,14 @@
                 const client = google.accounts.oauth2.initTokenClient({
                     client_id: '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com',
                     scope: 'https://www.googleapis.com/auth/drive.appdata',
-                    prompt: 'select_account', // 💡 自動ログインを防ぎ、毎回アカウント選択ダイアログを表示
                     callback: async (response) => {
+                        // エラーハンドリングの追加（エラーが発生したらポップアップで表示）
+                        if (response.error) {
+                            alert("Googleログインエラー: " + response.error);
+                            console.error("Google Auth Error:", response);
+                            return;
+                        }
+
                         if (response.access_token) {
                             localStorage.setItem('sella_gdrive_token', response.access_token);
                             
@@ -1504,10 +1510,10 @@
                     },
                 });
 
-                // アカウント強制選択の指定でリクエストを発行
-                client.requestAccessToken({ prompt: 'select_account' });
+                // 標準のアクセストークン要求を発行
+                client.requestAccessToken();
             } catch (e) {
-                alert("Google認証プラグインの起動手順:\nGoogle Cloud ConsoleでClient IDを取得して割り当てることで認証連携が有効になります。");
+                alert("Google認証の起動に失敗しました: " + e.message);
             }
         }
 
