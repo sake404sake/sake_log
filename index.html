@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.4 - Model Auto Fetch Update)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.5)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- JSZip (ZIPファイルの作成・解凍用ライブラリ) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
             --bg-color: #0d0d0e;
@@ -61,7 +63,6 @@
         .nav-item:hover, .nav-item.active { color: var(--text-primary); background-color: var(--card-bg); border-left: 3px solid var(--accent-amber); }
         .main-content { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; padding: 24px; position: relative; }
         
-        /* Pull to Refresh スタイル */
         .ptr-indicator {
             display: flex;
             align-items: center;
@@ -69,27 +70,26 @@
             gap: 8px;
             height: 0;
             overflow: hidden;
-            transition: height 0.2s ease, opacity 0.2s ease;
             opacity: 0;
             color: var(--accent-amber);
             font-size: 13px;
             font-weight: 600;
             user-select: none;
+            will-change: height, opacity;
         }
         .ptr-indicator.pulling { opacity: 0.9; }
-        .ptr-indicator.refreshing { height: 48px; opacity: 1; }
+        .ptr-indicator.refreshing { height: 40px; opacity: 1; }
         .ptr-spinner {
             width: 16px;
             height: 16px;
             border: 2px solid var(--border-color);
             border-top-color: var(--accent-amber);
             border-radius: 50%;
-            animation: ptr-spin 0.8s linear infinite;
+            animation: ptr-spin 0.6s linear infinite;
             display: none;
         }
         @keyframes ptr-spin { to { transform: rotate(360deg); } }
 
-        /* ダッシュボード文字改行対策 */
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
         .header-title { font-size: 24px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
         .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
@@ -126,17 +126,8 @@
             padding-bottom: 8px;
             border-bottom: 1px solid var(--border-color);
         }
-        .detail-label {
-            font-size: 11px;
-            color: var(--text-secondary);
-            font-weight: 600;
-        }
-        .detail-value {
-            font-size: 15px;
-            color: var(--text-primary);
-            font-weight: 500;
-            word-break: break-word;
-        }
+        .detail-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+        .detail-value { font-size: 15px; color: var(--text-primary); font-weight: 500; word-break: break-word; }
 
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
         #detail-modal { z-index: 1000; }
@@ -238,7 +229,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.4</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.5</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -273,12 +264,11 @@
 
             <!-- ビューパネル2：設定＆アカウント＆AI -->
             <div id="view-settings" class="view-panel">
-                <!-- 追加：バージョン情報カード -->
                 <div class="card">
                     <div class="card-title"><span>ℹ️</span> アプリ情報</div>
                     <div style="font-size: 13px; color: var(--text-primary); display: flex; flex-direction: column; gap: 6px;">
                         <div><strong>アプリ名:</strong> Sella - お酒ログ管理 & アルバム</div>
-                        <div><strong>バージョン:</strong> v26.4 (Model Auto Fetch Update)</div>
+                        <div><strong>バージョン:</strong> v26.5 (Zip & Cloud Sync Update)</div>
                     </div>
                 </div>
 
@@ -290,7 +280,7 @@
 
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         <button id="btn-google-login" onclick="initiateGoogleLogin()" style="background-color: #4285F4; color: white;">
-                            Googleアカウントでログイン
+                            Googleアカウントでログイン（同期・データ移動）
                         </button>
                         <button id="btn-google-logout" class="danger" onclick="executeGoogleLogout()" style="display: none;">
                             🚪 ログアウト
@@ -336,9 +326,13 @@
 
                 <div class="card">
                     <div class="card-title"><span>💾</span> バックアップ & 復元</div>
-                    <button onclick="exportJSON()" style="width: 100%; margin-bottom: 10px;">📤 JSON出力</button>
-                    <textarea id="import-text" rows="2" placeholder="JSONを貼り付け" style="margin-bottom: 10px;"></textarea>
-                    <button class="secondary" onclick="importJSON()" style="width: 100%;">📥 インポート</button>
+                    <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px; line-height:1.5;">
+                        画像データを含む全てのログ（完全データ）をZIPファイルとして出力・復元できます。
+                    </p>
+                    <button onclick="exportZipBackup()" style="width: 100%; margin-bottom: 12px;">📤 Zipバックアップを出力 (写真込)</button>
+                    
+                    <input type="file" id="import-zip-file" accept=".zip" style="display: none;" onchange="importZipBackup(this)">
+                    <button class="secondary" onclick="document.getElementById('import-zip-file').click()" style="width: 100%;">📥 Zipアップロードでリストア</button>
                 </div>
             </div>
         </div>
@@ -495,11 +489,12 @@
             loadLogsFromLocalStorage();
             checkGoogleAuthStatus();
             initPullToRefresh();
-            // 起動時にAPIキーが登録されている場合、最新のモデル一覧を自動取得し前回選択を復元
             await fetchGeminiModels(true);
         };
 
-        /* 📱 引っ張って更新 (Pull-to-Refresh) 機能 (設定画面対応) */
+        /* ----------------------------------------------------
+         * 引っ張って更新（PTR）の高速・軽快化＆Settingページ無効化
+         * ---------------------------------------------------- */
         function initPullToRefresh() {
             const mainContent = document.getElementById('main-content');
             const ptrIndicator = document.getElementById('ptr-indicator');
@@ -509,12 +504,20 @@
             let touchStartY = 0;
             let touchMoveY = 0;
             let isPulling = false;
-            const threshold = 70;
+            const threshold = 60;
 
             mainContent.addEventListener('touchstart', (e) => {
+                // Settingページが開かれている場合はPTRを起動しない
+                const isDashboard = document.getElementById('view-dashboard').classList.contains('active');
+                if (!isDashboard) {
+                    isPulling = false;
+                    return;
+                }
+
                 if (mainContent.scrollTop <= 0) {
                     touchStartY = e.touches[0].clientY;
                     isPulling = true;
+                    ptrIndicator.style.transition = 'none'; // ドラッグ中はアニメーションなしで即時反応
                 }
             }, { passive: true });
 
@@ -524,11 +527,12 @@
                 const pullDistance = touchMoveY - touchStartY;
 
                 if (pullDistance > 0 && mainContent.scrollTop <= 0) {
-                    const height = Math.min(pullDistance * 0.45, 80);
+                    const height = Math.min(pullDistance * 0.5, 50);
                     ptrIndicator.style.height = `${height}px`;
+                    ptrIndicator.style.opacity = Math.min(height / 40, 1);
                     ptrIndicator.classList.add('pulling');
 
-                    if (height >= threshold * 0.45) {
+                    if (height >= threshold * 0.5) {
                         ptrText.textContent = "手放して更新";
                     } else {
                         ptrText.textContent = "↓ 引っ張って更新";
@@ -541,25 +545,30 @@
                 isPulling = false;
                 const pullDistance = touchMoveY - touchStartY;
 
-                if (pullDistance * 0.45 >= threshold * 0.45 && mainContent.scrollTop <= 0) {
+                ptrIndicator.style.transition = 'height 0.15s ease-out, opacity 0.15s ease-out';
+
+                if (pullDistance * 0.5 >= threshold * 0.5 && mainContent.scrollTop <= 0) {
                     ptrIndicator.classList.add('refreshing');
+                    ptrIndicator.style.height = '40px';
+                    ptrIndicator.style.opacity = '1';
                     ptrText.textContent = "更新中...";
                     ptrSpinner.style.display = "inline-block";
 
-                    // ダッシュボード・設定・アカウント状態全般を最新に更新
                     loadLogsFromLocalStorage();
                     loadSavedSettings();
                     checkGoogleAuthStatus();
                     await fetchGeminiModels(true);
                     
-                    await new Promise(resolve => setTimeout(resolve, 600));
+                    await new Promise(resolve => setTimeout(resolve, 200));
 
                     ptrIndicator.style.height = '0px';
+                    ptrIndicator.style.opacity = '0';
                     ptrIndicator.classList.remove('pulling', 'refreshing');
                     ptrSpinner.style.display = "none";
                     ptrText.textContent = "↓ 引っ張って更新";
                 } else {
                     ptrIndicator.style.height = '0px';
+                    ptrIndicator.style.opacity = '0';
                     ptrIndicator.classList.remove('pulling');
                 }
                 touchStartY = 0;
@@ -623,7 +632,6 @@
             }
         }
 
-        /* 🤖 モデルリストを動的取得 & 前回使用モデルを自動記憶・選択復元 */
         async function fetchGeminiModels(isAuto = false) {
             const apiKey = document.getElementById('setting-gemini-key').value.trim();
             if (!apiKey) {
@@ -693,6 +701,12 @@
         function saveLogsToLocalStorage() {
             localStorage.setItem('sella_logs', JSON.stringify(logs));
             renderLogs();
+            
+            // Googleログイン済みの場合はDrive側にも自動同期
+            const token = localStorage.getItem('sella_gdrive_token');
+            if (token) {
+                syncLocalDataToGoogleDrive(token, false);
+            }
         }
 
         function switchView(viewName) {
@@ -702,7 +716,6 @@
 
             document.getElementById(`view-${viewName}`).classList.add('active');
             
-            // ビュー切り替え時にスクロール位置を最上部にリセット（Pull-to-Refresh発動を保証）
             const mainContent = document.getElementById('main-content');
             if (mainContent) mainContent.scrollTop = 0;
 
@@ -809,7 +822,6 @@
             renderLogs(filtered);
         }
 
-        /* 📸 画像の軽量化圧縮処理 */
         function compressImage(file, maxWidth = 600, quality = 0.4) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
@@ -1420,34 +1432,77 @@
             closeDetailModal();
         }
 
-        function exportJSON() {
-            const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `sella_backup_${formatDateLocal(new Date())}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function importJSON() {
-            const text = document.getElementById('import-text').value.trim();
-            if (!text) return alert("JSONテキストを入力してください。");
+        /* ----------------------------------------------------
+         * Zipバックアップ & リストア機能 (画像Base64含め全保存)
+         * ---------------------------------------------------- */
+        async function exportZipBackup() {
+            if (typeof JSZip === 'undefined') {
+                return alert("JSZipライブラリが読み込まれていません。ネットワーク接続を確認してください。");
+            }
             try {
-                const imported = JSON.parse(text);
-                if (Array.isArray(imported)) {
-                    logs = imported;
-                    saveLogsToLocalStorage();
-                    alert("インポートが完了しました。");
-                } else {
-                    alert("無効なJSONフォーマットです。");
-                }
-            } catch(e) {
-                alert("JSONの読み込みエラー: " + e.message);
+                const zip = new JSZip();
+                // 写真データ(Base64)を含む logs 配列全データを sella_backup.json として格納
+                const jsonStr = JSON.stringify(logs, null, 2);
+                zip.file("sella_backup.json", jsonStr);
+
+                const content = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `sella_full_backup_${formatDateLocal(new Date())}.zip`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                alert("ZIPバックアップの作成に失敗しました: " + e.message);
             }
         }
 
-        /* 🌐 Google Auth & Plugin 起動マネージャー */
+        async function importZipBackup(input) {
+            if (typeof JSZip === 'undefined') {
+                alert("JSZipライブラリが読み込まれていません。ネットワーク接続を確認してください。");
+                return;
+            }
+            const file = input.files[0];
+            if (!file) return;
+
+            try {
+                const zip = new JSZip();
+                const zipContent = await zip.loadAsync(file);
+                
+                let jsonFile = zipContent.file("sella_backup.json");
+                if (!jsonFile) {
+                    const jsonFiles = zipContent.file(/\.json$/i);
+                    if (jsonFiles.length > 0) jsonFile = jsonFiles[0];
+                }
+
+                if (!jsonFile) {
+                    alert("ZIPファイル内に有効なバックアップデータ (JSON) が見つかりませんでした。");
+                    input.value = "";
+                    return;
+                }
+
+                const jsonText = await jsonFile.async("string");
+                const imported = JSON.parse(jsonText);
+
+                if (Array.isArray(imported)) {
+                    if (confirm(`現在のデータに上書きして ${imported.length} 件のログ（写真含め全データ）を復元しますか？`)) {
+                        logs = imported;
+                        saveLogsToLocalStorage();
+                        alert("✅ ZIPファイルからの全データ復元が完了しました。");
+                    }
+                } else {
+                    alert("無効なバックアップデータ形式です。");
+                }
+            } catch (e) {
+                alert("ZIPファイルの読み込みエラー: " + e.message);
+            } finally {
+                input.value = "";
+            }
+        }
+
+        /* ----------------------------------------------------
+         * Google アカウント連携 & ログイン後のデータ移動・同期
+         * ---------------------------------------------------- */
         function checkGoogleAuthStatus() {
             const statusEl = document.getElementById('google-auth-status');
             const loginBtn = document.getElementById('btn-google-login');
@@ -1479,7 +1534,6 @@
                     client_id: '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com',
                     scope: 'https://www.googleapis.com/auth/drive.appdata',
                     callback: async (response) => {
-                        // エラーハンドリングの追加（エラーが発生したらポップアップで表示）
                         if (response.error) {
                             alert("Googleログインエラー: " + response.error);
                             console.error("Google Auth Error:", response);
@@ -1489,7 +1543,6 @@
                         if (response.access_token) {
                             localStorage.setItem('sella_gdrive_token', response.access_token);
                             
-                            // トークンからログインしたユーザー情報を取得してメールアドレスを記録
                             try {
                                 const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                                     headers: { Authorization: `Bearer ${response.access_token}` }
@@ -1505,15 +1558,83 @@
                             }
 
                             checkGoogleAuthStatus();
-                            alert("✅ Googleアカウントとの連携を開始しました。");
+                            
+                            // サインイン前にローカルにあった情報をGoogle Drive (AppData) に自動移行・統合
+                            await syncLocalDataToGoogleDrive(response.access_token, true);
                         }
                     },
                 });
 
-                // 標準のアクセストークン要求を発行
                 client.requestAccessToken();
             } catch (e) {
                 alert("Google認証の起動に失敗しました: " + e.message);
+            }
+        }
+
+        async function syncLocalDataToGoogleDrive(token, showNotice = false) {
+            try {
+                // 1. AppDataFolder内のお酒ログファイルを検索
+                const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'sella_logs.json'", {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const searchData = await searchRes.json();
+                let fileId = searchData.files && searchData.files.length > 0 ? searchData.files[0].id : null;
+
+                let localLogs = JSON.parse(localStorage.getItem('sella_logs') || '[]');
+                let driveLogs = [];
+
+                if (fileId) {
+                    const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    if (fileRes.ok) {
+                        driveLogs = await fileRes.json();
+                    }
+                }
+
+                // ローカルの未保存データとDrive側の既存データをID重複排除しながらマージ
+                const logMap = new Map();
+                driveLogs.forEach(item => logMap.set(item.id, item));
+                localLogs.forEach(item => logMap.set(item.id, item));
+                const mergedLogs = Array.from(logMap.values());
+
+                // Google Driveへ保存
+                const metadata = { name: 'sella_logs.json', parents: ['appDataFolder'] };
+                const fileContent = JSON.stringify(mergedLogs, null, 2);
+
+                if (fileId) {
+                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                        method: 'PATCH',
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: fileContent
+                    });
+                } else {
+                    const form = new FormData();
+                    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                    form.append('file', new Blob([fileContent], { type: 'application/json' }));
+                    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` },
+                        body: form
+                    });
+                }
+
+                // 最新の統合データでローカルを更新
+                logs = mergedLogs;
+                localStorage.setItem('sella_logs', JSON.stringify(logs));
+                renderLogs();
+
+                if (showNotice) {
+                    alert("✅ サインイン前にローカルにあったデータ（写真含む）をGoogleアカウントへ安全に移動・統合しました！");
+                }
+            } catch (e) {
+                console.error("Google Drive 同期エラー:", e);
+                if (showNotice) {
+                    alert("⚠️ Google Driveへのデータ移動中にエラーが発生しました: " + e.message);
+                }
             }
         }
 
