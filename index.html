@@ -1201,7 +1201,7 @@
                 </ul>
             </div>
             <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">
-                Sella Base v23.0.0
+                Sella Base v24.0.0
             </div>
         </div>
 
@@ -1317,6 +1317,18 @@
                     <div class="form-group" style="margin-bottom: 14px;">
                         <label style="font-size: 11px; text-transform: uppercase; color: var(--accent-gold); font-weight: bold;">Gemini API キー</label>
                         <input type="password" id="setting-gemini-api-key" placeholder="AIzaSy..." onchange="saveGeminiApiKey(this.value)" style="font-size: 12px; padding: 10px;">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <label style="font-size: 11px; text-transform: uppercase; color: var(--accent-gold); font-weight: bold; margin: 0;">使用するGeminiモデル</label>
+                            <a href="javascript:void(0)" onclick="fetchGeminiModels(false)" style="color: var(--accent-gold); font-size: 11px; text-decoration: none;">🔄 モデル一覧取得</a>
+                        </div>
+                        <select id="setting-gemini-model" onchange="saveGeminiModel(this.value)" style="font-size: 13px; padding: 10px;">
+                            <option value="gemini-2.5-flash">gemini-2.5-flash (推奨・標準)</option>
+                            <option value="gemini-2.5-pro">gemini-2.5-pro (高精度・詳細分析)</option>
+                            <option value="gemini-2.0-flash">gemini-2.0-flash (高速)</option>
+                        </select>
                     </div>
 
                     <div style="background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
@@ -1623,7 +1635,7 @@
         // 空白（"YOUR_CLIENT_ID_HERE"）のままでも、各自が設定画面にクライアントIDを入力すれば動きますが、
         // ここに設定しておくと、お酒アプリを使う一般の友人やユーザーは、面倒な設定を一切することなく
         // 「Googleアカウントでログイン」ボタンを押すだけで全自動クラウド同期が使えるようになります！
-        const GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
+        const GOOGLE_CLIENT_ID = "649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com";
 
         // Sella コアアプリケーション
         const SellaApp = {
@@ -2737,13 +2749,15 @@
             bottomItems.forEach(item => item.classList.remove('active'));
 
             if (viewId === 'dashboard') {
-                navItems[0].classList.add('active');
-                bottomItems[0].classList.add('active');
-                document.getElementById('search-bar-wrapper').style.display = 'block';
+                if (navItems[0]) navItems[0].classList.add('active');
+                if (bottomItems[0]) bottomItems[0].classList.add('active');
+                const searchBar = document.getElementById('search-bar-wrapper');
+                if (searchBar) searchBar.style.display = 'block';
             } else if (viewId === 'settings') {
-                navItems[1].classList.add('active');
-                bottomItems[3].classList.add('active');
-                document.getElementById('search-bar-wrapper').style.display = 'none';
+                if (navItems[1]) navItems[1].classList.add('active');
+                if (bottomItems[3]) bottomItems[3].classList.add('active');
+                const searchBar = document.getElementById('search-bar-wrapper');
+                if (searchBar) searchBar.style.display = 'none';
             }
 
             document.querySelector('.right-sidebar').classList.remove('mobile-open');
@@ -2981,6 +2995,19 @@
             SellaApp.state.autoDateEnabled = autoDateSetting;
             document.getElementById('setting-auto-date').checked = autoDateSetting;
 
+            // 6. Gemini APIキーのロードと入力フィールドへの反映
+            const savedApiKey = localStorage.getItem('sella_gemini_api_key') || '';
+            const apiKeyInput = document.getElementById('setting-gemini-api-key');
+            if (apiKeyInput) apiKeyInput.value = savedApiKey;
+
+            // 7. 使用モデルの設定復元
+            const savedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
+            const modelSelectObj = document.getElementById('setting-gemini-model');
+            if (modelSelectObj) modelSelectObj.value = savedModel;
+            if (localStorage.getItem('sella_gemini_api_key')) {
+                fetchGeminiModels(true);
+            }
+
             // 5. v20: Google OAuthクライアントIDの設定有無により入力欄を隠す（一般ユーザー向けに完全に隠してシンプルにする）
             const googleIDInputGroup = document.getElementById('google-client-id-input-group');
             const googleIDGuide = document.querySelector('#google-auth-status + div + details');
@@ -3014,6 +3041,74 @@
         function saveGeminiApiKey(key) {
             localStorage.setItem('sella_gemini_api_key', key.trim());
             console.log("🔑 Gemini API Key Saved.");
+            // APIキー更新時にモデル一覧も再取得を試みる
+            fetchGeminiModels(true);
+        }
+
+        function saveGeminiModel(val) {
+            if (val) {
+                localStorage.setItem('sella_gemini_model', val);
+                console.log("🤖 Gemini Model Saved:", val);
+                // Googleログイン中なら変更を即時自動保存
+                const logs = getLogs();
+                saveLogsToStorage(logs);
+            }
+        }
+
+        async function fetchGeminiModels(isAuto = false) {
+            const apiKey = localStorage.getItem('sella_gemini_api_key');
+            if (!apiKey) {
+                if (!isAuto) alert("先に Gemini API キー を入力してください。");
+                return;
+            }
+
+            const savedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
+
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+                if (!res.ok) throw new Error("APIキーが無効であるか、アクセス権限がありません。");
+                const data = await res.json();
+                
+                const modelSelect = document.getElementById('setting-gemini-model');
+                if (!modelSelect) return;
+                
+                modelSelect.innerHTML = "";
+                
+                const validModels = (data.models || []).filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"));
+                
+                let modelFound = false;
+                validModels.forEach(m => {
+                    const cleanName = m.name.replace('models/', '');
+                    const opt = document.createElement('option');
+                    opt.value = cleanName;
+                    opt.textContent = `${cleanName} (${m.displayName || ''})`;
+                    if (savedModel && cleanName === savedModel) {
+                        opt.selected = true;
+                        modelFound = true;
+                    }
+                    modelSelect.appendChild(opt);
+                });
+
+                if (modelFound) {
+                    modelSelect.value = savedModel;
+                } else if (savedModel) {
+                    const opt = document.createElement('option');
+                    opt.value = savedModel;
+                    opt.textContent = `${savedModel} (保存済み)`;
+                    opt.selected = true;
+                    modelSelect.prepend(opt);
+                } else if (modelSelect.options.length > 0) {
+                    saveGeminiModel(modelSelect.value);
+                }
+
+                if (!isAuto) {
+                    alert("🔄 利用可能なモデル一覧を取得し、ドロップダウンを更新しました。");
+                }
+            } catch (e) {
+                if (!isAuto) {
+                    alert("モデル一覧の取得に失敗しました: " + e.message);
+                }
+            }
         }
 
         async function triggerGeminiAnalysis() {
@@ -3040,8 +3135,9 @@
             const systemPrompt = "You are a master Sake Sommelier (SSI certified). Analyze the sake and return ONLY a JSON object with sharpness (キレ 1-5), acidity (酸味 1-5), body (コク 1-5), aroma (香り 1-5), sweetness (甘辛度 1-5, 1=辛口, 5=甘口), story (Japanese description of flavor profile, 120-150 chars), and pairing (recommended Japanese food/appetizers). Do not include markdown wraps.";
             const userPrompt = `Brand: ${brandName}, Type: ${latestLog.type} (${latestLog.subtype || 'Normal'}), Brewery: ${breweryName}, Region: ${latestLog.region}, User Memo: ${userMemo}`;
 
+            const model = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3326,11 +3422,48 @@
                 const localTime = parseInt(localStorage.getItem('sella_last_modified_time') || '0', 10);
 
                 if (cloudData) {
+                    let cloudLogs = [];
+                    let cloudSettings = null;
+                    if (Array.isArray(cloudData)) {
+                        cloudLogs = cloudData;
+                    } else if (cloudData && typeof cloudData === 'object') {
+                        cloudLogs = cloudData.logs || [];
+                        cloudSettings = cloudData.settings || null;
+                    }
+
                     if (cloudTime > localTime) {
                         console.log("☁️ クラウド側のデータが新しいため、ローカルを更新します。");
-                        localStorage.setItem('sella_logs', JSON.stringify(cloudData));
+                        localStorage.setItem('sella_logs', JSON.stringify(cloudLogs));
                         localStorage.setItem('sella_last_modified_time', cloudTime.toString());
-                        SellaApp.state.logs = cloudData;
+                        SellaApp.state.logs = cloudLogs;
+
+                        // Google Drive からの同期時、各種設定値を復元・適用する（設定の双方向同期）
+                        if (cloudSettings) {
+                            if (cloudSettings.gemini_api_key) {
+                                localStorage.setItem('sella_gemini_api_key', cloudSettings.gemini_api_key);
+                                const apiKeyInput = document.getElementById('setting-gemini-api-key');
+                                if (apiKeyInput) apiKeyInput.value = cloudSettings.gemini_api_key;
+                            }
+                            if (cloudSettings.gemini_model) {
+                                localStorage.setItem('sella_gemini_model', cloudSettings.gemini_model);
+                                const modelSelectObj = document.getElementById('setting-gemini-model');
+                                if (modelSelectObj) modelSelectObj.value = cloudSettings.gemini_model;
+                            }
+                            if (cloudSettings.theme) {
+                                localStorage.setItem('sella_theme', cloudSettings.theme);
+                                changeTheme(cloudSettings.theme);
+                                const themeSelector = document.getElementById('theme-selector');
+                                if (themeSelector) themeSelector.value = cloudSettings.theme;
+                            }
+                            if (cloudSettings.auto_date !== undefined) {
+                                const autoDateBool = cloudSettings.auto_date !== false;
+                                localStorage.setItem('sella_auto_date', autoDateBool);
+                                SellaApp.state.autoDateEnabled = autoDateBool;
+                                const autoDateCheckbox = document.getElementById('setting-auto-date');
+                                if (autoDateCheckbox) autoDateCheckbox.checked = autoDateBool;
+                            }
+                        }
+
                         renderLogs();
                     } else if (localTime > cloudTime) {
                         console.log("💻 ローカル側のデータが新しいため、クラウドを更新します。");
@@ -3348,10 +3481,19 @@
         }
 
         async function uploadToGoogleDrive(fileId, data, token) {
-            const metadata = { name: 'SellaSakeApp_data.json', mimeType: 'application/json' };
+            const syncData = {
+                logs: data,
+                settings: {
+                    gemini_api_key: localStorage.getItem('sella_gemini_api_key') || '',
+                    gemini_model: localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash',
+                    theme: localStorage.getItem('sella_theme') || 'dark-bar',
+                    auto_date: localStorage.getItem('sella_auto_date') !== 'false'
+                }
+            };
+            const metadata = { name: 'SellaSakeApp_data.json', parents: ['appDataFolder'], mimeType: 'application/json' };
             const form = new FormData();
             form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }));
+            form.append('file', new Blob([JSON.stringify(syncData)], { type: 'application/json' }));
 
             let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
             let method = 'POST';
