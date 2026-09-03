@@ -423,7 +423,6 @@
     <div class="modal-overlay" id="lightbox-modal">
         <button class="close-btn" onclick="closeLightbox()" style="position: absolute; top: 16px; right: 20px; font-size: 32px; color: #fff; z-index: 1510;">×</button>
         
-        <!-- コントロール類を画面左上に移動して被りを解消 -->
         <div id="lightbox-zoom-controls" style="position: absolute; top: 16px; left: 16px; display: flex; gap: 8px; z-index: 1510; background: rgba(0,0,0,0.65); backdrop-filter: blur(6px); padding: 6px 12px; border-radius: 30px; border: 1px solid var(--border-color);">
             <button type="button" class="secondary" onclick="zoomLightbox(0.3)" style="color:#fff; border-color:#555; padding: 4px 10px; font-size: 12px;">🔍＋</button>
             <button type="button" class="secondary" onclick="zoomLightbox(-0.3)" style="color:#fff; border-color:#555; padding: 4px 10px; font-size: 12px;">🔍−</button>
@@ -584,8 +583,8 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
-        /* 📸 画像の軽量化圧縮処理 */
-        function compressImage(file, maxWidth = 1000, quality = 0.7) {
+        /* 📸 画像の軽量化圧縮処理（高圧縮・エラー補足強化版） */
+        function compressImage(file, maxWidth = 800, quality = 0.5) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
                 const reader = new FileReader();
@@ -611,10 +610,14 @@
                             ctx.drawImage(img, 0, 0, width, height);
                             resolve(canvas.toDataURL('image/jpeg', quality));
                         } catch (err) {
+                            console.error("Canvas Error:", err);
                             resolve(null);
                         }
                     };
-                    img.onerror = () => resolve(null);
+                    img.onerror = () => {
+                        console.error("Image load Error:", file.name);
+                        resolve(null);
+                    };
                     img.src = e.target.result;
                 };
                 reader.onerror = () => resolve(null);
@@ -622,7 +625,7 @@
             });
         }
 
-        /* 📅 画像Exifの撮影日時抽出（精度＆対応タグ向上） */
+        /* 📅 画像Exifの撮影日時抽出 */
         function getExifDate(file) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
@@ -647,7 +650,7 @@
                                 const tags = view.getUint16(ifdOffset, little);
                                 ifdOffset += 2;
                                 
-                                const targetTags = [0x9003, 0x0132, 0x9004]; // DateTimeOriginal, DateTime, DateTimeDigitized
+                                const targetTags = [0x9003, 0x0132, 0x9004];
                                 let foundDate = null;
 
                                 for (let i = 0; i < tags; i++) {
@@ -682,17 +685,16 @@
                     }
                 };
                 reader.onerror = () => resolve(null);
-                reader.readAsArrayBuffer(file.slice(0, 2048 * 1024)); // メタデータが大きい高画質写真用に2MB範囲まで読み込み
+                reader.readAsArrayBuffer(file.slice(0, 2048 * 1024));
             });
         }
 
-        /* 複数画像処理 (複数枚一括処理・撮影日時取得の修正版) */
+        /* 複数画像処理 (未対応画像検出アラート付き) */
         async function processMultipleImages(input) {
             try {
                 const files = Array.from(input.files || []);
                 if (files.length === 0) return;
 
-                // 最初に見つかった写真の撮影日時（Exif / ファイル更新日）を取得
                 let photoDate = null;
                 for (const file of files) {
                     try {
@@ -708,15 +710,23 @@
                     document.getElementById('drink-date').value = photoDate;
                 }
 
-                // すべての画像を並行して圧縮・変換して配列に追加
+                let failedCount = 0;
                 const compressedResults = await Promise.all(files.map(f => compressImage(f)));
                 compressedResults.forEach(res => {
-                    if (res) tempUploadedImages.push(res);
+                    if (res) {
+                        tempUploadedImages.push(res);
+                    } else {
+                        failedCount++;
+                    }
                 });
 
                 renderFormThumbs();
+
+                if (failedCount > 0) {
+                    alert(`⚠️ ${failedCount}枚の画像を取り込めませんでした。\n（iPhone特有のHEICフォーマットや壊れた画像の可能性があります。JPEG/PNG形式でお試しいただくか、写真アプリで選択してください。）`);
+                }
             } catch (e) {
-                alert("画像の読み込みに失敗しました。画像形式を確認してください。");
+                alert("画像の読み込みに失敗しました。");
             } finally {
                 input.value = "";
             }
@@ -878,7 +888,7 @@
             alert(`一括AI解析が完了しました（${updatedCount} 件更新）`);
         }
 
-        /* ログ描画 */
+        /* ログ描画 (onclick構文エラーを防止する safe-attr 修正) */
         function renderLogs() {
             const logs = getLogs();
             document.getElementById('log-count').innerText = logs.length;
@@ -903,8 +913,11 @@
                     const img = (brandLogs.find(l => l.images && l.images.length > 0) || {}).images?.[0];
                     const imgTag = img ? `<img src="${img}" class="brand-image-preview">` : `<div class="brand-image-preview">🍶</div>`;
 
+                    const safeName = brandName.replace(/"/g, '&quot;');
+                    const safeBrewery = brewery.name.replace(/"/g, '&quot;');
+
                     contentHTML += `
-                        <div class="brand-card" onclick="showLogDetail('${latest.name}', '${latest.brewery}')">
+                        <div class="brand-card" data-brand="${safeName}" data-brewery="${safeBrewery}" onclick="showLogDetailFromElement(this)">
                             ${imgTag}
                             <div class="brand-info">
                                 <div class="brand-name">${brandName}</div>
@@ -926,6 +939,12 @@
             });
         }
 
+        function showLogDetailFromElement(el) {
+            const bName = el.getAttribute('data-brand');
+            const brName = el.getAttribute('data-brewery');
+            showLogDetail(bName, brName);
+        }
+
         /* 詳細モーダル */
         function showLogDetail(brandName, breweryName) {
             currentBrandKey = { name: brandName, brewery: breweryName };
@@ -945,7 +964,7 @@
 
             if (slideImages.length > 0) {
                 galleryWrapper.style.display = 'block';
-                wrapper.innerHTML = slideImages.map(img => `<div class="slide" onclick="openLightbox('${img}')"><img src="${img}"></div>`).join('');
+                wrapper.innerHTML = slideImages.map((img, i) => `<div class="slide" onclick="openSlideLightbox(${i})"><img src="${img}"></div>`).join('');
                 dots.innerHTML = slideImages.map((_, i) => `<div class="dot ${i===0?'active':''}" onclick="goToSlide(${i})"></div>`).join('');
                 currentSlideIndex = 0;
                 updateSliderPosition();
@@ -970,6 +989,10 @@
             `).join('');
 
             document.getElementById('detail-modal').classList.add('active');
+        }
+
+        function openSlideLightbox(idx) {
+            if (slideImages[idx]) openLightbox(slideImages[idx]);
         }
 
         function updateSliderPosition() {
@@ -1019,11 +1042,15 @@
         function renderFormThumbs() {
             const container = document.getElementById('form-image-list-container');
             container.innerHTML = tempUploadedImages.map((img, i) => `
-                <div class="form-image-thumb-wrapper" onclick="openLightbox('${img}')">
+                <div class="form-image-thumb-wrapper" onclick="openFormImageLightbox(${i})">
                     <img src="${img}">
                     <button class="form-image-delete-btn" onclick="event.stopPropagation(); tempUploadedImages.splice(${i},1); renderFormThumbs();">×</button>
                 </div>
             `).join('');
+        }
+
+        function openFormImageLightbox(idx) {
+            if (tempUploadedImages[idx]) openLightbox(tempUploadedImages[idx]);
         }
 
         /* 💾 保存処理 */
