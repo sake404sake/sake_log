@@ -1455,6 +1455,7 @@
                 const client = google.accounts.oauth2.initTokenClient({
                     client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
                     scope: 'https://www.googleapis.com/auth/drive.appdata',
+                    prompt: 'select_account',
                     callback: (response) => {
                         if (response.access_token) {
                             localStorage.setItem('sella_gdrive_token', response.access_token);
