@@ -583,8 +583,8 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
-        /* 📸 画像の軽量化圧縮処理（高圧縮・エラー補足強化版） */
-        function compressImage(file, maxWidth = 800, quality = 0.5) {
+        /* 📸 画像の軽量化圧縮処理（超軽量・メモリ・容量制限対策版） */
+        function compressImage(file, maxWidth = 600, quality = 0.4) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
                 const reader = new FileReader();
