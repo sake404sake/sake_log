@@ -701,6 +701,11 @@
             document.querySelectorAll('.bottom-nav-item').forEach(n => n.classList.remove('active'));
 
             document.getElementById(`view-${viewName}`).classList.add('active');
+            
+            // ビュー切り替え時にスクロール位置を最上部にリセット（Pull-to-Refresh発動を保証）
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) mainContent.scrollTop = 0;
+
             if (viewName === 'dashboard') {
                 document.getElementById('page-title').textContent = 'ダッシュボード';
             } else {
@@ -1442,15 +1447,18 @@
             }
         }
 
-        /* 🌐 Google Auth & Plugin 起動マネージャー (アカウント切替固定修正) */
+        /* 🌐 Google Auth & Plugin 起動マネージャー (アカウント固定・自動選択防止修正) */
         function checkGoogleAuthStatus() {
             const statusEl = document.getElementById('google-auth-status');
             const loginBtn = document.getElementById('btn-google-login');
             const logoutBtn = document.getElementById('btn-google-logout');
 
             const savedToken = localStorage.getItem('sella_gdrive_token');
+            const savedEmail = localStorage.getItem('sella_gdrive_email');
+
             if (savedToken) {
-                if (statusEl) statusEl.innerHTML = '<span style="font-size: 12px; color: #34c759; font-weight: 600;">🟢 Google連携済み (トークン有効)</span>';
+                const emailText = savedEmail ? ` (${escapeHtml(savedEmail)})` : '';
+                if (statusEl) statusEl.innerHTML = `<span style="font-size: 12px; color: #34c759; font-weight: 600;">🟢 Google連携済み${emailText}</span>`;
                 if (loginBtn) loginBtn.style.display = 'none';
                 if (logoutBtn) logoutBtn.style.display = 'inline-flex';
             } else {
@@ -1467,19 +1475,42 @@
             }
             
             try {
+                const savedEmail = localStorage.getItem('sella_gdrive_email');
                 const client = google.accounts.oauth2.initTokenClient({
                     client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
                     scope: 'https://www.googleapis.com/auth/drive.appdata',
-                    callback: (response) => {
+                    callback: async (response) => {
                         if (response.access_token) {
                             localStorage.setItem('sella_gdrive_token', response.access_token);
+                            
+                            // トークンからログインしたユーザー情報を取得してメールアドレスを記録
+                            try {
+                                const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                                    headers: { Authorization: `Bearer ${response.access_token}` }
+                                });
+                                if (userInfoRes.ok) {
+                                    const userInfo = await userInfoRes.json();
+                                    if (userInfo.email) {
+                                        localStorage.setItem('sella_gdrive_email', userInfo.email);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("ユーザー情報の取得に失敗しました", e);
+                            }
+
                             checkGoogleAuthStatus();
                             alert("✅ Googleアカウントとの連携を開始しました。");
                         }
                     },
                 });
-                // アカウント選択画面を強制表示するように明示的に要求
-                client.requestAccessToken({ prompt: 'select_account' });
+
+                // 前回ログインしたメールアドレスがある場合は hint を渡して対象アカウントを提示
+                const requestOptions = { prompt: 'select_account' };
+                if (savedEmail) {
+                    requestOptions.hint = savedEmail;
+                }
+
+                client.requestAccessToken(requestOptions);
             } catch (e) {
                 alert("Google認証プラグインの起動手順:\nGoogle Cloud ConsoleでClient IDを取得して割り当てることで認証連携が有効になります。");
             }
@@ -1493,6 +1524,7 @@
                 } catch(e) {}
             }
             localStorage.removeItem('sella_gdrive_token');
+            localStorage.removeItem('sella_gdrive_email');
             checkGoogleAuthStatus();
             alert("🚪 ログアウトしました。");
         }
