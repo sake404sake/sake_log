@@ -1984,12 +1984,15 @@
 
         async function syncLocalDataToGoogleDrive(token, showNotice = false) {
             try {
-                // AppDataFolderから設定ファイル `sella_logs.json` を検索
-                const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'sella_logs.json'", {
+                // AppDataFolderから設定ファイル `sella_logs.json` を検索（クエリ文字エンコードを追加してエラー回避）
+                const query = encodeURIComponent("name = 'sella_logs.json' and trashed = false");
+                const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${query}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 
                 if (!searchRes.ok) {
+                    const errBody = await searchRes.text();
+                    console.error("Drive Search Error Response:", errBody);
                     throw new Error("Google Drive 検索リクエストエラー");
                 }
 
