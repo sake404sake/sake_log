@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.2 - Subname Split)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.3 - Design Update)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -85,6 +85,26 @@
         .brand-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
         .brand-subname { font-size: 13px; color: var(--accent-amber); font-weight: 500; margin-bottom: 4px; }
         .brand-meta { font-size: 11px; color: var(--text-secondary); }
+
+        /* 詳細画面用の視認性向上スタイル */
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .detail-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .detail-value {
+            font-size: 15px;
+            color: var(--text-primary);
+            font-weight: 500;
+            word-break: break-word;
+        }
 
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
         #detail-modal { z-index: 1000; }
@@ -186,7 +206,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.2</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.3</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -627,7 +647,7 @@
             renderLogs(filtered);
         }
 
-        /* 📸 画像の軽量化圧縮処理（URL.createObjectURLで高速・安定化） */
+        /* 📸 画像の軽量化圧縮処理 */
         function compressImage(file, maxWidth = 600, quality = 0.4) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
@@ -669,7 +689,7 @@
             });
         }
 
-        /* 📅 画像Exifの撮影日時抽出（オフセット計算修正版） */
+        /* 📅 画像Exifの撮影日時抽出 */
         function getExifDate(file) {
             return new Promise((resolve) => {
                 if (!file || !file.type.includes('jpeg')) return resolve(null);
@@ -686,7 +706,7 @@
                             offset += 2;
                             if (marker === 0xFFE1) {
                                 const markerLength = view.getUint16(offset, false);
-                                if (view.getUint32(offset + 2, false) === 0x45786966) { // "Exif"
+                                if (view.getUint32(offset + 2, false) === 0x45786966) {
                                     const little = view.getUint16(offset + 8, false) === 0x4949;
                                     let ifdOffset = offset + 8 + view.getUint32(offset + 12, little);
                                     if (ifdOffset + 2 <= length) {
@@ -713,7 +733,7 @@
                                         }
                                     }
                                 }
-                                offset += markerLength; // セクション長分ポインタを進める
+                                offset += markerLength;
                             } else if ((marker & 0xFF00) === 0xFF00) {
                                 const markerLength = view.getUint16(offset, false);
                                 offset += markerLength;
@@ -737,7 +757,6 @@
                 const files = Array.from(input.files || []);
                 if (files.length === 0) return;
 
-                // 1. まず画像を確実に圧縮して保持
                 const compressedResults = await Promise.all(files.map(f => compressImage(f)));
                 let failedCount = 0;
                 compressedResults.forEach(res => {
@@ -745,7 +764,6 @@
                     else failedCount++;
                 });
 
-                // 2. 撮影日の取得（失敗しても画像取り込みを止めないよう独立して実行）
                 let photoDate = null;
                 for (const file of files) {
                     try {
@@ -1098,6 +1116,7 @@
             if (editId) closeDetailModal();
         }
 
+        /* 視認性を重視して各項目と値を明確に分ける描画処理 */
         function openDetailModal(id) {
             const item = logs.find(l => l.id === id);
             if (!item) return;
@@ -1149,16 +1168,43 @@
 
             body.innerHTML = `
                 ${imagesSliderHtml}
-                <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
-                    <div><strong>🍶 銘柄:</strong> ${escapeHtml(item.name)}</div>
-                    <div><strong>🏷️ 詳細・商品名:</strong> ${escapeHtml(item.subname || '未設定')}</div>
-                    <div><strong>🏭 酒蔵:</strong> ${escapeHtml(item.brewery || '未設定')}</div>
-                    <div><strong>📍 産地:</strong> ${escapeHtml(item.region || '未設定')}</div>
-                    <div><strong>❄️ 特定名称:</strong> ${escapeHtml(item.class || '未設定')}</div>
-                    <div><strong>📅 飲んだ日:</strong> ${item.date}</div>
-                    <div><strong>⭐ 評価:</strong> ${item.rating} / 5.0</div>
-                    <div><strong>🏷️ タグ:</strong> ${tagsHtml}</div>
-                    <div style="margin-top:8px;"><strong>📝 メモ:</strong><br>${escapeHtml(item.comment || 'メモなし')}</div>
+                <div style="margin-top:16px; display:flex; flex-direction:column; gap:10px;">
+                    <div class="detail-item">
+                        <span class="detail-label">🍶 銘柄</span>
+                        <span class="detail-value" style="font-size:17px; font-weight:700; color:var(--accent-amber);">${escapeHtml(item.name)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">🏷️ 詳細・商品名</span>
+                        <span class="detail-value">${escapeHtml(item.subname || '未設定')}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">🏭 酒蔵・メーカー</span>
+                        <span class="detail-value">${escapeHtml(item.brewery || '未設定')}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">📍 都道府県・産地</span>
+                        <span class="detail-value">${escapeHtml(item.region || '未設定')}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">❄️ 特定名称/格付</span>
+                        <span class="detail-value">${escapeHtml(item.class || '未設定')}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">📅 飲んだ日</span>
+                        <span class="detail-value">${item.date}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">⭐ 評価</span>
+                        <span class="detail-value" style="color:var(--accent-amber); font-weight:bold;">${item.rating} / 5.0</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">🏷️ タグ</span>
+                        <span class="detail-value">${tagsHtml}</span>
+                    </div>
+                    <div class="detail-item" style="border-bottom:none;">
+                        <span class="detail-label">📝 感想メモ</span>
+                        <span class="detail-value" style="white-space:pre-wrap; margin-top:2px;">${escapeHtml(item.comment || 'メモなし')}</span>
+                    </div>
                     ${aiBoxHtml}
                 </div>
                 <div style="display:flex; gap:10px; margin-top:20px;">
