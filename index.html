@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v22 - Full Edit & Easy API Key)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v23 - Enhanced AI & UX)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -21,6 +21,8 @@
             --accent-gold: #d4af37;
             --accent-gold-hover: #bfa030;
             --danger-color: #ff453a;
+            --ai-color: #ffd54f;
+            --ai-bg: rgba(255, 179, 0, 0.12);
             --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
             --border-radius-lg: 12px;
@@ -42,6 +44,8 @@
             --accent-gold: #16a085;
             --accent-gold-hover: #117a65;
             --danger-color: #c0392b;
+            --ai-color: #d35400;
+            --ai-bg: rgba(230, 126, 34, 0.1);
             --shadow: 0 4px 12px rgba(44, 62, 80, 0.08);
         }
 
@@ -63,7 +67,6 @@
         .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 16px; }
         .view-panel { display: none; }
         .view-panel.active { display: block; }
-        .right-sidebar { width: 320px; background-color: var(--panel-bg); border-left: 1px solid var(--border-color); padding: 24px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
         .card { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px; }
         .card-title { font-size: 16px; font-weight: 600; color: var(--accent-gold); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
         .brewery-accordion { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); margin-bottom: 14px; overflow: hidden; }
@@ -71,7 +74,6 @@
         .brewery-header:hover { background-color: var(--card-hover); }
         .brewery-title-container { display: flex; align-items: center; gap: 10px; }
         .brewery-name { font-weight: 600; font-size: 15px; }
-        .brewery-count-badge { font-size: 11px; background-color: rgba(212, 175, 55, 0.15); color: var(--accent-gold); padding: 2px 8px; border-radius: 12px; }
         .brewery-toggle-icon { font-size: 12px; color: var(--text-secondary); transition: transform 0.3s ease; }
         .brewery-accordion.open .brewery-toggle-icon { transform: rotate(180deg); }
         .brewery-content { display: none; padding: 12px; border-top: 1px solid var(--border-color); background-color: rgba(0,0,0,0.1); }
@@ -82,7 +84,11 @@
         .brand-info { flex: 1; }
         .brand-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
         .brand-meta { font-size: 11px; color: var(--text-secondary); }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; z-index: 1000; }
+
+        /* モーダル重なり順（z-index）調整：フォーム modal を最前面へ */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
+        #detail-modal { z-index: 1000; }
+        #form-modal { z-index: 1200; }
         .modal-overlay.active { display: flex; }
         .modal-content { background-color: var(--panel-bg); border: 1px solid var(--border-color); width: 100%; max-width: 560px; border-radius: var(--border-radius-lg); box-shadow: var(--shadow); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; }
         .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); }
@@ -90,8 +96,8 @@
         .close-btn { background: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; border: none; }
         .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
         
-        /* スワイプ対応スライダーギャラリー */
-        .slider-container { position: relative; width: 100%; height: 260px; background: #000; border-radius: 8px; overflow: hidden; user-select: none; touch-action: pan-y; }
+        /* スライダーギャラリー */
+        .slider-container { position: relative; width: 100%; height: 240px; background: #000; border-radius: 8px; overflow: hidden; user-select: none; touch-action: pan-y; }
         .slider-wrapper { display: flex; height: 100%; transition: transform 0.3s ease-out; }
         .slide { min-width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
         .slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
@@ -102,14 +108,37 @@
         .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.4); cursor: pointer; }
         .dot.active { background: var(--accent-gold); transform: scale(1.2); }
 
-        .form-image-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 12px; margin-top: 10px; }
+        .form-image-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; }
         .form-image-thumb-wrapper { position: relative; aspect-ratio: 1; border: 2px solid var(--border-color); border-radius: var(--border-radius-md); overflow: hidden; background-color: #000; }
         .form-image-thumb-wrapper img { width: 100%; height: 100%; object-fit: cover; }
         .form-image-delete-btn { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background-color: var(--danger-color); color: #fff; border: none; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
-        .form-group { margin-bottom: 14px; }
-        .form-group label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; }
-        input, textarea, select { width: 100%; background-color: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-primary); padding: 10px 12px; border-radius: var(--border-radius-md); font-size: 14px; }
+        .form-group { margin-bottom: 14px; position: relative; }
+        .form-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .form-group label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
+        
+        input, textarea, select { width: 100%; background-color: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-primary); padding: 10px 12px; border-radius: var(--border-radius-md); font-size: 14px; transition: var(--transition); }
+        
+        /* AI自動入力ハイライト表示スタイル */
+        .ai-updated-input {
+            border-color: var(--accent-amber) !important;
+            background-color: var(--ai-bg) !important;
+            color: var(--ai-color) !important;
+            font-weight: 600;
+        }
+
+        .btn-revert-field {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 10px;
+            cursor: pointer;
+            display: none;
+        }
+        .btn-revert-field:hover { color: #fff; background: rgba(255, 255, 255, 0.2); }
+
         .row-group { display: flex; gap: 12px; }
         .row-group .form-group { flex: 1; }
         button { background-color: var(--accent-gold); color: #000; border: none; padding: 12px 20px; font-weight: 600; font-size: 14px; border-radius: var(--border-radius-md); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
@@ -124,6 +153,17 @@
         .bottom-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 10px; cursor: pointer; width: 25%; height: 100%; }
         .bottom-nav-item.active { color: var(--accent-amber); }
 
+        .ai-info-box {
+            background-color: var(--ai-bg);
+            border: 1px dashed var(--accent-amber);
+            color: var(--ai-color);
+            padding: 10px 12px;
+            border-radius: var(--border-radius-md);
+            font-size: 12px;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
         @media (max-width: 768px) {
             body { flex-direction: column; }
             .app-container { flex-direction: column; height: calc(100vh - 60px); }
@@ -137,7 +177,7 @@
 <body>
 
     <div class="app-container">
-        <!-- 左カラム：PC用サイドバー -->
+        <!-- PC用サイドバー -->
         <div class="sidebar">
             <div>
                 <div class="logo-area">
@@ -149,10 +189,10 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v22.0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v23.0</div>
         </div>
 
-        <!-- 中央カラム：メインコンテンツ -->
+        <!-- メインコンテンツ -->
         <div class="main-content">
             <div class="header-bar">
                 <h1 class="header-title" id="page-title">ダッシュボード</h1>
@@ -198,10 +238,10 @@
                 <div class="card">
                     <div class="card-title"><span>🤖</span> Gemini AI 設定</div>
                     <div class="form-group">
-                        <label style="display:flex; justify-space-between; align-items:center;">
-                            <span>Gemini API Key</span>
+                        <div class="form-label-row">
+                            <label>Gemini API Key</label>
                             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:var(--accent-gold); font-size:11px; text-decoration:none;">🔑 APIキーを取得</a>
-                        </label>
+                        </div>
                         <div style="display:flex; gap:8px;">
                             <input type="password" id="setting-gemini-key" placeholder="AI StudioのAPI Keyを入力" onchange="saveGeminiKey(this.value)">
                             <button type="button" class="secondary" onclick="copyGeminiKey()" style="padding:6px 12px; font-size:12px; white-space:nowrap;">📋 コピー</button>
@@ -209,10 +249,10 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label style="display:flex; justify-space-between; align-items:center;">
-                            <span>使用するモデル</span>
+                        <div class="form-label-row">
+                            <label>使用するモデル</label>
                             <a href="javascript:void(0)" onclick="fetchGeminiModels()" style="color:var(--accent-gold); font-size:11px; text-decoration:none;">🔄 利用可能なモデル一覧を取得</a>
-                        </label>
+                        </div>
                         <select id="setting-gemini-model" onchange="saveGeminiModel(this.value)">
                             <option value="gemini-2.5-flash">gemini-2.5-flash (標準)</option>
                             <option value="gemini-2.5-pro">gemini-2.5-pro (高精度)</option>
@@ -225,7 +265,7 @@
                 <div class="card">
                     <div class="card-title"><span>🔄</span> 過去ログのAI再解析</div>
                     <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px; line-height:1.5;">
-                        画像が登録されている過去のログをAIで自動解析し、未入力の銘柄名・酒蔵・特定名称・産地・メモなどを一括補完します。
+                        画像が登録されている過去のログをAIで自動解析し、空欄部分のみ（銘柄名・酒蔵・特定名称・産地・AI豆知識）を補完します。既存の入力内容や日付・感想は上書きされません。
                     </p>
                     <button id="btn-batch-ai" onclick="batchAnalyzePastLogs()" style="width: 100%; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;">
                         ✨ 画像付き過去ログを一括AI解析
@@ -250,7 +290,7 @@
         </div>
     </div>
 
-    <!-- モーダル1：記録登録＆編集フォーム -->
+    <!-- モーダル1：記録登録＆編集フォーム（最前面 z-index: 1200） -->
     <div class="modal-overlay" id="form-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -262,15 +302,25 @@
                 <div class="form-group">
                     <label>写真</label>
                     <input type="file" id="image-file-input" accept="image/*" multiple style="display:none;" onchange="processMultipleImages(this)">
-                    <div style="display: flex; gap: 10px;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 8px;">
                         <button type="button" class="secondary" style="flex:1;" onclick="document.getElementById('image-file-input').click()">📂 画像を選択</button>
                         <button type="button" id="btn-ai-analyze" style="flex:1; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;" onclick="analyzeImageWithGemini()">✨ AIラベル自動入力</button>
+                    </div>
+                    <div id="ai-revert-bar" style="display:none; justify-content:space-between; align-items:center; background:var(--ai-bg); padding:6px 10px; border-radius:6px; margin-bottom:8px; border:1px solid var(--accent-amber);">
+                        <span style="font-size:11px; color:var(--ai-color);">✨ AIにより入力内容が自動適用されました</span>
+                        <button type="button" onclick="revertAllAiChanges()" style="padding:2px 8px; font-size:11px; background:rgba(0,0,0,0.5); color:#fff; border:1px solid var(--border-color);">↩️ 全て元に戻す</button>
                     </div>
                     <div id="form-image-list-container" class="form-image-container"></div>
                 </div>
 
                 <div class="row-group">
-                    <div class="form-group"><label>銘柄・名称</label><input type="text" id="drink-name" required></div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label>銘柄・名称</label>
+                            <button type="button" class="btn-revert-field" id="revert-btn-drink-name" onclick="revertField('drink-name')">↩️ 戻す</button>
+                        </div>
+                        <input type="text" id="drink-name" required>
+                    </div>
                     <div class="form-group" style="flex: 0.6;">
                         <label>種類</label>
                         <select id="drink-type">
@@ -283,24 +333,61 @@
                 </div>
 
                 <div class="row-group">
-                    <div class="form-group"><label>特定名称 / 詳細</label><input type="text" id="drink-subtype" placeholder="例：純米大吟醸"></div>
-                    <div class="form-group"><label>酒蔵 / メーカー</label><input type="text" id="drink-brewery" placeholder="例：旭酒造"></div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label>特定名称 / 詳細</label>
+                            <button type="button" class="btn-revert-field" id="revert-btn-drink-subtype" onclick="revertField('drink-subtype')">↩️ 戻す</button>
+                        </div>
+                        <input type="text" id="drink-subtype" placeholder="例：純米大吟醸">
+                    </div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label>酒蔵 / メーカー</label>
+                            <button type="button" class="btn-revert-field" id="revert-btn-drink-brewery" onclick="revertField('drink-brewery')">↩️ 戻す</button>
+                        </div>
+                        <input type="text" id="drink-brewery" placeholder="例：旭酒造">
+                    </div>
                 </div>
 
                 <div class="row-group">
-                    <div class="form-group"><label>産地 / 都道府県</label><input type="text" id="drink-region" placeholder="例：山口県"></div>
-                    <div class="form-group"><label>評価 (1-5)</label><input type="number" id="drink-rating" min="1" max="5" step="0.1" value="4.0"></div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label>産地 / 都道府県</label>
+                            <button type="button" class="btn-revert-field" id="revert-btn-drink-region" onclick="revertField('drink-region')">↩️ 戻す</button>
+                        </div>
+                        <input type="text" id="drink-region" placeholder="例：山口県">
+                    </div>
+                    <div class="form-group">
+                        <label>評価 (1-5)</label>
+                        <input type="number" id="drink-rating" min="1" max="5" step="0.1" value="4.0">
+                    </div>
                 </div>
 
-                <div class="form-group"><label>飲んだ日</label><input type="date" id="drink-date"></div>
-                <div class="form-group"><label>メモ / 感想</label><textarea id="drink-memo" rows="3"></textarea></div>
+                <div class="form-group">
+                    <label>飲んだ日</label>
+                    <input type="date" id="drink-date">
+                </div>
+
+                <!-- 個人の感想とAI豆知識・情報を明確に分離 -->
+                <div class="form-group">
+                    <label>💬 個人の感想・メモ</label>
+                    <textarea id="drink-memo" rows="3" placeholder="味わいや一緒に食べた料理、シチュエーションなど..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <div class="form-label-row">
+                        <label style="color:var(--accent-amber);">✨ AI解析情報・豆知識</label>
+                        <button type="button" class="btn-revert-field" id="revert-btn-drink-ai-memo" onclick="revertField('drink-ai-memo')">↩️ 戻す</button>
+                    </div>
+                    <textarea id="drink-ai-memo" class="ai-updated-input" rows="3" placeholder="AIによる酒蔵情報や味わいの特徴（自動生成）"></textarea>
+                </div>
 
                 <button onclick="saveLog()" style="width: 100%;">💾 ログを保存</button>
             </div>
         </div>
     </div>
 
-    <!-- モーダル2：お酒の詳細画面（スワイプギャラリー＆基本情報編集対応） -->
+    <!-- モーダル2：お酒の詳細画面（z-index: 1000） -->
     <div class="modal-overlay" id="detail-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -318,12 +405,9 @@
                     </div>
                 </div>
 
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-                    <div>
-                        <h2 id="detail-name" style="font-size: 22px; color:var(--accent-gold);"></h2>
-                        <p id="detail-brewery-info" style="font-size: 13px; color: var(--text-secondary);"></p>
-                    </div>
-                    <button class="secondary" onclick="triggerEditBrandSpec()" style="padding: 6px 12px; font-size: 11px;">📝 全体情報の括編集</button>
+                <div style="margin-bottom: 16px;">
+                    <h2 id="detail-name" style="font-size: 22px; color:var(--accent-gold);"></h2>
+                    <p id="detail-brewery-info" style="font-size: 13px; color: var(--text-secondary); margin-top:4px;"></p>
                 </div>
 
                 <div class="card" style="padding:14px; margin-bottom: 16px;">
@@ -333,30 +417,13 @@
                     </div>
                 </div>
 
-                <!-- タイムライン -->
+                <!-- タイムライン（個別のログ編集がわかりやすいカード形式） -->
                 <div class="card" style="padding:14px;">
-                    <div style="font-weight:bold; color:var(--accent-gold); margin-bottom:10px;">🔁 飲酒履歴</div>
-                    <div id="detail-timeline-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+                    <div style="font-weight:bold; color:var(--accent-gold); margin-bottom:12px;">🔁 飲酒履歴</div>
+                    <div id="detail-timeline-list" style="display:flex; flex-direction:column; gap:12px;"></div>
                 </div>
 
-                <button class="danger" onclick="deleteEntireBrand()" style="width:100%; margin-top:16px;">🚨 全履歴削除</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- モーダル3：基本情報一括編集モーダル -->
-    <div class="modal-overlay" id="edit-spec-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">📝 基本情報の一括編集</div>
-                <button class="close-btn" onclick="closeEditSpecModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group"><label>銘柄・名称</label><input type="text" id="edit-spec-name"></div>
-                <div class="form-group"><label>酒蔵 / メーカー</label><input type="text" id="edit-spec-brewery"></div>
-                <div class="form-group"><label>特定名称 / 詳細</label><input type="text" id="edit-spec-subtype"></div>
-                <div class="form-group"><label>産地 / 都道府県</label><input type="text" id="edit-spec-region"></div>
-                <button onclick="saveBrandSpec()" style="width: 100%;">💾 一括更新して保存</button>
+                <button class="danger" onclick="deleteEntireBrand()" style="width:100%; margin-top:16px;">🚨 銘柄の全履歴を削除</button>
             </div>
         </div>
     </div>
@@ -367,6 +434,9 @@
         let currentSlideIndex = 0;
         let slideImages = [];
         let currentBrandKey = { name: '', brewery: '' };
+        
+        // AI自動入力前の値を記憶する状態ホルダー
+        let preAiState = {};
 
         window.onload = function() {
             loadSettings();
@@ -395,15 +465,12 @@
         function saveGeminiKey(val) { localStorage.setItem('sella_gemini_key', val); }
         function saveGeminiModel(val) { localStorage.setItem('sella_gemini_model', val); }
 
-        /* APIキー ワンボタンコピー & 貼り付け機能 */
+        /* APIキー コピー & 貼り付け */
         function copyGeminiKey() {
             const key = document.getElementById('setting-gemini-key').value;
             if (!key) return alert("コピーするAPI Keyが入力されていません。");
-            navigator.clipboard.writeText(key).then(() => {
-                alert("📋 API Keyをクリップボードにコピーしました！");
-            }).catch(() => {
-                alert("コピーに失敗しました。");
-            });
+            navigator.clipboard.writeText(key).then(() => alert("📋 API Keyをクリップボードにコピーしました！"))
+            .catch(() => alert("コピーに失敗しました。"));
         }
 
         async function pasteGeminiKey() {
@@ -413,15 +480,13 @@
                     document.getElementById('setting-gemini-key').value = text.trim();
                     saveGeminiKey(text.trim());
                     alert("📥 クリップボードからAPI Keyを貼り付けました！");
-                } else {
-                    alert("クリップボードが空です。");
                 }
             } catch (err) {
                 alert("クリップボードの読み取り権限がありません。手動で貼り付けてください。");
             }
         }
 
-        /* Google OAuth & アカウント情報表示 */
+        /* Google OAuth */
         function initiateGoogleLogin() {
             if (!window.google) return alert("Google認証ライブラリ読み込み中...");
             const client = google.accounts.oauth2.initTokenClient({
@@ -465,7 +530,7 @@
             document.getElementById('btn-google-logout').style.display = 'none';
         }
 
-        /* Gemini 利用可能モデルの動的取得 */
+        /* Dynamic Gemini Models */
         async function fetchGeminiModels() {
             const key = localStorage.getItem('sella_gemini_key');
             if (!key) return alert("先にGemini API Keyを入力してください。");
@@ -488,11 +553,11 @@
                     alert("モデル一覧を取得・更新しました！");
                 }
             } catch (e) {
-                alert("モデル一覧の取得に失敗しました。API Keyを確認してください。");
+                alert("モデル一覧の取得に失敗しました。");
             }
         }
 
-        /* AI画像解析＆自動入力 */
+        /* ✨ AI画像解析（非破壊・色分け・元に戻す対応・AI情報独立） */
         async function analyzeImageWithGemini() {
             const key = localStorage.getItem('sella_gemini_key');
             if (!key) return alert("設定画面でGemini API Keyを登録してください。");
@@ -505,6 +570,13 @@
             btn.innerText = "⌛ AI解析中...";
             btn.disabled = true;
 
+            // AI実行前のフォーム状態を保存（Undo用）
+            const fields = ['drink-name', 'drink-subtype', 'drink-brewery', 'drink-region', 'drink-ai-memo'];
+            preAiState = {};
+            fields.forEach(f => {
+                preAiState[f] = document.getElementById(f).value;
+            });
+
             try {
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
                     method: 'POST',
@@ -512,24 +584,49 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [
-                                { text: "このお酒のラベル画像を解析し、以下の項目をJSON形式で返してください。不明な項目は空文字にしてください。キー名: name(銘柄名), brewery(酒蔵・メーカー名), subtype(特定名称・種類), region(都道府県・産地), memo(味わいや特徴の簡潔な解説)" },
+                                { text: "このお酒のラベル画像を解析し、以下の項目をJSON形式で返してください。不明な項目は空文字にしてください。日付や感想は含めないでください。キー名: name(銘柄名), brewery(酒蔵・メーカー名), subtype(特定名称・種類), region(都道府県・産地), aiMemo(酒蔵の特徴や味わい等の豆知識解説)" },
                                 { inline_data: { mime_type: "image/jpeg", data: base64Data } }
                             ]
                         }]
                     })
                 });
                 const data = await res.json();
-                const text = data.candidates[0].content.parts[0].text;
-                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
                 
-                if (jsonMatch) {
-                    const result = JSON.parse(jsonMatch[0]);
-                    if (result.name) document.getElementById('drink-name').value = result.name;
-                    if (result.brewery) document.getElementById('drink-brewery').value = result.brewery;
-                    if (result.subtype) document.getElementById('drink-subtype').value = result.subtype;
-                    if (result.region) document.getElementById('drink-region').value = result.region;
-                    if (result.memo) document.getElementById('drink-memo').value = result.memo;
-                    alert("✨ AIによる自動入力が完了しました！");
+                if (text) {
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const result = JSON.parse(jsonMatch[0]);
+                        let updatedAny = false;
+
+                        // AI回答がある部分のみ上書きし、ハイライト＋「戻す」ボタンを表示
+                        const map = {
+                            'drink-name': result.name,
+                            'drink-brewery': result.brewery,
+                            'drink-subtype': result.subtype,
+                            'drink-region': result.region,
+                            'drink-ai-memo': result.aiMemo
+                        };
+
+                        Object.entries(map).forEach(([fieldId, val]) => {
+                            if (val && val.trim() !== '') {
+                                const input = document.getElementById(fieldId);
+                                input.value = val.trim();
+                                input.classList.add('ai-updated-input');
+                                
+                                const revBtn = document.getElementById(`revert-btn-${fieldId}`);
+                                if (revBtn) revBtn.style.display = 'inline-block';
+                                updatedAny = true;
+                            }
+                        });
+
+                        if (updatedAny) {
+                            document.getElementById('ai-revert-bar').style.display = 'flex';
+                            alert("✨ AI解析結果を入力しました！（変更された項目はハイライトされています）");
+                        } else {
+                            alert("画像から新しい情報を読み取れませんでした。");
+                        }
+                    }
                 }
             } catch (e) {
                 alert("AI解析に失敗しました。画像の鮮明さやAPI Keyを確認してください。");
@@ -539,7 +636,23 @@
             }
         }
 
-        /* 過去ログの一括AI解析処理 */
+        /* 個別・一括 Undo（元に戻す）機能 */
+        function revertField(fieldId) {
+            if (preAiState[fieldId] !== undefined) {
+                const input = document.getElementById(fieldId);
+                input.value = preAiState[fieldId];
+                input.classList.remove('ai-updated-input');
+                const revBtn = document.getElementById(`revert-btn-${fieldId}`);
+                if (revBtn) revBtn.style.display = 'none';
+            }
+        }
+
+        function revertAllAiChanges() {
+            Object.keys(preAiState).forEach(f => revertField(f));
+            document.getElementById('ai-revert-bar').style.display = 'none';
+        }
+
+        /* 過去ログの一括AI解析（日付・感想は維持） */
         async function batchAnalyzePastLogs() {
             const key = localStorage.getItem('sella_gemini_key');
             if (!key) return alert("設定画面でGemini API Keyを登録してください。");
@@ -547,18 +660,11 @@
             const logs = getLogs();
             const targetIndices = [];
             logs.forEach((log, index) => {
-                if (log.images && log.images.length > 0) {
-                    targetIndices.push(index);
-                }
+                if (log.images && log.images.length > 0) targetIndices.push(index);
             });
 
-            if (targetIndices.length === 0) {
-                return alert("解析可能な画像付きログが見つかりませんでした。");
-            }
-
-            if (!confirm(`画像付きのログ ${targetIndices.length} 件をAIで一括解析しますか？\n（解析結果により既存のデータが補完・更新されます）`)) {
-                return;
-            }
+            if (targetIndices.length === 0) return alert("解析可能な画像付きログが見つかりませんでした。");
+            if (!confirm(`画像付きのログ ${targetIndices.length} 件をAIで一括解析しますか？\n（未入力の銘柄名・酒蔵・AI豆知識のみ補完され、既存の感想や日付は上書きされません）`)) return;
 
             const btn = document.getElementById('btn-batch-ai');
             const originalBtnText = btn.innerText;
@@ -580,7 +686,7 @@
                         body: JSON.stringify({
                             contents: [{
                                 parts: [
-                                    { text: "このお酒のラベル画像を解析し、以下の項目をJSON形式で返してください。不明な項目は空文字にしてください。キー名: name(銘柄名), brewery(酒蔵・メーカー名), subtype(特定名称・種類), region(都道府県・産地), memo(味わいや特徴の簡潔な解説)" },
+                                    { text: "このお酒のラベル画像を解析し、以下の項目をJSON形式で返してください。不明な項目は空文字にしてください。キー名: name(銘柄名), brewery(酒蔵名), subtype(特定名称), region(産地), aiMemo(酒蔵や銘柄の豆知識・特徴)" },
                                     { inline_data: { mime_type: "image/jpeg", data: base64Data } }
                                 ]
                             }]
@@ -593,16 +699,17 @@
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         if (jsonMatch) {
                             const result = JSON.parse(jsonMatch[0]);
-                            if (result.name) logs[idx].name = result.name;
-                            if (result.brewery) logs[idx].brewery = result.brewery;
-                            if (result.subtype) logs[idx].subtype = result.subtype;
-                            if (result.region) logs[idx].region = result.region;
-                            if (result.memo && !logs[idx].memo) logs[idx].memo = result.memo;
+                            // 空欄の項目のみを補完（非破壊）
+                            if (result.name && !logs[idx].name) logs[idx].name = result.name;
+                            if (result.brewery && !logs[idx].brewery) logs[idx].brewery = result.brewery;
+                            if (result.subtype && !logs[idx].subtype) logs[idx].subtype = result.subtype;
+                            if (result.region && !logs[idx].region) logs[idx].region = result.region;
+                            if (result.aiMemo && !logs[idx].aiMemo) logs[idx].aiMemo = result.aiMemo;
                             updatedCount++;
                         }
                     }
                 } catch (e) {
-                    console.error(`Log ID ${log.id} の解析に失敗しました:`, e);
+                    console.error(`Log ID ${log.id} の解析エラー:`, e);
                 }
             }
 
@@ -610,10 +717,10 @@
             renderLogs();
             btn.innerText = originalBtnText;
             btn.disabled = false;
-            alert(`処理が完了しました。${updatedCount} 件のログをAIで解析・更新しました！`);
+            alert(`一括AI解析が完了しました（${updatedCount} 件更新）`);
         }
 
-        /* ログ管理 & 表示 */
+        /* ログ描画 */
         function renderLogs() {
             const logs = getLogs();
             document.getElementById('log-count').innerText = logs.length;
@@ -661,22 +768,19 @@
             });
         }
 
-        /* スワイプギャラリー処理 */
+        /* 詳細モーダル */
         function showLogDetail(brandName, breweryName) {
             currentBrandKey = { name: brandName, brewery: breweryName };
             const logs = getLogs().filter(l => l.name === brandName && l.brewery === breweryName);
-            if (logs.length === 0) {
-                closeDetailModal();
-                return;
-            }
-            const latest = logs[0];
+            if (logs.length === 0) return closeDetailModal();
 
+            const latest = logs[0];
             document.getElementById('detail-name').innerText = latest.name;
             document.getElementById('detail-brewery-info').innerText = `🏢 ${latest.brewery} (${latest.region || '産地不明'})`;
             document.getElementById('detail-spec-subtype').innerText = latest.subtype || '通常';
             document.getElementById('detail-spec-rating').innerText = `★ ${latest.rating}`;
 
-            // スライダー画像の初期化
+            // ギャラリー
             slideImages = logs.flatMap(l => l.images || []);
             const wrapper = document.getElementById('slider-wrapper');
             const dots = document.getElementById('slider-dots');
@@ -692,19 +796,20 @@
                 galleryWrapper.style.display = 'none';
             }
 
-            // タイムライン（個別のフル編集・AI再解析ボタンを含む）
+            // タイムライン：個別のログ編集が目立つデザイン
             const tl = document.getElementById('detail-timeline-list');
             tl.innerHTML = logs.map(l => `
-                <div style="background:var(--card-bg); padding:10px 12px; border-left:3px solid var(--accent-amber); border-radius:6px; font-size:12px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; color:var(--text-secondary); margin-bottom:6px;">
-                        <span>📅 ${l.date}</span>
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <span style="color:var(--accent-amber); font-weight:bold; margin-right:4px;">★ ${l.rating}</span>
-                            <button class="secondary" onclick="openFormModal('edit', '${l.id}')" style="padding:3px 8px; font-size:11px;">✏️ 編集</button>
-                            <button class="danger" onclick="deleteSingleLog('${l.id}')" style="padding:3px 8px; font-size:11px;">🗑️</button>
+                <div style="background:var(--card-bg); border:1px solid var(--border-color); padding:14px; border-left:4px solid var(--accent-amber); border-radius:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:12px; color:var(--text-secondary); font-weight:600;">📅 ${l.date}</span>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <span style="color:var(--accent-amber); font-weight:bold; font-size:13px;">★ ${l.rating}</span>
+                            <button onclick="openFormModal('edit', '${l.id}')" style="padding:4px 10px; font-size:12px;">✏️ 編集する</button>
+                            <button class="danger" onclick="deleteSingleLog('${l.id}')" style="padding:4px 8px; font-size:12px;">🗑️</button>
                         </div>
                     </div>
-                    <div>${l.memo || 'メモなし'}</div>
+                    ${l.memo ? `<div style="font-size:13px; margin-bottom:6px; line-height:1.4;">💬 <strong>感想:</strong> ${l.memo}</div>` : ''}
+                    ${l.aiMemo ? `<div class="ai-info-box">✨ <strong>AI豆知識・特徴:</strong><br>${l.aiMemo}</div>` : ''}
                 </div>
             `).join('');
 
@@ -739,41 +844,12 @@
             }, { passive: true });
         }
 
-        /* 基本情報の一括編集機能 */
-        function triggerEditBrandSpec() {
-            const logs = getLogs().filter(l => l.name === currentBrandKey.name && l.brewery === currentBrandKey.brewery);
-            if (logs.length === 0) return;
-
-            const sample = logs[0];
-            document.getElementById('edit-spec-name').value = sample.name;
-            document.getElementById('edit-spec-brewery').value = sample.brewery;
-            document.getElementById('edit-spec-subtype').value = sample.subtype || '';
-            document.getElementById('edit-spec-region').value = sample.region || '';
-
-            document.getElementById('edit-spec-modal').classList.add('active');
-        }
-
-        function saveBrandSpec() {
-            const newName = document.getElementById('edit-spec-name').value.trim();
-            const newBrewery = document.getElementById('edit-spec-brewery').value.trim();
-            const newSubtype = document.getElementById('edit-spec-subtype').value.trim();
-            const newRegion = document.getElementById('edit-spec-region').value.trim();
-
-            if (!newName) return alert("銘柄名を入力してください");
-
-            let logs = getLogs();
-            logs = logs.map(log => {
-                if (log.name === currentBrandKey.name && log.brewery === currentBrandKey.brewery) {
-                    return { ...log, name: newName, brewery: newBrewery, subtype: newSubtype, region: newRegion };
-                }
-                return log;
-            });
-
+        function deleteSingleLog(id) {
+            if (!confirm("このログを削除しますか？")) return;
+            let logs = getLogs().filter(l => l.id !== id);
             saveLogsToStorage(logs);
-            closeEditSpecModal();
-            closeDetailModal();
+            showLogDetail(currentBrandKey.name, currentBrandKey.brewery);
             renderLogs();
-            alert("基本情報を一括更新しました。");
         }
 
         function deleteEntireBrand() {
@@ -781,14 +857,6 @@
             let logs = getLogs().filter(l => !(l.name === currentBrandKey.name && l.brewery === currentBrandKey.brewery));
             saveLogsToStorage(logs);
             closeDetailModal();
-            renderLogs();
-        }
-
-        function deleteSingleLog(id) {
-            if (!confirm("このログを削除しますか？")) return;
-            let logs = getLogs().filter(l => l.id !== id);
-            saveLogsToStorage(logs);
-            showLogDetail(currentBrandKey.name, currentBrandKey.brewery);
             renderLogs();
         }
 
@@ -814,7 +882,7 @@
             `).join('');
         }
 
-        /* 保存 ＆ モーダル制御 (新規登録 & フル過去ログ編集の統合) */
+        /* 保存処理（銘柄情報変更時に一括適用するかダイアログで確認） */
         function saveLog() {
             const name = document.getElementById('drink-name').value.trim();
             if (!name) return alert("銘柄名を入力してください");
@@ -822,26 +890,45 @@
             const editId = document.getElementById('edit-log-id').value;
             let logs = getLogs();
 
+            const newName = name;
+            const newBrewery = document.getElementById('drink-brewery').value.trim();
+            const newSubtype = document.getElementById('drink-subtype').value.trim();
+            const newRegion = document.getElementById('drink-region').value.trim();
+
             const logData = {
                 id: editId || ('log_' + Date.now()),
-                name,
+                name: newName,
                 type: document.getElementById('drink-type').value,
-                subtype: document.getElementById('drink-subtype').value,
-                brewery: document.getElementById('drink-brewery').value,
-                region: document.getElementById('drink-region').value,
+                subtype: newSubtype,
+                brewery: newBrewery,
+                region: newRegion,
                 rating: document.getElementById('drink-rating').value,
                 date: document.getElementById('drink-date').value || new Date().toISOString().split('T')[0],
-                memo: document.getElementById('drink-memo').value,
+                memo: document.getElementById('drink-memo').value.trim(),
+                aiMemo: document.getElementById('drink-ai-memo').value.trim(),
                 images: [...tempUploadedImages]
             };
 
             if (editId) {
-                const index = logs.findIndex(l => l.id === editId);
-                if (index !== -1) {
-                    logs[index] = logData;
-                } else {
-                    logs.unshift(logData);
+                const oldLog = logs.find(l => l.id === editId);
+                
+                // 銘柄基本情報が変更された場合、他ログも一括で変更するか確認
+                if (oldLog && (oldLog.name !== newName || oldLog.brewery !== newBrewery || oldLog.subtype !== newSubtype || oldLog.region !== newRegion)) {
+                    if (confirm("銘柄名や酒蔵などの基本情報が変更されています。\n「" + oldLog.name + "」の他の過去ログも一括更新しますか？\n\n[OK] 一括更新する / [キャンセル] このログのみ変更")) {
+                        logs.forEach(l => {
+                            if (l.name === oldLog.name && l.brewery === oldLog.brewery) {
+                                l.name = newName;
+                                l.brewery = newBrewery;
+                                l.subtype = newSubtype;
+                                l.region = newRegion;
+                            }
+                        });
+                    }
                 }
+
+                const index = logs.findIndex(l => l.id === editId);
+                if (index !== -1) logs[index] = logData;
+                else logs.unshift(logData);
             } else {
                 logs.unshift(logData);
             }
@@ -856,9 +943,21 @@
             renderLogs();
         }
 
+        /* モーダル制御 */
         function openFormModal(mode = 'add', logId = null) {
             tempUploadedImages = [];
+            preAiState = {};
             document.getElementById('edit-log-id').value = '';
+            document.getElementById('ai-revert-bar').style.display = 'none';
+
+            // 入力ハイライト＆復元ボタンのリセット
+            const fieldIds = ['drink-name', 'drink-subtype', 'drink-brewery', 'drink-region', 'drink-ai-memo'];
+            fieldIds.forEach(f => {
+                const input = document.getElementById(f);
+                if (input) input.classList.remove('ai-updated-input');
+                const revBtn = document.getElementById(`revert-btn-${f}`);
+                if (revBtn) revBtn.style.display = 'none';
+            });
 
             if (mode === 'edit' && logId) {
                 const logs = getLogs();
@@ -873,6 +972,7 @@
                     document.getElementById('drink-rating').value = log.rating || 4.0;
                     document.getElementById('drink-date').value = log.date || new Date().toISOString().split('T')[0];
                     document.getElementById('drink-memo').value = log.memo || '';
+                    document.getElementById('drink-ai-memo').value = log.aiMemo || '';
                     tempUploadedImages = log.images ? [...log.images] : [];
                     document.getElementById('form-modal-title').innerHTML = '<span>✏️</span> お酒のログ編集';
                 }
@@ -885,16 +985,18 @@
                 document.getElementById('drink-rating').value = '4.0';
                 document.getElementById('drink-date').value = new Date().toISOString().split('T')[0];
                 document.getElementById('drink-memo').value = '';
+                document.getElementById('drink-ai-memo').value = '';
                 document.getElementById('form-modal-title').innerHTML = '<span>✍️</span> お酒のログ入力';
             }
 
             renderFormThumbs();
+            
+            // 最前面に表示されるよう active クラス付与
             document.getElementById('form-modal').classList.add('active');
         }
 
         function closeFormModal() { document.getElementById('form-modal').classList.remove('active'); }
         function closeDetailModal() { document.getElementById('detail-modal').classList.remove('active'); }
-        function closeEditSpecModal() { document.getElementById('edit-spec-modal').classList.remove('active'); }
 
         function switchView(viewId) {
             document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
