@@ -38,8 +38,8 @@
         .progress-bar-bg { background: var(--card-bg); height: 8px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
         .progress-bar-fill { background: var(--accent-amber); height: 100%; width: 0%; transition: width 0.3s; }
 
-        /* スワイプ型 未確定ログカード */
-        .swipe-container { position: relative; width: 100%; min-height: 480px; overflow: hidden; display: none; }
+        /* スワイプ型 未確定ログカード (表示不具合修正済み) */
+        .swipe-container { position: relative; width: 100%; min-height: 480px; }
         .swipe-card { position: absolute; width: 100%; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.3s ease, opacity 0.3s ease; }
 
         .img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; margin: 12px 0; }
@@ -58,6 +58,8 @@
         .unassigned-item img { width: 100%; height: 100%; object-fit: cover; }
         .unassigned-item .actions { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: space-around; padding: 4px; }
         .unassigned-item .actions button { font-size: 10px; padding: 2px 6px; }
+
+        .model-control { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; background: var(--card-bg); padding: 8px 12px; border-radius: var(--border-radius-md); }
     </style>
 </head>
 <body>
@@ -74,8 +76,23 @@
         <p style="font-size:12px; color:var(--text-secondary); margin: 6px 0 12px 0;">
             重複画像は自動スキップされます。解析後、ボトルごとに振り分けられた未確定カードをスワイプで確認できます。
         </p>
+        
         <input type="file" id="batch-file-input" accept="image/*" multiple style="display:none;" onchange="handleBatchFiles(this.files)">
         <button onclick="document.getElementById('batch-file-input').click()">📂 画像を選択してAI解析開始</button>
+
+        <!-- モデル選択 & 再試行コントローラー -->
+        <div class="model-control">
+            <label style="font-size:12px; color:var(--text-secondary);">使用モデル:</label>
+            <select id="model-select" onchange="saveSelectedModel(this.value)" style="flex:1; min-width:140px;">
+                <option value="gemini-2.5-flash">gemini-2.5-flash (推奨)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+            </select>
+            <button type="button" class="secondary" id="retry-btn" onclick="retryAnalysisWithModel()" style="display:none; padding: 6px 12px; font-size:12px; color:var(--accent-amber); border-color:var(--accent-amber);">
+                🔄 圧縮画像で再解析
+            </button>
+        </div>
 
         <div class="progress-box" id="progress-box">
             <span id="progress-text" style="font-size:12px; color:var(--accent-gold);">処理中...</span>
@@ -108,6 +125,7 @@
     let existingImageHashes = new Set();
     let pendingLogs = []; // 未確定ログリスト
     let unassignedImages = []; // 未割り当て画像リスト
+    let cachedCompressedImages = []; // 圧縮済み画像を保持（再圧縮防止用）
     let currentCardIndex = 0;
 
     // タッチスワイプ変数
@@ -116,9 +134,19 @@
 
     window.onload = function() {
         loadExistingLogs();
+        initModelSelector();
     };
 
-    // メインアプリのデータをロード＆既存データのハッシュ生成
+    function initModelSelector() {
+        const savedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
+        const select = document.getElementById('model-select');
+        if (select) select.value = savedModel;
+    }
+
+    function saveSelectedModel(val) {
+        localStorage.setItem('sella_gemini_model', val);
+    }
+
     function loadExistingLogs() {
         existingImageHashes.clear();
         const raw = localStorage.getItem('sella_logs');
@@ -134,7 +162,6 @@
         }
     }
 
-    // 文字列ハッシュ (重複判定用)
     function simpleHash(str) {
         let hash = 0;
         const step = Math.max(1, Math.floor(str.length / 1000));
@@ -145,11 +172,10 @@
         return `${hash}_${str.length}`;
     }
 
-    // 画像読み込み＆処理
+    // 新規画像読み込み & 圧縮保持処理
     async function handleBatchFiles(files) {
         if (!files || files.length === 0) return;
 
-        // 最新の保存済みログハッシュを再読み込み
         loadExistingLogs();
 
         const progressBox = document.getElementById('progress-box');
@@ -158,8 +184,8 @@
         progressBox.style.display = 'block';
 
         const fileArray = Array.from(files);
-        const processedImages = [];
-        const currentSessionHashes = new Set(); // 今回の選択内での重複チェック用
+        cachedCompressedImages = []; // キャッシュリセット
+        const currentSessionHashes = new Set();
         let duplicateCount = 0;
 
         for (let i = 0; i < fileArray.length; i++) {
@@ -169,30 +195,49 @@
             const base64 = await compressImage(fileArray[i]);
             if (base64) {
                 const hash = simpleHash(base64);
-                // 保存済みログとの重複、または今回の選択内での重複をチェック
                 if (existingImageHashes.has(hash) || currentSessionHashes.has(hash)) {
                     duplicateCount++;
                 } else {
-                    currentSessionHashes.add(hash); // 今回の選択内のみ保持（確定保存されるまでは existingImageHashes に追加しない）
-                    processedImages.push({ id: `img_${Date.now()}_${i}`, data: base64 });
+                    currentSessionHashes.add(hash);
+                    cachedCompressedImages.push({ id: `img_${Date.now()}_${i}`, data: base64 });
                 }
             }
         }
 
         if (duplicateCount > 0) {
-            alert(`⚠️ 既に登録済み（または選択内で重複）の画像 ${duplicateCount} 枚をスキップしました。`);
+            alert(`⚠️ 既に登録済み（または重複）の画像 ${duplicateCount} 枚をスキップしました。`);
         }
 
-        if (processedImages.length === 0) {
+        if (cachedCompressedImages.length === 0) {
             progressBox.style.display = 'none';
             return alert("処理対象の新規画像がありません。");
         }
 
-        // AIによるバッチグループ化・解析
-        await analyzeImagesInBatches(processedImages, progressText, progressFill);
+        // 再解析ボタンを有効化
+        document.getElementById('retry-btn').style.display = 'inline-block';
+
+        // 解析を実行
+        await analyzeImagesInBatches(cachedCompressedImages, progressText, progressFill);
     }
 
-    // 画像圧縮
+    // 圧縮済み画像での再解析（モデル変更時など）
+    async function retryAnalysisWithModel() {
+        if (cachedCompressedImages.length === 0) {
+            return alert("再解析可能な圧縮画像がありません。画像を再度選択してください。");
+        }
+
+        const progressBox = document.getElementById('progress-box');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        progressBox.style.display = 'block';
+
+        // 未確定ログをクリアして再解析
+        pendingLogs = [];
+        currentCardIndex = 0;
+
+        await analyzeImagesInBatches(cachedCompressedImages, progressText, progressFill);
+    }
+
     function compressImage(file, maxWidth = 600, quality = 0.4) {
         return new Promise((resolve) => {
             const img = new Image();
@@ -215,12 +260,11 @@
         });
     }
 
-    // Gemini AI 一括解析・グループ化処理
+    // Gemini AI 解析処理
     async function analyzeImagesInBatches(images, progressText, progressFill) {
         const apiKey = localStorage.getItem('sella_gemini_key');
         if (!apiKey) {
-            alert("⚠️ Gemini API Keyが設定されていません。手動確認用に未確定ログとして追加します。");
-            // APIキーがなくても未確定ログとして表示できるようにフォールバック作成
+            alert("⚠️ Gemini API Keyが設定されていません。手動確認用に未確定ログへ送ります。");
             createFallbackPendingLogs(images);
             document.getElementById('progress-box').style.display = 'none';
             renderPendingSwipeCards();
@@ -228,56 +272,75 @@
             return;
         }
 
-        const model = localStorage.getItem('sella_gemini_model') || 'gemini-1.5-flash';
-        const chunkSize = 4; 
+        const model = document.getElementById('model-select').value || 'gemini-2.5-flash';
+        const chunkSize = 3; // 1回あたりの送信枚数
 
         for (let i = 0; i < images.length; i += chunkSize) {
             const chunk = images.slice(i, i + chunkSize);
-            progressText.textContent = `AIグループ化・解析中 (${i + 1}~${Math.min(i + chunkSize, images.length)} / ${images.length}枚)...`;
+            progressText.textContent = `[${model}] AI解析中 (${i + 1}~${Math.min(i + chunkSize, images.length)} / ${images.length}枚)...`;
             progressFill.style.width = `${40 + Math.round(((i + 1) / images.length) * 50)}%`;
 
-            try {
-                const parts = chunk.map((img) => ({
-                    inline_data: { mime_type: "image/jpeg", data: img.data.split(',')[1] }
-                }));
+            const parts = chunk.map((img) => ({
+                inline_data: { mime_type: "image/jpeg", data: img.data.split(',')[1] }
+            }));
 
-                const prompt = `提供された複数の画像を分析し、同一のお酒（ボトル・缶・ラベル表裏・グラスなど）ごとにグループ化して、それぞれのログ案を作成してください。
-無関係な写真や判断できない画像がある場合は unassigned_indices に画像インデックス(0始まり)を指定してください。
-
+            const prompt = `提供された画像を分析し同一のお酒ごとにグループ化してログ案を作成してください。
 出力は必ず以下のJSON形式のみで返してください:
 {
   "groups": [
     {
-      "image_indices": [0, 1],
+      "image_indices": [0],
       "name": "銘柄名",
-      "subname": "詳細・スペック",
+      "subname": "詳細",
       "brewery": "酒蔵名",
       "region": "産地",
-      "class": "特定名称/格付",
-      "ai_info": "豆知識や特徴"
+      "class": "格付",
+      "ai_info": "特徴"
     }
   ],
   "unassigned_indices": []
 }`;
-                parts.push({ text: prompt });
+            parts.push({ text: prompt });
 
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts }] })
-                });
+            let res = null;
+            let success = false;
+            
+            // 混雑(503/429)時の自動リトライ処理
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts }] })
+                    });
 
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    const errMsg = errData.error?.message || `ステータスコード: ${res.status}`;
-                    alert(`⚠️ API通信エラーが発生しました (${errMsg})。\n対象画像を個別未確定ログに送ります。`);
-                    createFallbackPendingLogs(chunk);
-                    continue;
+                    if (res.ok) {
+                        success = true;
+                        break;
+                    } else if (res.status === 503 || res.status === 429) {
+                        progressText.textContent = `混雑中... リトライ中 (${attempt}/3)`;
+                        await new Promise(r => setTimeout(r, 2000 * attempt));
+                    } else {
+                        break;
+                    }
+                } catch (e) {
+                    await new Promise(r => setTimeout(r, 1500));
                 }
+            }
 
+            if (!success || !res || !res.ok) {
+                const errJson = res ? await res.json().catch(() => ({})) : {};
+                const errMsg = errJson.error?.message || "通信失敗または混雑";
+                console.warn(`モデル ${model} で解析失敗: ${errMsg}`);
+                
+                // エラー時はフォールバックカードを作成
+                createFallbackPendingLogs(chunk, `AI解析失敗 (${model}): 上部でモデルを変更して「🔄 圧縮画像で再解析」を行えます。`);
+                continue;
+            }
+
+            try {
                 const data = await res.json();
                 const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                
                 const cleanText = text.replace(/```json|```/g, '').trim();
                 const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
 
@@ -313,11 +376,10 @@
                         }
                     });
                 } else {
-                    createFallbackPendingLogs(chunk);
+                    createFallbackPendingLogs(chunk, 'JSON解析エラーのため手動調整してください');
                 }
-            } catch(e) {
-                console.error("処理エラー:", e);
-                createFallbackPendingLogs(chunk);
+            } catch (e) {
+                createFallbackPendingLogs(chunk, '解析エラーのため手動調整してください');
             }
         }
 
@@ -328,8 +390,7 @@
         renderUnassignedPool();
     }
 
-    // AI解析不可・エラー時のフォールバック作成
-    function createFallbackPendingLogs(imgList) {
+    function createFallbackPendingLogs(imgList, customNote) {
         imgList.forEach((imgObj) => {
             pendingLogs.push({
                 tempId: `pending_${Date.now()}_${Math.random()}`,
@@ -338,7 +399,7 @@
                 brewery: '',
                 region: '',
                 class: '',
-                ai_info: '（解析未完了のため手動入力してください）',
+                ai_info: customNote || '（解析未完了のため手動入力してください）',
                 date: new Date().toISOString().split('T')[0],
                 rating: 4.0,
                 images: [imgObj.data]
@@ -346,7 +407,6 @@
         });
     }
 
-    // スワイプ型 未確定カードの描画
     function renderPendingSwipeCards() {
         const container = document.getElementById('swipe-container');
         const section = document.getElementById('swipe-section');
@@ -365,9 +425,6 @@
             card.className = 'swipe-card';
             card.id = `swipe-card-${index}`;
             card.style.zIndex = pendingLogs.length - index;
-            if (index !== currentCardIndex) {
-                card.style.display = 'none';
-            }
 
             const imgThumbs = item.images.map(img => `<img src="${img}">`).join('');
 
@@ -436,7 +493,6 @@
         });
     }
 
-    // 個別確定保存（ここで初めて既存ハッシュに登録される）
     function confirmPendingLog(index) {
         const item = pendingLogs[index];
         const newLog = {
@@ -458,7 +514,7 @@
         existingLogs.unshift(newLog);
         localStorage.setItem('sella_logs', JSON.stringify(existingLogs));
 
-        // 確定保存時に対象画像のハッシュをSetへ追加
+        // 保存確定時のみハッシュ登録
         item.images.forEach(imgData => {
             existingImageHashes.add(simpleHash(imgData));
         });
@@ -470,7 +526,6 @@
         renderPendingSwipeCards();
     }
 
-    // スキップして未割り当てへ移動
     function skipPendingLog(index) {
         const item = pendingLogs[index];
         item.images.forEach(imgData => {
@@ -485,7 +540,6 @@
         renderUnassignedPool();
     }
 
-    // 未割り当てギャラリーの描画
     function renderUnassignedPool() {
         const container = document.getElementById('unassigned-gallery');
         document.getElementById('unassigned-count').textContent = unassignedImages.length;
@@ -505,7 +559,6 @@
         });
     }
 
-    // 未割り当て画像を既存ログに手動追加
     function assignImageToExistingLog(imgIndex) {
         if (existingLogs.length === 0) return alert("割り当てる既存ログがありません。");
 
@@ -518,7 +571,6 @@
             if (!targetLog.images) targetLog.images = [];
             targetLog.images.push(unassignedImages[imgIndex].data);
 
-            // 保存およびハッシュの追記
             existingImageHashes.add(simpleHash(unassignedImages[imgIndex].data));
             localStorage.setItem('sella_logs', JSON.stringify(existingLogs));
 
