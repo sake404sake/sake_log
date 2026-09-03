@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v28 - Scroll & Sync Load Fix)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v28 - Auto Backup Fix)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- JSZip (ZIPファイルの作成・解凍用ライブラリ) -->
@@ -263,11 +263,11 @@
         button.danger { background-color: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
         button.danger:hover { background-color: rgba(255, 69, 58, 0.1); }
 
-        /* モバイル用のCSS (スワイプサイドメニュー & ボトムナビ完全撤廃 & スクロールロック解除) */
+        /* モバイル用のCSS */
         @media (max-width: 768px) {
             body { 
                 flex-direction: column; 
-                overflow-y: scroll !important; /* スマホ全体のスクロールロックを解除 */
+                overflow-y: scroll !important; 
                 height: auto !important; 
             }
             .app-container { 
@@ -277,7 +277,6 @@
                 display: block; 
             }
             
-            /* 左サイドバーをモバイルでは非表示＆スライド形式に */
             .sidebar {
                 display: flex !important;
                 position: fixed !important;
@@ -297,7 +296,7 @@
             .main-content {
                 width: 100%;
                 height: auto !important;
-                overflow-y: visible !important; /* コンテンツに応じたスクロールを確保 */
+                overflow-y: visible !important; 
                 padding: 16px;
                 padding-bottom: 40px !important;
             }
@@ -341,7 +340,6 @@
 
             <div class="header-bar">
                 <h1 class="header-title" id="page-title">
-                    <!-- ハンバーガーメニューボタン (モバイルのみ表示) -->
                     <button id="btn-mobile-menu" onclick="openMobileMenu()" style="background:none; border:none; color:var(--text-primary); font-size:24px; padding:4px 8px; cursor:pointer; display:none; align-items:center; justify-content:center; margin-right:12px; transition:var(--transition);">☰</button>
                     ダッシュボード
                 </h1>
@@ -371,7 +369,7 @@
                     <div class="card-title"><span>ℹ️</span> アプリ情報</div>
                     <div style="font-size: 13px; color: var(--text-primary); display: flex; flex-direction: column; gap: 6px;">
                         <div><strong>アプリ名:</strong> Sella - お酒ログ管理 & アルバム</div>
-                        <div><strong>バージョン:</strong> v28.0 (Scroll & Sync Load Fix)</div>
+                        <div><strong>バージョン:</strong> v28.0 (Auto Backup Fix)</div>
                     </div>
                 </div>
 
@@ -454,7 +452,6 @@
                     <label>写真 (自動軽量化・撮影日取得対応)</label>
                     <input type="file" id="image-file-input" accept="image/*" multiple style="display:none;" onchange="processMultipleImages(this)">
                     
-                    <!-- 📸 重複を撤廃し整理した写真ボタンエリア -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                         <button type="button" class="secondary" style="flex:1;" onclick="triggerFileInput()">📂 フォルダから選ぶ</button>
                         <button type="button" id="btn-ai-analyze" style="flex:1; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;" onclick="analyzeImageWithGemini()">✨ AIラベル自動入力</button>
@@ -553,10 +550,7 @@
                     <textarea id="drink-ai-info" rows="2" placeholder="AIが抽出したお酒の豆知識や特徴がここに記録されます"></textarea>
                 </div>
 
-                <!-- 🔁 動的保存ボタンコンテナ -->
-                <div id="form-save-btn-container" style="margin-top: 20px;">
-                    <!-- JSで新規登録ボタン、または一括・個別保存ボタンが並んで挿入されます -->
-                </div>
+                <div id="form-save-btn-container" style="margin-top: 20px;"></div>
             </div>
         </div>
     </div>
@@ -595,15 +589,21 @@
             initSwipeMenu();
             await fetchGeminiModels(true);
             
-            // 起動時にGoogleログイン済みの場合は、Google Driveの最新データを自動でロード・同期する (PC/スマホ間リアルタイム同期のバグ修正)
-            const token = localStorage.getItem('sella_gdrive_token');
-            if (token) {
-                await syncLocalDataToGoogleDrive(token, false);
+            // 起動時にGoogleログイン済みの場合は、最新のアクセストークンを自動獲得してDriveと同期
+            if (localStorage.getItem('sella_gdrive_email')) {
+                autoRefreshGoogleTokenAndSync();
             }
         };
 
+        function formatDateLocal(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
         /* ----------------------------------------------------
-         * 引っ張って更新（PTR）の高速・軽快化（全画面対応）
+         * 引っ張って更新（PTR）
          * ---------------------------------------------------- */
         function initPullToRefresh() {
             const mainContent = document.getElementById('main-content');
@@ -620,7 +620,7 @@
                 if (mainContent.scrollTop <= 0) {
                     touchStartY = e.touches[0].clientY;
                     isPulling = true;
-                    ptrIndicator.style.transition = 'none'; // ドラッグ中はアニメーションなしで即時反応
+                    ptrIndicator.style.transition = 'none';
                 }
             }, { passive: true });
 
@@ -662,10 +662,8 @@
                     checkGoogleAuthStatus();
                     await fetchGeminiModels(true);
                     
-                    // 「引っ張って更新」をした時にもGoogle Driveから最新データを強制ダウンロード・同期する
-                    const token = localStorage.getItem('sella_gdrive_token');
-                    if (token) {
-                        await syncLocalDataToGoogleDrive(token, false);
+                    if (localStorage.getItem('sella_gdrive_email')) {
+                        await autoRefreshGoogleTokenAndSync();
                     }
                     
                     await new Promise(resolve => setTimeout(resolve, 250));
@@ -685,7 +683,7 @@
             });
         }
 
-        /* 📱 スマホ用スライドサイドメニュー ＆ スワイプジェスチャー */
+        /* 📱 スマホ用スライドサイドメニュー */
         let menuTouchStartX = 0;
         let menuTouchStartY = 0;
 
@@ -696,7 +694,6 @@
                 const isClosed = !sidebar.classList.contains('mobile-open');
                 const clientX = e.touches[0].clientX;
                 
-                // メニューが閉じているときは画面の左端（50px以内）からのスワイプのみ検知
                 if (isClosed && clientX > 50) return;
                 
                 menuTouchStartX = clientX;
@@ -715,7 +712,7 @@
 
                     if (isClosed && diffX > 60) {
                         openMobileMenu();
-                        menuTouchStartX = 0; // 重複発動を遮断
+                        menuTouchStartX = 0;
                     } else if (!isClosed && diffX < -60) {
                         closeMobileMenu();
                         menuTouchStartX = 0;
@@ -743,7 +740,6 @@
             if (overlay) overlay.classList.remove('active');
         }
 
-        // switchView 時にも自動的にメニューを閉じる
         function switchView(viewId) {
             document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -798,12 +794,14 @@
             if (trimmed) {
                 fetchGeminiModels(true);
             }
+            triggerAutoBackup();
         }
 
         function saveGeminiModel(val) {
             if (val) {
                 localStorage.setItem("sella_gemini_model", val);
             }
+            triggerAutoBackup();
         }
 
         function copyGeminiKey() {
@@ -898,16 +896,18 @@
         function saveLogsToLocalStorage() {
             localStorage.setItem('sella_logs', JSON.stringify(logs));
             renderLogs();
-            
-            // Googleログイン済みの場合はDrive側にも自動同期
-            const token = localStorage.getItem('sella_gdrive_token');
-            if (token) {
-                syncLocalDataToGoogleDrive(token, false);
+            triggerAutoBackup();
+        }
+
+        // 自動バックアップトリガー
+        function triggerAutoBackup() {
+            if (localStorage.getItem('sella_gdrive_email')) {
+                autoRefreshGoogleTokenAndSync();
             }
         }
 
         /* ----------------------------------------------------
-         * 2. お酒の種類（大別）による完璧なアコーディオン仕分け
+         * お酒の種類（大別）によるアコーディオン仕分け
          * ---------------------------------------------------- */
         function renderLogs(logsToRender = logs) {
             document.getElementById('log-count').textContent = logsToRender.length;
@@ -924,7 +924,6 @@
                 return;
             }
 
-            // お酒の種類（type）ごとにグループ化
             const typeGroups = {
                 sake: { name: '🍶 日本酒', logs: {} },
                 wine: { name: '🍷 ワイン', logs: {} },
@@ -948,7 +947,7 @@
                 if (brandNames.length === 0) return;
 
                 const accordion = document.createElement('div');
-                accordion.className = `brewery-accordion open`; // デフォルトですべて展開
+                accordion.className = `brewery-accordion open`;
                 accordion.id = `type-acc-${typeKey}`;
                 
                 const header = document.createElement('div');
@@ -974,7 +973,6 @@
                     const latestLog = brandLogs[0];
                     const repeatCount = brandLogs.length;
 
-                    // 平均評価
                     const totalRating = brandLogs.reduce((sum, l) => sum + parseFloat(l.rating || 4), 0);
                     const avgRating = (totalRating / repeatCount).toFixed(1);
 
@@ -982,7 +980,6 @@
                     card.className = 'brand-card';
                     card.onclick = () => showLogDetail(latestLog.name, latestLog.brewery);
 
-                    // 代表（カバー）画像の決定
                     let imageHTML = `<div class="brand-image-preview">🍶</div>`;
                     const logWithImg = brandLogs.find(l => l.images && l.images.length > 0);
                     if (logWithImg) {
@@ -1035,7 +1032,7 @@
             renderLogs(filtered);
         }
 
-        /* 📸 高画質なリサイズ圧縮処理 (お酒の文字をクッキリ保つ) */
+        /* 📸 画像リサイズ圧縮処理 */
         function compressImage(file, maxWidth = 1500, quality = 0.85) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
@@ -1178,7 +1175,6 @@
             }
         }
 
-        /* 👑 スマホでの ontouchstart 競合を解消したサムネイル描画 */
         function renderFormThumbs() {
             const container = document.getElementById('form-image-list-container');
             container.innerHTML = "";
@@ -1204,7 +1200,6 @@
                 container.appendChild(wrapper);
             });
 
-            // ➕ 「写真追加」インラインカード
             if (tempUploadedImages.length > 0) {
                 const addBtn = document.createElement('div');
                 addBtn.className = 'form-image-thumb-wrapper form-image-add-card';
@@ -1432,7 +1427,7 @@
             alert(`✨ 過去ログの一括AI補完解析が完了しました（${updatedCount} 件更新）。`);
         }
 
-        /* ✍️ 新規追加 ＆ 編集用 ２つの物理保存ボタン分離処理 */
+        /* ✍️ フォームモーダル操作 */
         function openFormModal(mode, id = null) {
             tempUploadedImages = [];
             tempCoverImageIndex = 0;
@@ -1463,7 +1458,6 @@
                 document.getElementById('drink-comment').value = '';
                 document.getElementById('drink-ai-info').value = '';
 
-                // 新規ボタンのみ表示
                 btnContainer.innerHTML = `
                     <button onclick="saveLogFromForm('new')" style="width: 100%;">💾 ログを保存する</button>
                 `;
@@ -1489,7 +1483,6 @@
                 if (item.images) tempUploadedImages = [...item.images];
                 tempCoverImageIndex = item.coverImageIndex || 0;
 
-                // 🔁 「一括」と「この日のみ」のボタンを最初から2つ表示
                 btnContainer.innerHTML = `
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         <button onclick="saveLogFromForm('all')" style="width: 100%; background: var(--accent-amber); color: #000;">🔁 過去リピートも含めて一括更新</button>
@@ -1537,7 +1530,6 @@
 
             if (editId) {
                 if (saveMode === 'all') {
-                    // スペック一括更新
                     const oldLog = logs.find(l => l.id === editId);
                     if (oldLog) {
                         logs.forEach(l => {
@@ -1579,7 +1571,6 @@
             document.getElementById('detail-title').textContent = fullTitle;
             const body = document.getElementById('detail-body');
 
-            // タイムラインカルーセルの画像全集約
             slideImages = brandLogs.flatMap(l => l.images || []);
             let imagesSliderHtml = "";
             if (slideImages.length > 0) {
@@ -1623,7 +1614,6 @@
                 </div>
             ` : '';
 
-            // リピート履歴リスト
             const timelineHtml = brandLogs.map(l => `
                 <div style="background:var(--card-bg); border:1px solid var(--border-color); padding:14px; border-left:4px solid var(--accent-amber); border-radius:8px; margin-bottom: 10px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -1734,15 +1724,14 @@
         }
 
         function deleteEntireBrand(brandName, breweryName) {
-            if (!confirm(`「${breweryName} - ${brandName}」の全履歴（すべてのリピートログ）を完全に削除しますか？
-この操作は戻せません。`)) return;
+            if (!confirm(`「${breweryName} - ${brandName}」の全履歴（すべてのリピートログ）を完全に削除しますか？\nこの操作は戻せません。`)) return;
             logs = logs.filter(l => !(l.name === brandName && l.brewery === breweryName));
             saveLogsToLocalStorage();
             closeDetailModal();
         }
 
         /* ----------------------------------------------------
-         * 【完全対応】設定（APIキー等）も一緒に同梱するZIPバックアップ
+         * ZIPバックアップ & 復元
          * ---------------------------------------------------- */
         async function exportZipBackup() {
             if (typeof JSZip === 'undefined') {
@@ -1752,7 +1741,6 @@
                 const zip = new JSZip();
                 const imgFolder = zip.folder("images");
 
-                // アプリ設定情報をパッケージ
                 const settings = {
                     gemini_key: localStorage.getItem("sella_gemini_key") || "",
                     gemini_model: localStorage.getItem("sella_gemini_model") || "gemini-2.5-flash",
@@ -1834,10 +1822,8 @@
                 let importedSettings = null;
 
                 if (Array.isArray(parsedData)) {
-                    // 旧形式の配列直接
                     importedLogs = parsedData;
                 } else if (parsedData && Array.isArray(parsedData.logs)) {
-                    // 新形式の設定同梱型
                     importedLogs = parsedData.logs;
                     importedSettings = parsedData.settings;
                 } else {
@@ -1847,7 +1833,6 @@
                 }
 
                 if (confirm(`現在のデータに上書きして ${importedLogs.length} 件のログ（写真・アプリ設定含む）を復元しますか？`)) {
-                    // 画像ファイル参照（images/xxx.jpg）を Base64 に展開復元
                     for (const item of importedLogs) {
                         if (item.images && item.images.length > 0) {
                             const restoredImages = [];
@@ -1871,7 +1856,6 @@
                         }
                     }
 
-                    // 設定値の復元
                     if (importedSettings) {
                         if (importedSettings.gemini_key) localStorage.setItem("sella_gemini_key", importedSettings.gemini_key);
                         if (importedSettings.gemini_model) localStorage.setItem("sella_gemini_model", importedSettings.gemini_model);
@@ -1881,7 +1865,7 @@
 
                     logs = importedLogs;
                     saveLogsToLocalStorage();
-                    loadSavedSettings(); // UI再表示
+                    loadSavedSettings();
                     alert("✅ アプリ設定・全写真データの完全リストアが完了しました！");
                     location.reload();
                 }
@@ -1893,19 +1877,18 @@
         }
 
         /* ----------------------------------------------------
-         * Google アカウント連携 & ログイン後のデータ移動・同期 (設定値も対象)
+         * Google アカウント連携 & ログイン後のデータ自動バックアップ（修正版）
          * ---------------------------------------------------- */
         function checkGoogleAuthStatus() {
             const statusEl = document.getElementById('google-auth-status');
             const loginBtn = document.getElementById('btn-google-login');
             const logoutBtn = document.getElementById('btn-google-logout');
 
-            const savedToken = localStorage.getItem('sella_gdrive_token');
             const savedEmail = localStorage.getItem('sella_gdrive_email');
 
-            if (savedToken) {
-                const emailText = savedEmail ? ` (${escapeHtml(savedEmail)})` : '';
-                if (statusEl) statusEl.innerHTML = `<span style="font-size: 12px; color: #34c759; font-weight: 600;">🟢 Google連携済み${emailText}</span>`;
+            if (savedEmail) {
+                const emailText = ` (${escapeHtml(savedEmail)})`;
+                if (statusEl) statusEl.innerHTML = `<span style="font-size: 12px; color: #34c759; font-weight: 600;">🟢 Google連携・自動バックアップ有効${emailText}</span>`;
                 if (loginBtn) loginBtn.style.display = 'none';
                 if (logoutBtn) logoutBtn.style.display = 'inline-flex';
             } else {
@@ -1950,8 +1933,6 @@
                             }
 
                             checkGoogleAuthStatus();
-                            
-                            // サインイン前にローカルにあった情報をGoogle Drive (AppData) に自動移行・統合
                             await syncLocalDataToGoogleDrive(response.access_token, true);
                         }
                     },
@@ -1963,12 +1944,54 @@
             }
         }
 
+        // バックグラウンドでトークンを更新して自動同期する関数
+        async function autoRefreshGoogleTokenAndSync() {
+            const currentToken = localStorage.getItem('sella_gdrive_token');
+            if (!currentToken) return;
+
+            // トークンの有効性確認
+            const isValid = await checkTokenValid(currentToken);
+            if (isValid) {
+                await syncLocalDataToGoogleDrive(currentToken, false);
+            } else {
+                // 有効期限が切れている場合は静かに再トークン取得を試みる
+                if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+                    const client = google.accounts.oauth2.initTokenClient({
+                        client_id: GOOGLE_CLIENT_ID,
+                        scope: 'https://www.googleapis.com/auth/drive.appdata',
+                        prompt: '', // ポップアップを抑制
+                        callback: async (response) => {
+                            if (response.access_token) {
+                                localStorage.setItem('sella_gdrive_token', response.access_token);
+                                await syncLocalDataToGoogleDrive(response.access_token, false);
+                            }
+                        }
+                    });
+                    client.requestAccessToken({ prompt: '' });
+                }
+            }
+        }
+
+        async function checkTokenValid(token) {
+            try {
+                const res = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`);
+                return res.ok;
+            } catch (e) {
+                return false;
+            }
+        }
+
         async function syncLocalDataToGoogleDrive(token, showNotice = false) {
             try {
-                // AppDataFolder内のお酒ログファイルを検索
+                // AppDataFolderから設定ファイル `sella_logs.json` を検索
                 const searchRes = await fetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'sella_logs.json'", {
                     headers: { Authorization: `Bearer ${token}` }
                 });
+                
+                if (!searchRes.ok) {
+                    throw new Error("Google Drive 検索リクエストエラー");
+                }
+
                 const searchData = await searchRes.json();
                 let fileId = searchData.files && searchData.files.length > 0 ? searchData.files[0].id : null;
 
@@ -1991,13 +2014,12 @@
                     }
                 }
 
-                // ローカルの未保存データとDrive側の既存データをID重複排除しながらマージ
+                // ローカルとクラウドのデータをID基準で統合 (新規登録・変更内容の優先保存)
                 const logMap = new Map();
                 driveLogs.forEach(item => logMap.set(item.id, item));
-                localLogs.forEach(item => logMap.set(item.id, item));
+                localLogs.forEach(item => logMap.set(item.id, item)); // ローカル側（最新状態）で上書き
                 const mergedLogs = Array.from(logMap.values());
 
-                // 設定情報もパッケージ
                 const settings = {
                     gemini_key: localStorage.getItem("sella_gemini_key") || "",
                     gemini_model: localStorage.getItem("sella_gemini_model") || "gemini-2.5-flash",
@@ -2013,6 +2035,7 @@
                 const fileContent = JSON.stringify(backupPackage, null, 2);
 
                 if (fileId) {
+                    // 既存ファイルをPATCH更新
                     await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
                         method: 'PATCH',
                         headers: {
@@ -2022,6 +2045,7 @@
                         body: fileContent
                     });
                 } else {
+                    // 新規作成
                     const metadata = { name: 'sella_logs.json', parents: ['appDataFolder'] };
                     const form = new FormData();
                     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -2033,12 +2057,9 @@
                     });
                 }
 
-                // クラウド側の設定を復元・ローカルに反映
-                if (driveSettings) {
+                if (driveSettings && showNotice) {
                     if (driveSettings.gemini_key) localStorage.setItem("sella_gemini_key", driveSettings.gemini_key);
                     if (driveSettings.gemini_model) localStorage.setItem("sella_gemini_model", driveSettings.gemini_model);
-                    if (driveSettings.theme) localStorage.setItem("sella_theme", driveSettings.theme);
-                    if (driveSettings.auto_date) localStorage.setItem("sella_auto_date", driveSettings.auto_date);
                     loadSavedSettings();
                 }
 
@@ -2047,7 +2068,7 @@
                 renderLogs();
 
                 if (showNotice) {
-                    alert("✅ サインイン前にローカルにあったデータ・写真・各種アプリ設定をGoogleアカウントへ安全に同期・統合しました！");
+                    alert("✅ Googleアカウントとデータを安全に同期・バックアップしました！");
                 }
             } catch (e) {
                 console.error("Google Drive 同期エラー:", e);
