@@ -118,8 +118,9 @@
         loadExistingLogs();
     };
 
-    // メインアプリのデータをロード＆重複防止用ハッシュ生成
+    // メインアプリのデータをロード＆既存データのハッシュ生成
     function loadExistingLogs() {
+        existingImageHashes.clear();
         const raw = localStorage.getItem('sella_logs');
         if (raw) {
             try {
@@ -133,7 +134,7 @@
         }
     }
 
-    // 文字列ハッシュ (重複判定用・データ全体サンプリング)
+    // 文字列ハッシュ (重複判定用)
     function simpleHash(str) {
         let hash = 0;
         const step = Math.max(1, Math.floor(str.length / 1000));
@@ -148,6 +149,9 @@
     async function handleBatchFiles(files) {
         if (!files || files.length === 0) return;
 
+        // 最新の保存済みログハッシュを再読み込み
+        loadExistingLogs();
+
         const progressBox = document.getElementById('progress-box');
         const progressFill = document.getElementById('progress-fill');
         const progressText = document.getElementById('progress-text');
@@ -155,6 +159,7 @@
 
         const fileArray = Array.from(files);
         const processedImages = [];
+        const currentSessionHashes = new Set(); // 今回の選択内での重複チェック用
         let duplicateCount = 0;
 
         for (let i = 0; i < fileArray.length; i++) {
@@ -164,17 +169,18 @@
             const base64 = await compressImage(fileArray[i]);
             if (base64) {
                 const hash = simpleHash(base64);
-                if (existingImageHashes.has(hash)) {
+                // 保存済みログとの重複、または今回の選択内での重複をチェック
+                if (existingImageHashes.has(hash) || currentSessionHashes.has(hash)) {
                     duplicateCount++;
                 } else {
-                    existingImageHashes.add(hash); // 今回のセッション内重複も防ぐ
+                    currentSessionHashes.add(hash); // 今回の選択内のみ保持（確定保存されるまでは existingImageHashes に追加しない）
                     processedImages.push({ id: `img_${Date.now()}_${i}`, data: base64 });
                 }
             }
         }
 
         if (duplicateCount > 0) {
-            alert(`⚠️ 既に登録済みの画像 ${duplicateCount} 枚をスキップしました。`);
+            alert(`⚠️ 既に登録済み（または選択内で重複）の画像 ${duplicateCount} 枚をスキップしました。`);
         }
 
         if (processedImages.length === 0) {
@@ -209,34 +215,33 @@
         });
     }
 
- // Gemini AI 一括解析・グループ化処理 (修正版)
-async function analyzeImagesInBatches(images, progressText, progressFill) {
-    const apiKey = localStorage.getItem('sella_gemini_key');
-    if (!apiKey) {
-        alert("⚠️ Gemini API Keyが設定されていません。メイン画面の設定からAPIキーをセットしてください。");
-        unassignedImages.push(...images);
-        renderUnassignedPool();
-        document.getElementById('progress-box').style.display = 'none';
-        return;
-    }
+    // Gemini AI 一括解析・グループ化処理
+    async function analyzeImagesInBatches(images, progressText, progressFill) {
+        const apiKey = localStorage.getItem('sella_gemini_key');
+        if (!apiKey) {
+            alert("⚠️ Gemini API Keyが設定されていません。手動確認用に未確定ログとして追加します。");
+            // APIキーがなくても未確定ログとして表示できるようにフォールバック作成
+            createFallbackPendingLogs(images);
+            document.getElementById('progress-box').style.display = 'none';
+            renderPendingSwipeCards();
+            renderUnassignedPool();
+            return;
+        }
 
-    // デフォルトモデルを確実に利用可能な名称に指定
-    const model = localStorage.getItem('sella_gemini_model') || 'gemini-1.5-flash';
-    
-    // 1回の送信枚数を10枚から4枚に減らしてタイムアウト・容量オーバーを防止
-    const chunkSize = 4; 
-    
-    for (let i = 0; i < images.length; i += chunkSize) {
-        const chunk = images.slice(i, i + chunkSize);
-        progressText.textContent = `AIグループ化・解析中 (${i + 1}~${Math.min(i + chunkSize, images.length)} / ${images.length}枚)...`;
-        progressFill.style.width = `${40 + Math.round(((i + 1) / images.length) * 50)}%`;
+        const model = localStorage.getItem('sella_gemini_model') || 'gemini-1.5-flash';
+        const chunkSize = 4; 
 
-        try {
-            const parts = chunk.map((img) => ({
-                inline_data: { mime_type: "image/jpeg", data: img.data.split(',')[1] }
-            }));
+        for (let i = 0; i < images.length; i += chunkSize) {
+            const chunk = images.slice(i, i + chunkSize);
+            progressText.textContent = `AIグループ化・解析中 (${i + 1}~${Math.min(i + chunkSize, images.length)} / ${images.length}枚)...`;
+            progressFill.style.width = `${40 + Math.round(((i + 1) / images.length) * 50)}%`;
 
-            const prompt = `提供された複数の画像を分析し、同一のお酒（ボトル・缶・ラベル表裏・グラスなど）ごとにグループ化して、それぞれのログ案を作成してください。
+            try {
+                const parts = chunk.map((img) => ({
+                    inline_data: { mime_type: "image/jpeg", data: img.data.split(',')[1] }
+                }));
+
+                const prompt = `提供された複数の画像を分析し、同一のお酒（ボトル・缶・ラベル表裏・グラスなど）ごとにグループ化して、それぞれのログ案を作成してください。
 無関係な写真や判断できない画像がある場合は unassigned_indices に画像インデックス(0始まり)を指定してください。
 
 出力は必ず以下のJSON形式のみで返してください:
@@ -254,76 +259,93 @@ async function analyzeImagesInBatches(images, progressText, progressFill) {
   ],
   "unassigned_indices": []
 }`;
-            parts.push({ text: prompt });
+                parts.push({ text: prompt });
 
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts }] })
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                const errMsg = errData.error?.message || `ステータスコード: ${res.status}`;
-                alert(`⚠️ API通信エラーが発生しました:\n${errMsg}`);
-                chunk.forEach(img => unassignedImages.push(img));
-                continue;
-            }
-
-            const data = await res.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            
-            // JSONフォーマットの整形抽出
-            const cleanText = text.replace(/```json|```/g, '').trim();
-            const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-
-            if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                const assignedIndices = new Set();
-
-                (parsed.groups || []).forEach(g => {
-                    const groupImgs = (g.image_indices || []).map(idx => {
-                        assignedIndices.add(idx);
-                        return chunk[idx] ? chunk[idx].data : null;
-                    }).filter(Boolean);
-
-                    if (groupImgs.length > 0) {
-                        pendingLogs.push({
-                            tempId: `pending_${Date.now()}_${Math.random()}`,
-                            name: g.name || '不明なお酒',
-                            subname: g.subname || '',
-                            brewery: g.brewery || '',
-                            region: g.region || '',
-                            class: g.class || '',
-                            ai_info: g.ai_info || '',
-                            date: new Date().toISOString().split('T')[0],
-                            rating: 4.0,
-                            images: groupImgs
-                        });
-                    }
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts }] })
                 });
 
-                // 割り当てられなかった画像をプールへ
-                chunk.forEach((img, idx) => {
-                    if (!assignedIndices.has(idx) || (parsed.unassigned_indices && parsed.unassigned_indices.includes(idx))) {
-                        unassignedImages.push(img);
-                    }
-                });
-            } else {
-                chunk.forEach(img => unassignedImages.push(img));
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    const errMsg = errData.error?.message || `ステータスコード: ${res.status}`;
+                    alert(`⚠️ API通信エラーが発生しました (${errMsg})。\n対象画像を個別未確定ログに送ります。`);
+                    createFallbackPendingLogs(chunk);
+                    continue;
+                }
+
+                const data = await res.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                
+                const cleanText = text.replace(/```json|```/g, '').trim();
+                const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    const assignedIndices = new Set();
+
+                    (parsed.groups || []).forEach(g => {
+                        const groupImgs = (g.image_indices || []).map(idx => {
+                            assignedIndices.add(idx);
+                            return chunk[idx] ? chunk[idx].data : null;
+                        }).filter(Boolean);
+
+                        if (groupImgs.length > 0) {
+                            pendingLogs.push({
+                                tempId: `pending_${Date.now()}_${Math.random()}`,
+                                name: g.name || '不明なお酒',
+                                subname: g.subname || '',
+                                brewery: g.brewery || '',
+                                region: g.region || '',
+                                class: g.class || '',
+                                ai_info: g.ai_info || '',
+                                date: new Date().toISOString().split('T')[0],
+                                rating: 4.0,
+                                images: groupImgs
+                            });
+                        }
+                    });
+
+                    chunk.forEach((img, idx) => {
+                        if (!assignedIndices.has(idx) || (parsed.unassigned_indices && parsed.unassigned_indices.includes(idx))) {
+                            unassignedImages.push(img);
+                        }
+                    });
+                } else {
+                    createFallbackPendingLogs(chunk);
+                }
+            } catch(e) {
+                console.error("処理エラー:", e);
+                createFallbackPendingLogs(chunk);
             }
-        } catch(e) {
-            console.error("処理エラー:", e);
-            chunk.forEach(img => unassignedImages.push(img));
         }
+
+        progressFill.style.width = '100%';
+        setTimeout(() => { document.getElementById('progress-box').style.display = 'none'; }, 500);
+
+        renderPendingSwipeCards();
+        renderUnassignedPool();
     }
 
-    progressFill.style.width = '100%';
-    setTimeout(() => { document.getElementById('progress-box').style.display = 'none'; }, 500);
+    // AI解析不可・エラー時のフォールバック作成
+    function createFallbackPendingLogs(imgList) {
+        imgList.forEach((imgObj) => {
+            pendingLogs.push({
+                tempId: `pending_${Date.now()}_${Math.random()}`,
+                name: '新規なお酒',
+                subname: '',
+                brewery: '',
+                region: '',
+                class: '',
+                ai_info: '（解析未完了のため手動入力してください）',
+                date: new Date().toISOString().split('T')[0],
+                rating: 4.0,
+                images: [imgObj.data]
+            });
+        });
+    }
 
-    renderPendingSwipeCards();
-    renderUnassignedPool();
-}
     // スワイプ型 未確定カードの描画
     function renderPendingSwipeCards() {
         const container = document.getElementById('swipe-container');
@@ -379,7 +401,6 @@ async function analyzeImagesInBatches(images, progressText, progressFill) {
                 </div>
             `;
 
-            // タッチスワイプイベント設定
             card.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; });
             card.addEventListener('touchend', e => {
                 touchEndX = e.changedTouches[0].screenX;
@@ -396,11 +417,9 @@ async function analyzeImagesInBatches(images, progressText, progressFill) {
         const diff = touchEndX - touchStartX;
         if (Math.abs(diff) > 60) {
             if (diff < 0 && currentCardIndex < pendingLogs.length - 1) {
-                // 左スワイプ -> 次へ
                 currentCardIndex++;
                 updateCardVisibility();
             } else if (diff > 0 && currentCardIndex > 0) {
-                // 右スワイプ -> 前へ
                 currentCardIndex--;
                 updateCardVisibility();
             }
@@ -417,7 +436,7 @@ async function analyzeImagesInBatches(images, progressText, progressFill) {
         });
     }
 
-    // 個別確定保存
+    // 個別確定保存（ここで初めて既存ハッシュに登録される）
     function confirmPendingLog(index) {
         const item = pendingLogs[index];
         const newLog = {
@@ -439,7 +458,11 @@ async function analyzeImagesInBatches(images, progressText, progressFill) {
         existingLogs.unshift(newLog);
         localStorage.setItem('sella_logs', JSON.stringify(existingLogs));
 
-        // 未確定から削除して次へ
+        // 確定保存時に対象画像のハッシュをSetへ追加
+        item.images.forEach(imgData => {
+            existingImageHashes.add(simpleHash(imgData));
+        });
+
         pendingLogs.splice(index, 1);
         if (currentCardIndex >= pendingLogs.length && currentCardIndex > 0) {
             currentCardIndex--;
@@ -495,7 +518,10 @@ async function analyzeImagesInBatches(images, progressText, progressFill) {
             if (!targetLog.images) targetLog.images = [];
             targetLog.images.push(unassignedImages[imgIndex].data);
 
+            // 保存およびハッシュの追記
+            existingImageHashes.add(simpleHash(unassignedImages[imgIndex].data));
             localStorage.setItem('sella_logs', JSON.stringify(existingLogs));
+
             unassignedImages.splice(imgIndex, 1);
             renderUnassignedPool();
             alert(`「${targetLog.name}」に画像を追加しました。`);
