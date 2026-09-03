@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.1 - Exif Loop Fix)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.2 - Subname Split)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -83,6 +83,7 @@
         .brand-image-preview { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; background-color: #000; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
         .brand-info { flex: 1; }
         .brand-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+        .brand-subname { font-size: 13px; color: var(--accent-amber); font-weight: 500; margin-bottom: 4px; }
         .brand-meta { font-size: 11px; color: var(--text-secondary); }
 
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
@@ -143,9 +144,6 @@
         button:hover { background-color: var(--accent-gold-hover); }
         button.secondary { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
         button.danger { background-color: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
-        
-        .user-profile-badge { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); }
-        .user-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
 
         .bottom-nav { display: none; position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; background-color: var(--panel-bg); border-top: 1px solid var(--border-color); z-index: 999; justify-content: space-around; align-items: center; }
         .bottom-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 10px; cursor: pointer; width: 25%; height: 100%; }
@@ -168,6 +166,7 @@
             .sidebar { display: none; }
             .main-content { width: 100%; height: 100%; padding: 16px; padding-bottom: 80px; }
             .bottom-nav { display: flex; }
+            .row-group { flex-direction: column; gap: 0; }
         }
     </style>
 </head>
@@ -187,7 +186,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.1</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.2</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -205,7 +204,7 @@
             <!-- 検索バー -->
             <div class="search-container">
                 <span class="search-icon">🔍</span>
-                <input type="text" class="search-input" id="search-input" placeholder="銘柄、酒蔵、都道府県、タグ(#...)から検索..." oninput="filterLogs()">
+                <input type="text" class="search-input" id="search-input" placeholder="銘柄、詳細、酒蔵、都道府県、タグ(#...)から検索..." oninput="filterLogs()">
             </div>
 
             <!-- ビューパネル1：お酒棚 -->
@@ -260,7 +259,7 @@
                 <div class="card">
                     <div class="card-title"><span>🔄</span> 過去ログのAI再解析</div>
                     <p style="font-size:12px; color:var(--text-secondary); margin-bottom:12px; line-height:1.5;">
-                        画像が登録されている過去のログをAIで自動解析し、空欄部分のみ（銘柄名・酒蔵・特定名称・産地・AI豆知識）を補完します。
+                        画像が登録されている過去のログをAIで自動解析し、空欄部分のみ（銘柄名・詳細・酒蔵・特定名称・産地・AI豆知識）を補完します。
                     </p>
                     <button id="btn-batch-ai" onclick="batchAnalyzePastLogs()" style="width: 100%; background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color:#000;">
                         ✨ 画像付き過去ログを一括AI解析
@@ -310,10 +309,27 @@
                 <div class="row-group">
                     <div class="form-group">
                         <div class="form-label-row">
-                            <label>銘柄・名称</label>
+                            <label>銘柄 (大別)</label>
                             <button type="button" class="btn-revert-field" id="revert-btn-drink-name" onclick="revertField('drink-name')">↩️ 戻す</button>
                         </div>
-                        <input type="text" id="drink-name" required>
+                        <input type="text" id="drink-name" placeholder="例: 写楽, 新政, 十四代" required>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label>詳細・商品名</label>
+                            <button type="button" class="btn-revert-field" id="revert-btn-drink-subname" onclick="revertField('drink-subname')">↩️ 戻す</button>
+                        </div>
+                        <input type="text" id="drink-subname" placeholder="例: 酒未来, 備前雄町, No.6 S-type">
+                    </div>
+                </div>
+
+                <div class="row-group">
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label>酒蔵・メーカー</label>
+                            <button type="button" class="btn-revert-field" id="revert-btn-drink-brewery" onclick="revertField('drink-brewery')">↩️ 戻す</button>
+                        </div>
+                        <input type="text" id="drink-brewery">
                     </div>
                     <div class="form-group" style="flex: 0.6;">
                         <label>種類</label>
@@ -330,45 +346,37 @@
                 <div class="row-group">
                     <div class="form-group">
                         <div class="form-label-row">
-                            <label>酒蔵・メーカー</label>
-                            <button type="button" class="btn-revert-field" id="revert-btn-drink-brewery" onclick="revertField('drink-brewery')">↩️ 戻す</button>
-                        </div>
-                        <input type="text" id="drink-brewery">
-                    </div>
-                    <div class="form-group">
-                        <div class="form-label-row">
                             <label>都道府県・産地</label>
                             <button type="button" class="btn-revert-field" id="revert-btn-drink-region" onclick="revertField('drink-region')">↩️ 戻す</button>
                         </div>
                         <input type="text" id="drink-region">
                     </div>
-                </div>
-
-                <div class="row-group">
                     <div class="form-group">
                         <div class="form-label-row">
                             <label>特定名称/格付</label>
                             <button type="button" class="btn-revert-field" id="revert-btn-drink-class" onclick="revertField('drink-class')">↩️ 戻す</button>
                         </div>
-                        <input type="text" id="drink-class">
+                        <input type="text" id="drink-class" placeholder="例: 純米吟醸">
                     </div>
+                </div>
+
+                <div class="row-group">
                     <div class="form-group">
                         <label>飲んだ日</label>
                         <input type="date" id="drink-date" required>
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label>評価</label>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <input type="range" id="drink-rating" min="1" max="5" step="0.5" value="4" oninput="document.getElementById('rating-val').textContent = parseFloat(this.value).toFixed(1)">
-                        <span id="rating-val" style="color:var(--accent-amber); font-weight:bold; font-size:16px;">4.0</span>⭐
+                    <div class="form-group">
+                        <label>評価</label>
+                        <div style="display:flex; gap:10px; align-items:center; height: 38px;">
+                            <input type="range" id="drink-rating" min="1" max="5" step="0.5" value="4" oninput="document.getElementById('rating-val').textContent = parseFloat(this.value).toFixed(1)">
+                            <span id="rating-val" style="color:var(--accent-amber); font-weight:bold; font-size:16px;">4.0</span>⭐
+                        </div>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label>タグ (スペース区切り)</label>
-                    <input type="text" id="drink-tags" placeholder="#純米大吟醸 #限定酒">
+                    <input type="text" id="drink-tags" placeholder="#純米吟醸 #限定酒">
                 </div>
 
                 <div class="form-group">
@@ -579,10 +587,13 @@
                         ? item.tags.map(t => `<span style="color:var(--accent-gold); margin-right:4px;">#${escapeHtml(t)}</span>`).join('')
                         : '';
 
+                    const subnameHtml = item.subname ? `<div class="brand-subname">${escapeHtml(item.subname)}</div>` : '';
+
                     card.innerHTML = `
                         ${imgThumb}
                         <div class="brand-info">
                             <div class="brand-name">${escapeHtml(item.name)}</div>
+                            ${subnameHtml}
                             <div class="brand-meta">
                                 ${escapeHtml(item.region || '産地未設定')} | ${escapeHtml(item.class || '特定名称未設定')}<br>
                                 📅 ${item.date} | ⭐ ${item.rating}
@@ -605,11 +616,12 @@
 
             const filtered = logs.filter(log => {
                 const name = (log.name || '').toLowerCase();
+                const subname = (log.subname || '').toLowerCase();
                 const brewery = (log.brewery || '').toLowerCase();
                 const region = (log.region || '').toLowerCase();
                 const tags = (log.tags || []).join(' ').toLowerCase();
 
-                return name.includes(query) || brewery.includes(query) || region.includes(query) || tags.includes(query);
+                return name.includes(query) || subname.includes(query) || brewery.includes(query) || region.includes(query) || tags.includes(query);
             });
 
             renderLogs(filtered);
@@ -814,15 +826,17 @@
                 const promptText = `提供されたお酒のボトルまたはラベル画像から、以下の情報をJSONフォーマットで厳密に抽出・推測してください。
 情報が見つからない・不明な場合は null を設定してください。
 
-- name: 銘柄名
-- brewery: 酒蔵または製造メーカー名
-- region: 都道府県または産地 (例: 新潟県, フランス)
-- class: 特定名称や格付 (例: 純米大吟醸, 赤ワイン, シングルモルト)
+- name: 銘柄の大別・ブランド名 (例: 写楽, 新政, 十四代)
+- subname: 詳細・商品仕様・サブネーム (例: 酒未来, 備前雄町, No.6 S-type)
+- brewery: 酒蔵または製造メーカー名 (例: 宮泉銘醸)
+- region: 都道府県または産地 (例: 福島県, フランス)
+- class: 特定名称や格付 (例: 純米吟醸, 赤ワイン)
 - ai_info: このお酒の特徴、おすすめの飲み方、歴史などの豆知識 (150文字程度)
 
 出力形式:
 {
   "name": "...",
+  "subname": "...",
   "brewery": "...",
   "region": "...",
   "class": "...",
@@ -860,6 +874,7 @@
         function saveOriginalFieldValues() {
             originalFieldValues = {
                 name: document.getElementById('drink-name').value,
+                subname: document.getElementById('drink-subname').value,
                 brewery: document.getElementById('drink-brewery').value,
                 region: document.getElementById('drink-region').value,
                 class: document.getElementById('drink-class').value,
@@ -870,6 +885,7 @@
         function applyAiExtractedData(data) {
             const fieldMap = {
                 'name': 'drink-name',
+                'subname': 'drink-subname',
                 'brewery': 'drink-brewery',
                 'region': 'drink-region',
                 'class': 'drink-class',
@@ -891,6 +907,7 @@
             const el = document.getElementById(fieldId);
             const keyMap = {
                 'drink-name': 'name',
+                'drink-subname': 'subname',
                 'drink-brewery': 'brewery',
                 'drink-region': 'region',
                 'drink-class': 'class',
@@ -906,7 +923,7 @@
         }
 
         function revertAllAiChanges() {
-            ['drink-name', 'drink-brewery', 'drink-region', 'drink-class', 'drink-ai-info'].forEach(id => revertField(id));
+            ['drink-name', 'drink-subname', 'drink-brewery', 'drink-region', 'drink-class', 'drink-ai-info'].forEach(id => revertField(id));
             document.getElementById('ai-revert-bar').style.display = 'none';
         }
 
@@ -941,14 +958,15 @@
                     });
 
                     const promptText = `提供された画像から以下の情報をJSONフォーマットで返してください。空欄補完用です。
-- name: 銘柄名
+- name: 銘柄名(大別)
+- subname: 詳細・商品名
 - brewery: 酒蔵またはメーカー名
 - region: 都道府県または産地
 - class: 特定名称または格付
 - ai_info: お酒の豆知識・特徴(100字程度)
 
 出力形式:
-{"name": "...", "brewery": "...", "region": "...", "class": "...", "ai_info": "..."}`;
+{"name": "...", "subname": "...", "brewery": "...", "region": "...", "class": "...", "ai_info": "..."}`;
 
                     parts.push({ text: promptText });
 
@@ -965,6 +983,7 @@
                         if (jsonMatch) {
                             const ext = JSON.parse(jsonMatch[0]);
                             if (!item.name && ext.name) item.name = ext.name;
+                            if (!item.subname && ext.subname) item.subname = ext.subname;
                             if (!item.brewery && ext.brewery) item.brewery = ext.brewery;
                             if (!item.region && ext.region) item.region = ext.region;
                             if (!item.class && ext.class) item.class = ext.class;
@@ -987,7 +1006,7 @@
             tempUploadedImages = [];
             originalFieldValues = {};
             document.getElementById('ai-revert-bar').style.display = 'none';
-            ['drink-name', 'drink-brewery', 'drink-region', 'drink-class', 'drink-ai-info'].forEach(id => {
+            ['drink-name', 'drink-subname', 'drink-brewery', 'drink-region', 'drink-class', 'drink-ai-info'].forEach(id => {
                 const el = document.getElementById(id);
                 el.classList.remove('ai-updated-input');
                 const revertBtn = document.getElementById(`revert-btn-${id}`);
@@ -998,6 +1017,7 @@
                 document.getElementById('form-modal-title').innerHTML = '<span>✍️</span> お酒のログ入力';
                 document.getElementById('edit-log-id').value = '';
                 document.getElementById('drink-name').value = '';
+                document.getElementById('drink-subname').value = '';
                 document.getElementById('drink-type').value = 'sake';
                 document.getElementById('drink-brewery').value = '';
                 document.getElementById('drink-region').value = '';
@@ -1015,6 +1035,7 @@
                 document.getElementById('form-modal-title').innerHTML = '<span>✏️</span> ログの編集';
                 document.getElementById('edit-log-id').value = item.id;
                 document.getElementById('drink-name').value = item.name || '';
+                document.getElementById('drink-subname').value = item.subname || '';
                 document.getElementById('drink-type').value = item.type || 'sake';
                 document.getElementById('drink-brewery').value = item.brewery || '';
                 document.getElementById('drink-region').value = item.region || '';
@@ -1052,6 +1073,7 @@
             const logData = {
                 id: editId ? editId : Date.now().toString(),
                 name: name,
+                subname: document.getElementById('drink-subname').value.trim(),
                 type: document.getElementById('drink-type').value,
                 brewery: document.getElementById('drink-brewery').value.trim(),
                 region: document.getElementById('drink-region').value.trim(),
@@ -1080,7 +1102,8 @@
             const item = logs.find(l => l.id === id);
             if (!item) return;
 
-            document.getElementById('detail-title').textContent = item.name;
+            const fullTitle = item.subname ? `${item.name} (${item.subname})` : item.name;
+            document.getElementById('detail-title').textContent = fullTitle;
             const body = document.getElementById('detail-body');
 
             let imagesSliderHtml = "";
@@ -1127,9 +1150,11 @@
             body.innerHTML = `
                 ${imagesSliderHtml}
                 <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
-                    <div><strong>🍶 酒蔵:</strong> ${escapeHtml(item.brewery || '未設定')}</div>
+                    <div><strong>🍶 銘柄:</strong> ${escapeHtml(item.name)}</div>
+                    <div><strong>🏷️ 詳細・商品名:</strong> ${escapeHtml(item.subname || '未設定')}</div>
+                    <div><strong>🏭 酒蔵:</strong> ${escapeHtml(item.brewery || '未設定')}</div>
                     <div><strong>📍 産地:</strong> ${escapeHtml(item.region || '未設定')}</div>
-                    <div><strong>🏷️ 特定名称:</strong> ${escapeHtml(item.class || '未設定')}</div>
+                    <div><strong>❄️ 特定名称:</strong> ${escapeHtml(item.class || '未設定')}</div>
                     <div><strong>📅 飲んだ日:</strong> ${item.date}</div>
                     <div><strong>⭐ 評価:</strong> ${item.rating} / 5.0</div>
                     <div><strong>🏷️ タグ:</strong> ${tagsHtml}</div>
