@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v22 - Gesture Menu & High-Res)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v23 - Type Acc & Double Save)</title>
     <!-- Google Identity Services & Google API Loader -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -145,7 +145,7 @@
         }
 
         /* メインコンテンツ（中央カラム） */
-        #btn-mobile-menu { display: none; }
+        #btn-mobile-menu { display: inline-flex !important; }
         .main-content {
             flex: 1;
             display: flex;
@@ -979,7 +979,7 @@
                 display: flex;
             }
 
-            #btn-mobile-menu { display: none; }
+            #btn-mobile-menu { display: inline-flex !important; }
         .main-content {
                 width: 100%;
                 height: auto !important;
@@ -1156,6 +1156,21 @@
 
         
 
+
+        #menu-overlay-element {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9999;
+            display: none;
+            backdrop-filter: blur(2px);
+        }
+        #menu-overlay-element.active {
+            display: block;
+        }
     </style>
 </head>
 
@@ -1186,7 +1201,7 @@
                 </ul>
             </div>
             <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">
-                Sella Base v22.0.0
+                Sella Base v23.0.0
             </div>
         </div>
 
@@ -1424,14 +1439,6 @@
                     <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="display: none;" onchange="processAndCompressCameraImage(this)">
                     
                     <!-- 従来の写真が0枚の時のプレースホルダー枠（ドラッグ＆ドロップ対応、タップすればライブラリ選択） -->
-                    <div class="image-uploader-box" id="image-uploader-box" onclick="document.getElementById('image-file-input').click()">
-                        <div class="image-uploader-placeholder" id="uploader-placeholder">
-                            <span>📷</span>
-                            <p>または、ここにドラッグ＆ドロップして追加</p>
-                        </div>
-                    </div>
-                    
-                    <!-- アップロードされた複数画像のリスト表示・コントロールエリア -->
                     <div id="form-image-list-container" class="form-image-container" style="margin-top: 8px; margin-bottom: 14px;">
                         <!-- JSで動的にサムネイルが生成されます -->
                     </div>
@@ -1502,9 +1509,20 @@
                     <textarea id="drink-memo" rows="3" placeholder="味の感想やおつまみの相性など自由にメモしてください。"></textarea>
                 </div>
 
-                <button onclick="saveLog()" style="width: 100%; margin-top: 8px;">
+                <!-- 新規登録モード時の保存ボタン -->
+                <button id="btn-save-new" onclick="saveLog(false)" style="width: 100%; margin-top: 8px; display: block;">
                     <span>💾</span> ログを保存する
                 </button>
+                
+                <!-- 編集モード時の分岐保存ボタン -->
+                <div id="edit-save-actions" style="display: none; flex-direction: column; gap: 10px; margin-top: 8px; width: 100%;">
+                    <button id="btn-save-batch" onclick="saveLog(true)" style="background: linear-gradient(135deg, var(--accent-gold), var(--accent-amber)); color: #000; font-weight: bold; width: 100%; margin: 0; padding: 12px 20px; font-size: 14px; border-radius: var(--border-radius-md);">
+                        <span>🔁</span> 過去リピートも含めて一括更新保存
+                    </button>
+                    <button id="btn-save-single" onclick="saveLog(false)" class="secondary" style="width: 100%; margin: 0; padding: 12px 20px; font-size: 14px; border-radius: var(--border-radius-md);">
+                        <span>💾</span> この1杯の記録のみ変更保存
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1866,13 +1884,7 @@
             const container = document.getElementById('form-image-list-container');
             container.innerHTML = '';
 
-            // v15改善: 全ての編集モード（個別・基本情報）で統一された追加UIを適用
-            const uploaderBox = document.getElementById('image-uploader-box');
-            if (tempUploadedImages.length === 0) {
-                if (uploaderBox) uploaderBox.style.display = 'block';
-            } else {
-                if (uploaderBox) uploaderBox.style.display = 'none';
-            }
+            
 
             // カバーインデックスの範囲外防止
             if (tempCoverImageIndex >= tempUploadedImages.length) {
@@ -1984,7 +1996,7 @@
         // =========================================
         // ログの保存＆リピート・履歴一括編集
         // =========================================
-        function saveLog() {
+        function saveLog(isBatch = false) {
             const editId = document.getElementById('edit-log-id').value;
             const name = document.getElementById('drink-name').value.trim();
             const type = document.getElementById('drink-type').value;
@@ -2017,25 +2029,17 @@
 
                 const oldLog = logs[targetLogIndex];
                 
-                // 基本情報が変更されたかどうか
-                const nameChanged = oldLog.name !== name;
-                const breweryChanged = oldLog.brewery !== brewery;
-                const regionChanged = oldLog.region !== region;
-                const typeChanged = oldLog.type !== type;
-                const subtypeChanged = oldLog.subtype !== subtype;
-                
-                if (nameChanged || breweryChanged || regionChanged || typeChanged || subtypeChanged) {
-                    if (confirm("お酒の基本スペック情報（銘柄、酒蔵、産地、特定名称など）が変更されました。この銘柄のすべての過去リピートログも一括で更新しますか？\n\n（「いいえ」を選ぶと、この1回分のログだけが別の銘柄グループとして独立します）")) {
-                        logs.forEach(log => {
-                            if (log.name === oldLog.name && log.brewery === oldLog.brewery) {
-                                log.name = name;
-                                log.brewery = brewery || '不明な蔵元';
-                                log.region = region || '不明な地域';
-                                log.type = type;
-                                log.subtype = subtype || '通常';
-                            }
-                        });
-                    }
+                // ボタンの選択に応じて一括更新か個別更新かを制御（ダイアログ不要化）
+                if (isBatch) {
+                    logs.forEach(log => {
+                        if (log.name === oldLog.name && log.brewery === oldLog.brewery) {
+                            log.name = name;
+                            log.brewery = brewery || '不明な蔵元';
+                            log.region = region || '不明な地域';
+                            log.type = type;
+                            log.subtype = subtype || '通常';
+                        }
+                    });
                 }
 
                 // 対象ログの個別変更をマウント
@@ -2199,54 +2203,61 @@
                 return;
             }
 
-            // 1. データを「酒造」ごとにグループ化
-            const breweryGroups = {};
+            // 1. データを「酒の種類（type）」ごとにグループ化
+            const typeGroups = {};
+            const typeLabelMap = {
+                sake: '🍶 日本酒',
+                wine: '🍷 ワイン',
+                whisky: '🥃 ウイスキー',
+                beer: '🍺 ビール',
+                other: '🍹 その他'
+            };
+
             logs.forEach(log => {
-                const bName = log.brewery || '不明な蔵元';
-                if (!breweryGroups[bName]) {
-                    breweryGroups[bName] = {
-                        name: bName,
-                        region: log.region || '産地なし',
+                const typeKey = log.type || 'sake';
+                if (!typeGroups[typeKey]) {
+                    typeGroups[typeKey] = {
+                        key: typeKey,
+                        name: typeLabelMap[typeKey] || '🍹 その他',
                         brands: {}, 
                         totalLogsCount: 0
                     };
                 }
                 
                 const brandName = log.name;
-                if (!breweryGroups[bName].brands[brandName]) {
-                    breweryGroups[bName].brands[brandName] = [];
+                if (!typeGroups[typeKey].brands[brandName]) {
+                    typeGroups[typeKey].brands[brandName] = [];
                 }
-                breweryGroups[bName].brands[brandName].push(log);
-                breweryGroups[bName].totalLogsCount++;
+                typeGroups[typeKey].brands[brandName].push(log);
+                typeGroups[typeKey].totalLogsCount++;
             });
 
-            // 2. 酒造アコーディオンを画面に出力
-            Object.values(breweryGroups).forEach((brewery, bIndex) => {
+            // 2. 酒の種類アコーディオンを画面に出力
+            Object.values(typeGroups).forEach((group, tIndex) => {
                 const acc = document.createElement('div');
                 acc.className = 'brewery-accordion open'; // デフォルトで展開
-                acc.id = `brewery-acc-${bIndex}`;
-                acc.setAttribute('data-brewery-name', brewery.name.toLowerCase());
-                acc.setAttribute('data-brewery-region', brewery.region.toLowerCase());
+                acc.id = `type-acc-${tIndex}`;
+                acc.setAttribute('data-brewery-name', group.name.toLowerCase()); // 検索互換性用
+                acc.setAttribute('data-brewery-region', '');
 
-                // 酒蔵ヘッダー
+                // アコーディオンヘッダー
                 const header = document.createElement('div');
                 header.className = 'brewery-header';
                 header.onclick = () => toggleAccordion(acc);
                 header.innerHTML = `
                     <div class="brewery-title-container">
-                        <span class="brewery-name">🏢 ${brewery.name}</span>
-                        <span style="font-size:11px; color:var(--text-secondary);">(${brewery.region})</span>
-                        <span class="brewery-count-badge">${Object.keys(brewery.brands).length}種類 / 計${brewery.totalLogsCount}杯</span>
+                        <span class="brewery-name">${group.name}</span>
+                        <span class="brewery-count-badge">${Object.keys(group.brands).length}種類 / 計${group.totalLogsCount}杯</span>
                     </div>
                     <span class="brewery-toggle-icon">▼</span>
                 `;
 
-                // 酒蔵の銘柄リスト格納庫
+                // 銘柄リスト格納庫
                 const content = document.createElement('div');
                 content.className = 'brewery-content';
 
                 // 各銘柄をカード化して追加
-                Object.entries(brewery.brands).forEach(([brandName, brandLogs]) => {
+                Object.entries(group.brands).forEach(([brandName, brandLogs]) => {
                     const latestLog = brandLogs[0];
                     const repeatCount = brandLogs.length;
 
@@ -2282,11 +2293,17 @@
 
                     const repeatBadge = repeatCount > 1 ? `<span class="brand-repeat-badge">🔁 リピート ${repeatCount}回</span>` : '';
 
+                    // サブ情報に「特定名称・詳細 ｜ 酒蔵名 (都道府県)」を表示
+                    const specLabel = latestLog.subtype || '通常';
+                    const breweryLabel = latestLog.brewery || '不明な酒蔵';
+                    const regionLabel = latestLog.region ? ` (${latestLog.region})` : '';
+
                     brandCard.innerHTML = `
                         ${imageHTML}
                         <div class="brand-info">
                             <div class="brand-name">${brandName}</div>
-                            <div class="brand-meta">${latestLog.subtype} | ${latestLog.date}</div>
+                            <div class="brand-meta" style="margin-top: 2px;">${specLabel} | ${breweryLabel}${regionLabel}</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 1px;">📅 ${latestLog.date}</div>
                         </div>
                         <div class="brand-stats">
                             <span class="brand-rating">★ ${avgRating}</span>
@@ -2602,7 +2619,8 @@
             document.getElementById('drink-date').value = `${yyyy}-${mm}-${dd}`;
 
             const title = document.querySelector('#form-modal .modal-title');
-            const submitBtn = document.querySelector('#form-modal button[onclick="saveLog()"]');
+            const btnNew = document.getElementById('btn-save-new');
+            const editActions = document.getElementById('edit-save-actions');
 
             if (mode === 'edit' && logId) {
                 const logs = getLogs();
@@ -2637,11 +2655,13 @@
                     }
 
                     title.innerHTML = `<span>📝</span> ログを編集する`;
-                    submitBtn.innerHTML = `<span>💾</span> 変更を保存する`;
+                    if (btnNew) btnNew.style.display = 'none';
+                    if (editActions) editActions.style.display = 'flex';
                 }
             } else {
                 title.innerHTML = `<span>✍️</span> 新しく記録する`;
-                submitBtn.innerHTML = `<span>💾</span> ログを保存する`;
+                if (btnNew) btnNew.style.display = 'block';
+                if (editActions) editActions.style.display = 'none';
             }
 
             adaptFormFields();
@@ -2983,7 +3003,7 @@
                 initGoogleAuthIfAvailable();
             }
 
-            console.log("🍺 Sella v21 (Gesture Menu & High-Res Camera) Initialized.");
+            console.log("🍺 Sella v23 (Type Acc, Save Split & Side Menu Fix) Initialized.");
         };
 
         
