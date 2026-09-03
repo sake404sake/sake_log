@@ -575,10 +575,19 @@
             }
         }
 
+        /* 📅 ローカル日付整形ユーティリティ (YYYY-MM-DD) */
+        function formatDateLocal(dateObj) {
+            if (!dateObj || isNaN(dateObj.getTime())) return null;
+            const yyyy = dateObj.getFullYear();
+            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(dateObj.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
         /* 📸 画像の軽量化圧縮処理 */
         function compressImage(file, maxWidth = 1000, quality = 0.7) {
             return new Promise((resolve) => {
-                if (!file || !file.type || !file.type.startsWith('image/')) return resolve(null);
+                if (!file) return resolve(null);
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = new Image();
@@ -613,7 +622,7 @@
             });
         }
 
-        /* 📅 画像Exifの撮影日時抽出（エラー保護強化） */
+        /* 📅 画像Exifの撮影日時抽出（精度＆対応タグ向上） */
         function getExifDate(file) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
@@ -637,22 +646,30 @@
                                 if (ifdOffset + 2 > length) return resolve(null);
                                 const tags = view.getUint16(ifdOffset, little);
                                 ifdOffset += 2;
+                                
+                                const targetTags = [0x9003, 0x0132, 0x9004]; // DateTimeOriginal, DateTime, DateTimeDigitized
+                                let foundDate = null;
+
                                 for (let i = 0; i < tags; i++) {
                                     const tagOffset = ifdOffset + (i * 12);
                                     if (tagOffset + 12 > length) break;
-                                    if (view.getUint16(tagOffset, little) === 0x9003) {
+                                    const tag = view.getUint16(tagOffset, little);
+                                    if (targetTags.includes(tag)) {
                                         const valOffset = offset + 8 + view.getUint32(tagOffset + 8, little);
                                         if (valOffset + 10 > length) break;
                                         let dateStr = "";
                                         for (let j = 0; j < 10; j++) {
                                             dateStr += String.fromCharCode(view.getUint8(valOffset + j));
                                         }
-                                        const parts = dateStr.split(":");
-                                        if (parts.length === 3) {
-                                            return resolve(`${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`);
+                                        const cleanStr = dateStr.replace(/[:\/]/g, "-");
+                                        const parts = cleanStr.split("-");
+                                        if (parts.length >= 3 && parts[0].length === 4) {
+                                            foundDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                                            break;
                                         }
                                     }
                                 }
+                                if (foundDate) return resolve(foundDate);
                             } else if ((marker & 0xFF00) !== 0xFF00) {
                                 break;
                             } else {
@@ -665,24 +682,23 @@
                     }
                 };
                 reader.onerror = () => resolve(null);
-                reader.readAsArrayBuffer(file.slice(0, 128 * 1024));
+                reader.readAsArrayBuffer(file.slice(0, 2048 * 1024)); // メタデータが大きい高画質写真用に2MB範囲まで読み込み
             });
         }
 
-        /* 複数画像処理 (不具合修正・登録ロジック強化) */
+        /* 複数画像処理 (複数枚一括処理・撮影日時取得の修正版) */
         async function processMultipleImages(input) {
             try {
                 const files = Array.from(input.files || []);
                 if (files.length === 0) return;
 
-                // 最初に見つかった写真の撮影日時（Exif）を取得
+                // 最初に見つかった写真の撮影日時（Exif / ファイル更新日）を取得
                 let photoDate = null;
                 for (const file of files) {
                     try {
                         photoDate = await getExifDate(file);
                         if (!photoDate && file.lastModified) {
-                            const d = new Date(file.lastModified);
-                            photoDate = d.toISOString().split('T')[0];
+                            photoDate = formatDateLocal(new Date(file.lastModified));
                         }
                     } catch (e) {}
                     if (photoDate) break;
@@ -692,13 +708,12 @@
                     document.getElementById('drink-date').value = photoDate;
                 }
 
-                // 画像を圧縮変換して配列に追加
-                for (const file of files) {
-                    const compressedBase64 = await compressImage(file);
-                    if (compressedBase64) {
-                        tempUploadedImages.push(compressedBase64);
-                    }
-                }
+                // すべての画像を並行して圧縮・変換して配列に追加
+                const compressedResults = await Promise.all(files.map(f => compressImage(f)));
+                compressedResults.forEach(res => {
+                    if (res) tempUploadedImages.push(res);
+                });
+
                 renderFormThumbs();
             } catch (e) {
                 alert("画像の読み込みに失敗しました。画像形式を確認してください。");
@@ -1032,7 +1047,7 @@
                 brewery: newBrewery,
                 region: newRegion,
                 rating: document.getElementById('drink-rating').value,
-                date: document.getElementById('drink-date').value || new Date().toISOString().split('T')[0],
+                date: document.getElementById('drink-date').value || formatDateLocal(new Date()),
                 memo: document.getElementById('drink-memo').value.trim(),
                 aiMemo: document.getElementById('drink-ai-memo').value.trim(),
                 images: [...tempUploadedImages]
@@ -1195,7 +1210,7 @@
                     document.getElementById('drink-brewery').value = log.brewery || '';
                     document.getElementById('drink-region').value = log.region || '';
                     document.getElementById('drink-rating').value = log.rating || 4.0;
-                    document.getElementById('drink-date').value = log.date || new Date().toISOString().split('T')[0];
+                    document.getElementById('drink-date').value = log.date || formatDateLocal(new Date());
                     document.getElementById('drink-memo').value = log.memo || '';
                     document.getElementById('drink-ai-memo').value = log.aiMemo || '';
                     tempUploadedImages = log.images ? [...log.images] : [];
@@ -1208,7 +1223,7 @@
                 document.getElementById('drink-brewery').value = '';
                 document.getElementById('drink-region').value = '';
                 document.getElementById('drink-rating').value = '4.0';
-                document.getElementById('drink-date').value = new Date().toISOString().split('T')[0];
+                document.getElementById('drink-date').value = formatDateLocal(new Date());
                 document.getElementById('drink-memo').value = '';
                 document.getElementById('drink-ai-memo').value = '';
                 document.getElementById('form-modal-title').innerHTML = '<span>✍️</span> お酒のログ入力';
