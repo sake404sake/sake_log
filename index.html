@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v28 - Auto Backup Fix)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v28.1 - Auto Backup Fix)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- JSZip (ZIPファイルの作成・解凍用ライブラリ) -->
@@ -327,7 +327,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v28.0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v28.1</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -369,7 +369,7 @@
                     <div class="card-title"><span>ℹ️</span> アプリ情報</div>
                     <div style="font-size: 13px; color: var(--text-primary); display: flex; flex-direction: column; gap: 6px;">
                         <div><strong>アプリ名:</strong> Sella - お酒ログ管理 & アルバム</div>
-                        <div><strong>バージョン:</strong> v28.0 (Auto Backup Fix)</div>
+                        <div><strong>バージョン:</strong> v28.1 (Google Drive API Fix)</div>
                     </div>
                 </div>
 
@@ -1916,6 +1916,12 @@
                             return;
                         }
 
+                        // ユーザーがDriveアクセス権限のチェックボックスを外した場合の保護処理
+                        if (google.accounts.oauth2.hasGrantedAllScopes && !google.accounts.oauth2.hasGrantedAllScopes(response, 'https://www.googleapis.com/auth/drive.appdata')) {
+                            alert("⚠️ Google Driveへのアクセス権限が付与されませんでした。バックアップを有効にするには、ログイン画面でチェックボックスをオンにしてください。");
+                            return;
+                        }
+
                         if (response.access_token) {
                             localStorage.setItem('sella_gdrive_token', response.access_token);
                             
@@ -1984,16 +1990,18 @@
 
         async function syncLocalDataToGoogleDrive(token, showNotice = false) {
             try {
-                // AppDataFolderから設定ファイル `sella_logs.json` を検索（クエリ文字エンコードを追加してエラー回避）
-                const query = encodeURIComponent("name = 'sella_logs.json' and trashed = false");
-                const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${query}`, {
+                // 【修正箇所 1】
+                // AppDataFolderは「ゴミ箱」をサポートしていないため trashed=false を含めると 400エラーになります。
+                // 検索クエリを純粋なファイル名の一致のみに修正。
+                const query = encodeURIComponent("name='sella_logs.json'");
+                const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q=${query}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 
                 if (!searchRes.ok) {
                     const errBody = await searchRes.text();
                     console.error("Drive Search Error Response:", errBody);
-                    throw new Error("Google Drive 検索リクエストエラー");
+                    throw new Error(`Google Drive 検索リクエストエラー (HTTP ${searchRes.status}): ${errBody.substring(0, 100)}`);
                 }
 
                 const searchData = await searchRes.json();
@@ -2040,7 +2048,7 @@
 
                 if (fileId) {
                     // 既存ファイルをPATCH更新
-                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                    const patchRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
                         method: 'PATCH',
                         headers: {
                             Authorization: `Bearer ${token}`,
@@ -2048,17 +2056,36 @@
                         },
                         body: fileContent
                     });
+                    if (!patchRes.ok) throw new Error("既存バックアップの上書き更新に失敗しました");
                 } else {
-                    // 新規作成
-                    const metadata = { name: 'sella_logs.json', parents: ['appDataFolder'] };
-                    const form = new FormData();
-                    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                    form.append('file', new Blob([fileContent], { type: 'application/json' }));
-                    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                    // 【修正箇所 2】
+                    // FormDataを使用したmultipart/form-dataによるアップロードはDrive APIに互換性がなく、
+                    // メタデータが無視されて保存先指定に失敗するため、確実な2ステップ方式に修正。
+                    
+                    // ステップ1: メタデータ(空のファイル枠)をappDataFolderに作成
+                    const metaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
                         method: 'POST',
-                        headers: { Authorization: `Bearer ${token}` },
-                        body: form
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ name: 'sella_logs.json', parents: ['appDataFolder'] })
                     });
+                    
+                    if (!metaRes.ok) throw new Error("バックアップファイルの新規枠作成に失敗しました");
+                    const metaData = await metaRes.json();
+                    const newFileId = metaData.id;
+
+                    // ステップ2: 作成したファイル枠に中身(実データ)を書き込み(PATCH)
+                    const uploadRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`, {
+                        method: 'PATCH',
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: fileContent
+                    });
+                    if (!uploadRes.ok) throw new Error("バックアップデータ本体の書き込みに失敗しました");
                 }
 
                 if (driveSettings && showNotice) {
