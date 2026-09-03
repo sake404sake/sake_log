@@ -133,14 +133,15 @@
         }
     }
 
-    // 軽量な文字列ハッシュ (重複判定用)
+    // 文字列ハッシュ (重複判定用・データ全体サンプリング)
     function simpleHash(str) {
         let hash = 0;
-        for (let i = 0; i < Math.min(str.length, 500); i++) {
+        const step = Math.max(1, Math.floor(str.length / 1000));
+        for (let i = 0; i < str.length; i += step) {
             hash = ((hash << 5) - hash) + str.charCodeAt(i);
             hash |= 0;
         }
-        return hash.toString();
+        return `${hash}_${str.length}`;
     }
 
     // 画像読み込み＆処理
