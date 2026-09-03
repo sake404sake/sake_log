@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v27 - Gestures & Settings Sync)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v28 - Scroll & Sync Load Fix)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- JSZip (ZIPファイルの作成・解凍用ライブラリ) -->
@@ -263,10 +263,19 @@
         button.danger { background-color: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
         button.danger:hover { background-color: rgba(255, 69, 58, 0.1); }
 
-        /* モバイル用のCSS (スワイプサイドメニュー & ボトムナビ完全撤廃) */
+        /* モバイル用のCSS (スワイプサイドメニュー & ボトムナビ完全撤廃 & スクロールロック解除) */
         @media (max-width: 768px) {
-            body { flex-direction: column; }
-            .app-container { flex-direction: column; height: auto !important; min-height: 100vh; display: block; }
+            body { 
+                flex-direction: column; 
+                overflow-y: scroll !important; /* スマホ全体のスクロールロックを解除 */
+                height: auto !important; 
+            }
+            .app-container { 
+                flex-direction: column; 
+                height: auto !important; 
+                min-height: 100vh; 
+                display: block; 
+            }
             
             /* 左サイドバーをモバイルでは非表示＆スライド形式に */
             .sidebar {
@@ -288,6 +297,7 @@
             .main-content {
                 width: 100%;
                 height: auto !important;
+                overflow-y: visible !important; /* コンテンツに応じたスクロールを確保 */
                 padding: 16px;
                 padding-bottom: 40px !important;
             }
@@ -318,7 +328,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v27.0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v28.0</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -361,7 +371,7 @@
                     <div class="card-title"><span>ℹ️</span> アプリ情報</div>
                     <div style="font-size: 13px; color: var(--text-primary); display: flex; flex-direction: column; gap: 6px;">
                         <div><strong>アプリ名:</strong> Sella - お酒ログ管理 & アルバム</div>
-                        <div><strong>バージョン:</strong> v27.0 (Gestures & Settings Sync)</div>
+                        <div><strong>バージョン:</strong> v28.0 (Scroll & Sync Load Fix)</div>
                     </div>
                 </div>
 
@@ -584,6 +594,12 @@
             initPullToRefresh();
             initSwipeMenu();
             await fetchGeminiModels(true);
+            
+            // 起動時にGoogleログイン済みの場合は、Google Driveの最新データを自動でロード・同期する (PC/スマホ間リアルタイム同期のバグ修正)
+            const token = localStorage.getItem('sella_gdrive_token');
+            if (token) {
+                await syncLocalDataToGoogleDrive(token, false);
+            }
         };
 
         /* ----------------------------------------------------
@@ -645,6 +661,12 @@
                     loadSavedSettings();
                     checkGoogleAuthStatus();
                     await fetchGeminiModels(true);
+                    
+                    // 「引っ張って更新」をした時にもGoogle Driveから最新データを強制ダウンロード・同期する
+                    const token = localStorage.getItem('sella_gdrive_token');
+                    if (token) {
+                        await syncLocalDataToGoogleDrive(token, false);
+                    }
                     
                     await new Promise(resolve => setTimeout(resolve, 250));
 
