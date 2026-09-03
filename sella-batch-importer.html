@@ -59,7 +59,9 @@
         .unassigned-item .actions { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: space-around; padding: 4px; }
         .unassigned-item .actions button { font-size: 10px; padding: 2px 6px; }
 
-        .model-control { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; background: var(--card-bg); padding: 8px 12px; border-radius: var(--border-radius-md); }
+        .model-control { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; background: var(--card-bg); padding: 10px 12px; border-radius: var(--border-radius-md); }
+        .model-control-header { display: flex; justify-content: space-between; align-items: center; }
+        .model-control-body { display: flex; items-center; gap: 8px; }
     </style>
 </head>
 <body>
@@ -80,18 +82,22 @@
         <input type="file" id="batch-file-input" accept="image/*" multiple style="display:none;" onchange="handleBatchFiles(this.files)">
         <button onclick="document.getElementById('batch-file-input').click()">📂 画像を選択してAI解析開始</button>
 
-        <!-- モデル選択 & 再試行コントローラー -->
+        <!-- モデル選択 & 動的取得・再試行コントローラー -->
         <div class="model-control">
-            <label style="font-size:12px; color:var(--text-secondary);">使用モデル:</label>
-            <select id="model-select" onchange="saveSelectedModel(this.value)" style="flex:1; min-width:140px;">
-                <option value="gemini-2.5-flash">gemini-2.5-flash (推奨)</option>
-                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-            </select>
-            <button type="button" class="secondary" id="retry-btn" onclick="retryAnalysisWithModel()" style="display:none; padding: 6px 12px; font-size:12px; color:var(--accent-amber); border-color:var(--accent-amber);">
-                🔄 圧縮画像で再解析
-            </button>
+            <div class="model-control-header">
+                <label style="font-size:12px; color:var(--text-secondary);">使用モデル (Setting画面と自動同期):</label>
+                <a href="javascript:void(0)" onclick="fetchGeminiModels(false)" style="color:var(--accent-gold); font-size:11px; text-decoration:none;">🔄 モデル一覧取得</a>
+            </div>
+            <div class="model-control-body">
+                <select id="model-select" onchange="saveSelectedModel(this.value)" style="flex:1; min-width:140px;">
+                    <option value="gemini-2.5-flash">gemini-2.5-flash (推奨)</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                </select>
+                <button type="button" class="secondary" id="retry-btn" onclick="retryAnalysisWithModel()" style="display:none; padding: 6px 12px; font-size:12px; color:var(--accent-amber); border-color:var(--accent-amber); white-space:nowrap;">
+                    🔄 圧縮画像で再解析
+                </button>
+            </div>
         </div>
 
         <div class="progress-box" id="progress-box">
@@ -132,19 +138,83 @@
     let touchStartX = 0;
     let touchEndX = 0;
 
-    window.onload = function() {
+    window.onload = async function() {
         loadExistingLogs();
-        initModelSelector();
+        await initModelSelector();
     };
 
-    function initModelSelector() {
+    async function initModelSelector() {
         const savedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
         const select = document.getElementById('model-select');
         if (select) select.value = savedModel;
+
+        // API Keyが存在する場合は自動的に使用可能モデルを取得して同期
+        const apiKey = localStorage.getItem('sella_gemini_key');
+        if (apiKey) {
+            await fetchGeminiModels(true);
+        }
     }
 
     function saveSelectedModel(val) {
-        localStorage.setItem('sella_gemini_model', val);
+        if (val) {
+            localStorage.setItem('sella_gemini_model', val);
+        }
+    }
+
+    async function fetchGeminiModels(isAuto = false) {
+        const apiKey = localStorage.getItem('sella_gemini_key');
+        if (!apiKey) {
+            if (!isAuto) alert("先に Setting 画面で Gemini API Key を設定してください。");
+            return;
+        }
+
+        const savedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
+
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+            if (!res.ok) throw new Error("APIキーが無効であるか、アクセス権限がありません。");
+            const data = await res.json();
+            
+            const modelSelect = document.getElementById('model-select');
+            if (!modelSelect) return;
+            
+            modelSelect.innerHTML = "";
+            
+            const validModels = (data.models || []).filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"));
+            
+            let modelFound = false;
+            validModels.forEach(m => {
+                const cleanName = m.name.replace('models/', '');
+                const opt = document.createElement('option');
+                opt.value = cleanName;
+                opt.textContent = `${cleanName} (${m.displayName || ''})`;
+                if (savedModel && cleanName === savedModel) {
+                    opt.selected = true;
+                    modelFound = true;
+                }
+                modelSelect.appendChild(opt);
+            });
+
+            if (modelFound) {
+                modelSelect.value = savedModel;
+            } else if (savedModel) {
+                const opt = document.createElement('option');
+                opt.value = savedModel;
+                opt.textContent = `${savedModel} (保存済み)`;
+                opt.selected = true;
+                modelSelect.prepend(opt);
+            } else if (modelSelect.options.length > 0) {
+                saveSelectedModel(modelSelect.value);
+            }
+
+            if (!isAuto) {
+                alert("🔄 利用可能なモデル一覧を取得し、ドロップダウンを更新しました。");
+            }
+        } catch (e) {
+            if (!isAuto) {
+                alert("モデル一覧の取得に失敗しました: " + e.message);
+            }
+        }
     }
 
     function loadExistingLogs() {
@@ -272,7 +342,7 @@
             return;
         }
 
-        const model = document.getElementById('model-select').value || 'gemini-2.5-flash';
+        const model = document.getElementById('model-select').value || localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
         const chunkSize = 3; // 1回あたりの送信枚数
 
         for (let i = 0; i < images.length; i += chunkSize) {
