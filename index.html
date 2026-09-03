@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍶 Sella - お酒ログ管理 & アルバム (v26 - UI & Image Fix)</title>
+    <title>🍶 Sella - お酒ログ管理 & アルバム (v26.1 - Exif Loop Fix)</title>
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -187,7 +187,7 @@
                     <li class="nav-item" onclick="switchView('settings')"><span>⚙️</span> Setting</li>
                 </ul>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); text-align: center;">Sella Base v26.1</div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -583,7 +583,7 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
-        /* 📸 画像の軽量化圧縮処理（超軽量・メモリ・容量制限対策版） */
+        /* 📸 画像の軽量化圧縮処理 */
         function compressImage(file, maxWidth = 600, quality = 0.4) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
@@ -625,7 +625,7 @@
             });
         }
 
-        /* 📅 画像Exifの撮影日時抽出 */
+        /* 📅 画像Exifの撮影日時抽出（無限ループ対策済み） */
         function getExifDate(file) {
             return new Promise((resolve) => {
                 if (!file) return resolve(null);
@@ -676,7 +676,10 @@
                             } else if ((marker & 0xFF00) !== 0xFF00) {
                                 break;
                             } else {
-                                offset += view.getUint16(offset, false);
+                                if (offset + 2 > length) break;
+                                const markerLength = view.getUint16(offset, false);
+                                if (markerLength < 2) break;
+                                offset += markerLength;
                             }
                         }
                         resolve(null);
@@ -689,7 +692,7 @@
             });
         }
 
-        /* 複数画像処理 (未対応画像検出アラート付き) */
+        /* 複数画像処理 */
         async function processMultipleImages(input) {
             try {
                 const files = Array.from(input.files || []);
@@ -888,7 +891,7 @@
             alert(`一括AI解析が完了しました（${updatedCount} 件更新）`);
         }
 
-        /* ログ描画 (onclick構文エラーを防止する safe-attr 修正) */
+        /* ログ描画 */
         function renderLogs() {
             const logs = getLogs();
             document.getElementById('log-count').innerText = logs.length;
