@@ -89,8 +89,12 @@
         }
         @keyframes ptr-spin { to { transform: rotate(360deg); } }
 
-        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .header-title { font-size: 24px; font-weight: 600; }
+        /* ダッシュボード文字改行対策 */
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+        .header-title { font-size: 24px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+        .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
+        .header-actions button { white-space: nowrap; flex-shrink: 0; }
+
         .search-container { margin-bottom: 20px; position: relative; }
         .search-input { width: 100%; background-color: var(--panel-bg); border: 1px solid var(--border-color); color: var(--text-primary); padding: 12px 16px 12px 40px; border-radius: var(--border-radius-lg); font-size: 14px; box-shadow: var(--shadow); }
         .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 16px; }
@@ -101,19 +105,19 @@
         .brewery-accordion { background-color: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); margin-bottom: 14px; overflow: hidden; }
         .brewery-header { background-color: var(--card-bg); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
         .brewery-header:hover { background-color: var(--card-hover); }
-        .brewery-title-container { display: flex; align-items: center; gap: 10px; }
-        .brewery-name { font-weight: 600; font-size: 15px; }
-        .brewery-toggle-icon { font-size: 12px; color: var(--text-secondary); transition: transform 0.3s ease; }
+        .brewery-title-container { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .brewery-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .brewery-toggle-icon { font-size: 12px; color: var(--text-secondary); transition: transform 0.3s ease; flex-shrink: 0; }
         .brewery-accordion.open .brewery-toggle-icon { transform: rotate(180deg); }
         .brewery-content { display: none; padding: 12px; border-top: 1px solid var(--border-color); background-color: rgba(0,0,0,0.1); }
         .brewery-accordion.open .brewery-content { display: flex; flex-direction: column; gap: 8px; }
         .brand-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 12px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: var(--transition); }
         .brand-card:hover { background-color: var(--card-hover); border-color: var(--accent-amber); transform: translateX(4px); }
         .brand-image-preview { width: 50px; height: 50px; border-radius: 6px; object-fit: cover; background-color: #000; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-        .brand-info { flex: 1; }
-        .brand-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-        .brand-subname { font-size: 13px; color: var(--accent-amber); font-weight: 500; margin-bottom: 4px; }
-        .brand-meta { font-size: 11px; color: var(--text-secondary); }
+        .brand-info { flex: 1; min-width: 0; }
+        .brand-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .brand-subname { font-size: 13px; color: var(--accent-amber); font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .brand-meta { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
 
         .detail-item {
             display: flex;
@@ -141,7 +145,7 @@
         .modal-overlay.active { display: flex; }
         .modal-content { background-color: var(--panel-bg); border: 1px solid var(--border-color); width: 100%; max-width: 560px; border-radius: var(--border-radius-lg); box-shadow: var(--shadow); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column; }
         .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background-color: var(--card-bg); }
-        .modal-title { font-size: 18px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 8px; }
+        .modal-title { font-size: 18px; font-weight: 600; color: var(--accent-gold); display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .close-btn { background: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; border: none; }
         .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
         
@@ -247,11 +251,10 @@
 
             <div class="header-bar">
                 <h1 class="header-title" id="page-title">ダッシュボード</h1>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <span style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 12px;">
+                <div class="header-actions">
+                    <span style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 20px; font-size: 12px; white-space: nowrap;">
                         計: <span id="log-count" style="color: var(--accent-amber); font-weight: bold;">0</span> 杯
                     </span>
-                    <!-- 追加：一括取り込みプラグイン呼び出しボタン -->
                     <button onclick="window.location.href='sella-batch-importer.html'" class="secondary" style="padding: 6px 14px; font-size: 13px;">📦 一括取り込み</button>
                     <button onclick="openFormModal('add')" style="padding: 6px 14px; font-size: 13px;">➕ 記録を登録</button>
                 </div>
@@ -270,6 +273,15 @@
 
             <!-- ビューパネル2：設定＆アカウント＆AI -->
             <div id="view-settings" class="view-panel">
+                <!-- 追加：バージョン情報カード -->
+                <div class="card">
+                    <div class="card-title"><span>ℹ️</span> アプリ情報</div>
+                    <div style="font-size: 13px; color: var(--text-primary); display: flex; flex-direction: column; gap: 6px;">
+                        <div><strong>アプリ名:</strong> Sella - お酒ログ管理 & アルバム</div>
+                        <div><strong>バージョン:</strong> v26.4 (Model Auto Fetch Update)</div>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-title"><span>🌐</span> Google アカウント連携プラグイン</div>
                     <div id="google-auth-status" style="margin-bottom: 14px;">
@@ -487,7 +499,7 @@
             await fetchGeminiModels(true);
         };
 
-        /* 📱 引っ張って更新 (Pull-to-Refresh) 機能 */
+        /* 📱 引っ張って更新 (Pull-to-Refresh) 機能 (設定画面対応) */
         function initPullToRefresh() {
             const mainContent = document.getElementById('main-content');
             const ptrIndicator = document.getElementById('ptr-indicator');
@@ -534,7 +546,10 @@
                     ptrText.textContent = "更新中...";
                     ptrSpinner.style.display = "inline-block";
 
+                    // ダッシュボード・設定・アカウント状態全般を最新に更新
                     loadLogsFromLocalStorage();
+                    loadSavedSettings();
+                    checkGoogleAuthStatus();
                     await fetchGeminiModels(true);
                     
                     await new Promise(resolve => setTimeout(resolve, 600));
@@ -727,7 +742,7 @@
                 titleContainer.innerHTML = `
                     <span class="brewery-toggle-icon">▼</span>
                     <span class="brewery-name">🍶 ${escapeHtml(breweryName)}</span>
-                    <span style="font-size:11px; color:var(--text-secondary);">(${breweryLogs.length})</span>
+                    <span style="font-size:11px; color:var(--text-secondary); flex-shrink:0;">(${breweryLogs.length})</span>
                 `;
 
                 header.appendChild(titleContainer);
@@ -1427,7 +1442,7 @@
             }
         }
 
-        /* 🌐 Google Auth & Plugin 起動マネージャー */
+        /* 🌐 Google Auth & Plugin 起動マネージャー (アカウント切替固定修正) */
         function checkGoogleAuthStatus() {
             const statusEl = document.getElementById('google-auth-status');
             const loginBtn = document.getElementById('btn-google-login');
@@ -1455,7 +1470,6 @@
                 const client = google.accounts.oauth2.initTokenClient({
                     client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
                     scope: 'https://www.googleapis.com/auth/drive.appdata',
-                    prompt: 'select_account',
                     callback: (response) => {
                         if (response.access_token) {
                             localStorage.setItem('sella_gdrive_token', response.access_token);
@@ -1464,13 +1478,20 @@
                         }
                     },
                 });
-                client.requestAccessToken();
+                // アカウント選択画面を強制表示するように明示的に要求
+                client.requestAccessToken({ prompt: 'select_account' });
             } catch (e) {
                 alert("Google認証プラグインの起動手順:\nGoogle Cloud ConsoleでClient IDを取得して割り当てることで認証連携が有効になります。");
             }
         }
 
         function executeGoogleLogout() {
+            const token = localStorage.getItem('sella_gdrive_token');
+            if (token && typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+                try {
+                    google.accounts.oauth2.revoke(token, () => {});
+                } catch(e) {}
+            }
             localStorage.removeItem('sella_gdrive_token');
             checkGoogleAuthStatus();
             alert("🚪 ログアウトしました。");
