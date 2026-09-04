@@ -29,7 +29,8 @@
 
         .card { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 16px; margin-bottom: 20px; }
         
-        button { background: var(--accent-gold); color: #000; border: none; padding: 10px 16px; font-weight: 600; border-radius: var(--border-radius-md); cursor: pointer; }
+        button { background: var(--accent-gold); color: #000; border: none; padding: 10px 16px; font-weight: 600; border-radius: var(--border-radius-md); cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.8; }
         button.secondary { background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
         button.danger { background: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
 
@@ -38,30 +39,27 @@
         .progress-bar-bg { background: var(--card-bg); height: 8px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
         .progress-bar-fill { background: var(--accent-amber); height: 100%; width: 0%; transition: width 0.3s; }
 
-        /* スワイプ型 未確定ログカード (表示不具合修正済み) */
-        .swipe-container { position: relative; width: 100%; min-height: 480px; }
+        /* スワイプ型 未確定ログカード */
+        .swipe-container { position: relative; width: 100%; min-height: 540px; overflow: hidden; display: none; margin-bottom: 20px; }
         .swipe-card { position: absolute; width: 100%; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.3s ease, opacity 0.3s ease; }
 
         .img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; margin: 12px 0; }
         .img-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); }
+        .img-remove-btn { position: absolute; top: -4px; right: -4px; background: var(--danger-color); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
 
         .form-group { margin-bottom: 10px; }
-        .form-group label { font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 2px; }
-        input, textarea, select { width: 100%; background: var(--panel-bg); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px; border-radius: 6px; font-size: 13px; }
+        .form-group label { font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 2px; font-weight: 600; }
+        input, textarea, select { width: 100%; background: var(--panel-bg); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 10px; border-radius: 6px; font-size: 13px; }
 
         .card-actions { display: flex; gap: 8px; margin-top: 14px; }
         .card-actions button { flex: 1; }
 
         /* 未割り当て画像ギャラリー */
-        .unassigned-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; margin-top: 12px; }
+        .unassigned-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 12px; }
         .unassigned-item { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); }
         .unassigned-item img { width: 100%; height: 100%; object-fit: cover; }
         .unassigned-item .actions { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: space-around; padding: 4px; }
         .unassigned-item .actions button { font-size: 10px; padding: 2px 6px; }
-
-        .model-control { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; background: var(--card-bg); padding: 10px 12px; border-radius: var(--border-radius-md); }
-        .model-control-header { display: flex; justify-content: space-between; align-items: center; }
-        .model-control-body { display: flex; items-center; gap: 8px; }
     </style>
 </head>
 <body>
@@ -72,33 +70,24 @@
         <button class="secondary" onclick="window.location.href='index.html'">メイン画面へ戻る</button>
     </div>
 
-    <!-- Step 1: 画像の読み込みと重複チェック -->
     <div class="card">
-        <strong style="color:var(--accent-amber);">1. 写真を一括選択 (100枚以上対応)</strong>
+        <strong style="color:var(--accent-amber);">1. 解析設定 & 写真選択</strong>
         <p style="font-size:12px; color:var(--text-secondary); margin: 6px 0 12px 0;">
-            重複画像は自動スキップされます。解析後、ボトルごとに振り分けられた未確定カードをスワイプで確認できます。
+            撮影時間が1〜2分以内の写真は、自動的に「同じお酒」としてグループ化してAI解析されます。<br>
+            誤って混ざった画像は、後から未確定カード内で除外（プールへ移動）できます。
         </p>
         
-        <input type="file" id="batch-file-input" accept="image/*" multiple style="display:none;" onchange="handleBatchFiles(this.files)">
-        <button onclick="document.getElementById('batch-file-input').click()">📂 画像を選択してAI解析開始</button>
-
-        <!-- モデル選択 & 動的取得・再試行コントローラー -->
-        <div class="model-control">
-            <div class="model-control-header">
-                <label style="font-size:12px; color:var(--text-secondary);">使用モデル (Setting画面と自動同期):</label>
-                <a href="javascript:void(0)" onclick="fetchGeminiModels(false)" style="color:var(--accent-gold); font-size:11px; text-decoration:none;">🔄 モデル一覧取得</a>
-            </div>
-            <div class="model-control-body">
-                <select id="model-select" onchange="saveSelectedModel(this.value)" style="flex:1; min-width:140px;">
-                    <option value="gemini-2.5-flash">gemini-2.5-flash (推奨)</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                </select>
-                <button type="button" class="secondary" id="retry-btn" onclick="retryAnalysisWithModel()" style="display:none; padding: 6px 12px; font-size:12px; color:var(--accent-amber); border-color:var(--accent-amber); white-space:nowrap;">
-                    🔄 圧縮画像で再解析
-                </button>
-            </div>
+        <div class="form-group" style="margin-bottom: 16px;">
+            <label>AIモデル</label>
+            <select id="ai-model-select">
+                <option value="gemini-2.5-flash">gemini-2.5-flash (標準)</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro (高精度)</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash (高速)</option>
+            </select>
         </div>
+
+        <input type="file" id="batch-file-input" accept="image/*" multiple style="display:none;" onchange="handleBatchFiles(this.files)">
+        <button onclick="document.getElementById('batch-file-input').click()" style="width: 100%;">📂 画像を選択してAI解析開始</button>
 
         <div class="progress-box" id="progress-box">
             <span id="progress-text" style="font-size:12px; color:var(--accent-gold);">処理中...</span>
@@ -106,7 +95,17 @@
         </div>
     </div>
 
-    <!-- Step 2: 未確定ログのスワイプUI -->
+    <div class="card" id="retry-section" style="display:none; border-color: var(--danger-color);">
+        <strong style="color:var(--danger-color);">⚠️ 解析失敗グループ (<span id="failed-count">0</span>件)</strong>
+        <p style="font-size:12px; color:var(--text-secondary); margin: 6px 0 12px 0;">
+            複雑なラベルなどでAIが読み取れなかった画像グループです。高精度モデル(pro)等に変更して再試行するか、未割り当てプールへ送って手動入力してください。
+        </p>
+        <div style="display: flex; gap: 8px;">
+            <button onclick="retryFailedGroups()" style="background:var(--accent-amber); flex: 1;">🔄 リトライ実行</button>
+            <button onclick="moveFailedToUnassigned()" class="secondary" style="flex: 1;">プールへ移動</button>
+        </div>
+    </div>
+
     <div id="swipe-section" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <strong style="font-size:14px;">未確定ログ確認 (<span id="current-card-idx">1</span>/<span id="total-card-count">0</span>)</strong>
@@ -116,11 +115,10 @@
         <div class="swipe-container" id="swipe-container"></div>
     </div>
 
-    <!-- Step 3: 未割り当て・スキップ画像の整理プール -->
     <div class="card" id="unassigned-section" style="margin-top:20px;">
         <strong style="color:var(--accent-gold);">🎨 未割り当て・不要画像プール (<span id="unassigned-count">0</span>)</strong>
         <p style="font-size:12px; color:var(--text-secondary); margin-top:4px;">
-            解析で余った画像やログから外した画像です。既存ログに追加するか不要なら破棄できます。
+            解析で除外した画像や、ログから外した画像です。既存ログに手動追加するか、不要なら破棄できます。
         </p>
         <div class="unassigned-gallery" id="unassigned-gallery"></div>
     </div>
@@ -129,96 +127,30 @@
 <script>
     let existingLogs = [];
     let existingImageHashes = new Set();
-    let pendingLogs = []; // 未確定ログリスト
+    let pendingLogs = [];      // 未確定ログリスト
     let unassignedImages = []; // 未割り当て画像リスト
-    let cachedCompressedImages = []; // 圧縮済み画像を保持（再圧縮防止用）
+    let failedGroups = [];     // 解析に失敗した画像グループ
     let currentCardIndex = 0;
 
     // タッチスワイプ変数
     let touchStartX = 0;
     let touchEndX = 0;
 
-    window.onload = async function() {
-        loadExistingLogs();
-        await initModelSelector();
+    window.onload = function() {
+        loadSettingsAndLogs();
     };
 
-    async function initModelSelector() {
-        const savedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
-        const select = document.getElementById('model-select');
-        if (select) select.value = savedModel;
-
-        // API Keyが存在する場合は自動的に使用可能モデルを取得して同期
-        const apiKey = localStorage.getItem('sella_gemini_key');
-        if (apiKey) {
-            await fetchGeminiModels(true);
-        }
-    }
-
-    function saveSelectedModel(val) {
-        if (val) {
-            localStorage.setItem('sella_gemini_model', val);
-        }
-    }
-
-    async function fetchGeminiModels(isAuto = false) {
-        const apiKey = localStorage.getItem('sella_gemini_key');
-        if (!apiKey) {
-            if (!isAuto) alert("先に Setting 画面で Gemini API Key を設定してください。");
-            return;
-        }
-
-        const savedModel = localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
-
-        try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-            if (!res.ok) throw new Error("APIキーが無効であるか、アクセス権限がありません。");
-            const data = await res.json();
-            
-            const modelSelect = document.getElementById('model-select');
-            if (!modelSelect) return;
-            
-            modelSelect.innerHTML = "";
-            
-            const validModels = (data.models || []).filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"));
-            
-            let modelFound = false;
-            validModels.forEach(m => {
-                const cleanName = m.name.replace('models/', '');
-                const opt = document.createElement('option');
-                opt.value = cleanName;
-                opt.textContent = `${cleanName} (${m.displayName || ''})`;
-                if (savedModel && cleanName === savedModel) {
-                    opt.selected = true;
-                    modelFound = true;
-                }
-                modelSelect.appendChild(opt);
-            });
-
-            if (modelFound) {
-                modelSelect.value = savedModel;
-            } else if (savedModel) {
-                const opt = document.createElement('option');
-                opt.value = savedModel;
-                opt.textContent = `${savedModel} (保存済み)`;
-                opt.selected = true;
-                modelSelect.prepend(opt);
-            } else if (modelSelect.options.length > 0) {
-                saveSelectedModel(modelSelect.value);
-            }
-
-            if (!isAuto) {
-                alert("🔄 利用可能なモデル一覧を取得し、ドロップダウンを更新しました。");
-            }
-        } catch (e) {
-            if (!isAuto) {
-                alert("モデル一覧の取得に失敗しました: " + e.message);
+    function loadSettingsAndLogs() {
+        // 設定モデルの読み込みと適用
+        const savedModel = localStorage.getItem('sella_gemini_model');
+        if (savedModel) {
+            const selectEl = document.getElementById('ai-model-select');
+            if (Array.from(selectEl.options).some(opt => opt.value === savedModel)) {
+                selectEl.value = savedModel;
             }
         }
-    }
 
-    function loadExistingLogs() {
-        existingImageHashes.clear();
+        // ログの読み込みと重複用ハッシュ
         const raw = localStorage.getItem('sella_logs');
         if (raw) {
             try {
@@ -232,83 +164,94 @@
         }
     }
 
+    // 軽量ハッシュ生成（重複判定用）
     function simpleHash(str) {
         let hash = 0;
-        const step = Math.max(1, Math.floor(str.length / 1000));
-        for (let i = 0; i < str.length; i += step) {
+        for (let i = 0; i < Math.min(str.length, 500); i++) {
             hash = ((hash << 5) - hash) + str.charCodeAt(i);
             hash |= 0;
         }
-        return `${hash}_${str.length}`;
+        return hash.toString();
     }
 
-    // 新規画像読み込み & 圧縮保持処理
-    async function handleBatchFiles(files) {
-        if (!files || files.length === 0) return;
+    function formatDateLocal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
 
-        loadExistingLogs();
-
-        const progressBox = document.getElementById('progress-box');
-        const progressFill = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-text');
-        progressBox.style.display = 'block';
-
-        const fileArray = Array.from(files);
-        cachedCompressedImages = []; // キャッシュリセット
-        const currentSessionHashes = new Set();
-        let duplicateCount = 0;
-
-        for (let i = 0; i < fileArray.length; i++) {
-            progressText.textContent = `画像圧縮・重複チェック中... (${i + 1}/${fileArray.length})`;
-            progressFill.style.width = `${Math.round(((i + 1) / fileArray.length) * 40)}%`;
-
-            const base64 = await compressImage(fileArray[i]);
-            if (base64) {
-                const hash = simpleHash(base64);
-                if (existingImageHashes.has(hash) || currentSessionHashes.has(hash)) {
-                    duplicateCount++;
-                } else {
-                    currentSessionHashes.add(hash);
-                    cachedCompressedImages.push({ id: `img_${Date.now()}_${i}`, data: base64 });
+    // Exif情報 (撮影日とタイムスタンプ) の取得
+    function getExifInfo(file) {
+        return new Promise((resolve) => {
+            const fallback = { date: formatDateLocal(new Date(file.lastModified)), timestamp: file.lastModified };
+            if (!file || !file.type.includes('jpeg')) return resolve(fallback);
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const view = new DataView(e.target.result);
+                    if (view.byteLength < 2 || view.getUint16(0, false) !== 0xFFD8) return resolve(fallback);
+                    let offset = 2;
+                    const length = view.byteLength;
+                    while (offset < length - 4) {
+                        const marker = view.getUint16(offset, false);
+                        offset += 2;
+                        if (marker === 0xFFE1) {
+                            const markerLength = view.getUint16(offset, false);
+                            if (view.getUint32(offset + 2, false) === 0x45786966) {
+                                const little = view.getUint16(offset + 8, false) === 0x4949;
+                                let ifdOffset = offset + 8 + view.getUint32(offset + 12, little);
+                                if (ifdOffset + 2 <= length) {
+                                    const tags = view.getUint16(ifdOffset, little);
+                                    ifdOffset += 2;
+                                    const targetTags = [0x9003, 0x0132, 0x9004]; // DateTimeOriginal etc.
+                                    for (let i = 0; i < tags; i++) {
+                                        const tagOffset = ifdOffset + (i * 12);
+                                        if (tagOffset + 12 > length) break;
+                                        const tag = view.getUint16(tagOffset, little);
+                                        if (targetTags.includes(tag)) {
+                                            const valOffset = offset + 8 + view.getUint32(tagOffset + 8, little);
+                                            if (valOffset + 19 <= length) {
+                                                let dateStr = "";
+                                                for (let j = 0; j < 19; j++) {
+                                                    dateStr += String.fromCharCode(view.getUint8(valOffset + j));
+                                                }
+                                                const parts = dateStr.split(" ");
+                                                if (parts.length === 2) {
+                                                    const dParts = parts[0].split(":");
+                                                    const tParts = parts[1].split(":");
+                                                    if (dParts.length === 3 && tParts.length === 3) {
+                                                        const dateObj = new Date(dParts[0], dParts[1]-1, dParts[2], tParts[0], tParts[1], tParts[2]);
+                                                        const formattedDate = `${dParts[0]}-${dParts[1].padStart(2, '0')}-${dParts[2].padStart(2, '0')}`;
+                                                        return resolve({ date: formattedDate, timestamp: dateObj.getTime() });
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            offset += markerLength;
+                        } else if ((marker & 0xFF00) === 0xFF00) {
+                            const markerLength = view.getUint16(offset, false);
+                            offset += markerLength;
+                        } else {
+                            break;
+                        }
+                    }
+                    resolve(fallback);
+                } catch (err) {
+                    resolve(fallback);
                 }
-            }
-        }
-
-        if (duplicateCount > 0) {
-            alert(`⚠️ 既に登録済み（または重複）の画像 ${duplicateCount} 枚をスキップしました。`);
-        }
-
-        if (cachedCompressedImages.length === 0) {
-            progressBox.style.display = 'none';
-            return alert("処理対象の新規画像がありません。");
-        }
-
-        // 再解析ボタンを有効化
-        document.getElementById('retry-btn').style.display = 'inline-block';
-
-        // 解析を実行
-        await analyzeImagesInBatches(cachedCompressedImages, progressText, progressFill);
+            };
+            reader.onerror = () => resolve(fallback);
+            reader.readAsArrayBuffer(file.slice(0, 128 * 1024));
+        });
     }
 
-    // 圧縮済み画像での再解析（モデル変更時など）
-    async function retryAnalysisWithModel() {
-        if (cachedCompressedImages.length === 0) {
-            return alert("再解析可能な圧縮画像がありません。画像を再度選択してください。");
-        }
-
-        const progressBox = document.getElementById('progress-box');
-        const progressFill = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-text');
-        progressBox.style.display = 'block';
-
-        // 未確定ログをクリアして再解析
-        pendingLogs = [];
-        currentCardIndex = 0;
-
-        await analyzeImagesInBatches(cachedCompressedImages, progressText, progressFill);
-    }
-
-    function compressImage(file, maxWidth = 600, quality = 0.4) {
+    // 画像圧縮
+    function compressImage(file, maxWidth = 600, quality = 0.5) {
         return new Promise((resolve) => {
             const img = new Image();
             const url = URL.createObjectURL(file);
@@ -330,153 +273,215 @@
         });
     }
 
-    // Gemini AI 解析処理
-    async function analyzeImagesInBatches(images, progressText, progressFill) {
+    // 画像読み込みと前処理 (Exif抽出 + 圧縮)
+    async function handleBatchFiles(files) {
+        if (!files || files.length === 0) return;
+
+        // 次回操作時も最新設定を維持
+        localStorage.setItem('sella_gemini_model', document.getElementById('ai-model-select').value);
+
+        const progressBox = document.getElementById('progress-box');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        progressBox.style.display = 'block';
+
+        const fileArray = Array.from(files);
+        const processedImages = [];
+        let duplicateCount = 0;
+
+        for (let i = 0; i < fileArray.length; i++) {
+            progressText.textContent = `写真の読み込み・撮影日時取得中... (${i + 1}/${fileArray.length})`;
+            progressFill.style.width = `${Math.round(((i + 1) / fileArray.length) * 30)}%`;
+
+            const [base64, exifData] = await Promise.all([
+                compressImage(fileArray[i]),
+                getExifInfo(fileArray[i])
+            ]);
+
+            if (base64) {
+                const hash = simpleHash(base64);
+                if (existingImageHashes.has(hash)) {
+                    duplicateCount++;
+                } else {
+                    existingImageHashes.add(hash);
+                    processedImages.push({
+                        data: base64,
+                        timestamp: exifData.timestamp,
+                        dateStr: exifData.date
+                    });
+                }
+            }
+        }
+
+        if (duplicateCount > 0) alert(`⚠️ 既に登録済みの画像 ${duplicateCount} 枚をスキップしました。`);
+        
+        if (processedImages.length === 0) {
+            progressBox.style.display = 'none';
+            return alert("処理対象の新規画像がありません。");
+        }
+
+        // タイムスタンプ順にソート
+        processedImages.sort((a, b) => a.timestamp - b.timestamp);
+
+        // 1〜2分 (120,000ms) 以内の写真を同じグループとしてまとめる
+        const imageGroups = [];
+        let currentGroup = [];
+
+        for (let i = 0; i < processedImages.length; i++) {
+            const img = processedImages[i];
+            if (currentGroup.length === 0) {
+                currentGroup.push(img);
+            } else {
+                const lastImg = currentGroup[currentGroup.length - 1];
+                if (Math.abs(img.timestamp - lastImg.timestamp) <= 120000) {
+                    currentGroup.push(img);
+                } else {
+                    imageGroups.push(currentGroup);
+                    currentGroup = [img];
+                }
+            }
+        }
+        if (currentGroup.length > 0) imageGroups.push(currentGroup);
+
+        await analyzeImageGroups(imageGroups, progressText, progressFill, 30);
+    }
+
+    // AI解析 (グループごと)
+    async function analyzeImageGroups(groups, progressText, progressFill, startProgress) {
         const apiKey = localStorage.getItem('sella_gemini_key');
         if (!apiKey) {
-            alert("⚠️ Gemini API Keyが設定されていません。手動確認用に未確定ログへ送ります。");
-            createFallbackPendingLogs(images);
-            document.getElementById('progress-box').style.display = 'none';
-            renderPendingSwipeCards();
+            alert("Gemini API Keyが設定されていません。すべて未割り当てプールに移動します。");
+            groups.forEach(g => unassignedImages.push(...g.map(img => img.data)));
             renderUnassignedPool();
+            document.getElementById('progress-box').style.display = 'none';
             return;
         }
 
-        const model = document.getElementById('model-select').value || localStorage.getItem('sella_gemini_model') || 'gemini-2.5-flash';
-        const chunkSize = 3; // 1回あたりの送信枚数
+        const model = document.getElementById('ai-model-select').value || 'gemini-2.5-flash';
+        
+        let newPending = [];
+        let newFailed = [];
 
-        for (let i = 0; i < images.length; i += chunkSize) {
-            const chunk = images.slice(i, i + chunkSize);
-            progressText.textContent = `[${model}] AI解析中 (${i + 1}~${Math.min(i + chunkSize, images.length)} / ${images.length}枚)...`;
-            progressFill.style.width = `${40 + Math.round(((i + 1) / images.length) * 50)}%`;
-
-            const parts = chunk.map((img) => ({
-                inline_data: { mime_type: "image/jpeg", data: img.data.split(',')[1] }
-            }));
-
-            const prompt = `提供された画像を分析し同一のお酒ごとにグループ化してログ案を作成してください。
-出力は必ず以下のJSON形式のみで返してください:
-{
-  "groups": [
-    {
-      "image_indices": [0],
-      "name": "銘柄名",
-      "subname": "詳細",
-      "brewery": "酒蔵名",
-      "region": "産地",
-      "class": "格付",
-      "ai_info": "特徴"
-    }
-  ],
-  "unassigned_indices": []
-}`;
-            parts.push({ text: prompt });
-
-            let res = null;
-            let success = false;
-            
-            // 混雑(503/429)時の自動リトライ処理
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                try {
-                    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts }] })
-                    });
-
-                    if (res.ok) {
-                        success = true;
-                        break;
-                    } else if (res.status === 503 || res.status === 429) {
-                        progressText.textContent = `混雑中... リトライ中 (${attempt}/3)`;
-                        await new Promise(r => setTimeout(r, 2000 * attempt));
-                    } else {
-                        break;
-                    }
-                } catch (e) {
-                    await new Promise(r => setTimeout(r, 1500));
-                }
-            }
-
-            if (!success || !res || !res.ok) {
-                const errJson = res ? await res.json().catch(() => ({})) : {};
-                const errMsg = errJson.error?.message || "通信失敗または混雑";
-                console.warn(`モデル ${model} で解析失敗: ${errMsg}`);
-                
-                // エラー時はフォールバックカードを作成
-                createFallbackPendingLogs(chunk, `AI解析失敗 (${model}): 上部でモデルを変更して「🔄 圧縮画像で再解析」を行えます。`);
-                continue;
-            }
+        for (let i = 0; i < groups.length; i++) {
+            const group = groups[i];
+            progressText.textContent = `AI推論中... グループ ${i + 1}/${groups.length}`;
+            progressFill.style.width = `${startProgress + Math.round(((i + 1) / groups.length) * (100 - startProgress))}%`;
 
             try {
-                const data = await res.json();
-                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                const cleanText = text.replace(/```json|```/g, '').trim();
-                const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+                const parts = group.map(img => ({
+                    inline_data: { mime_type: "image/jpeg", data: img.data.split(',')[1] }
+                }));
 
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    const assignedIndices = new Set();
+                const prompt = `提供された画像群は、同じ1種類のお酒（ボトル・ラベルなど）の写真です。
+以下の情報をJSONフォーマットで抽出・推測してください。情報が読み取れない項目は空文字 "" にしてください。
 
-                    (parsed.groups || []).forEach(g => {
-                        const groupImgs = (g.image_indices || []).map(idx => {
-                            assignedIndices.add(idx);
-                            return chunk[idx] ? chunk[idx].data : null;
-                        }).filter(Boolean);
+出力形式:
+{
+  "name": "銘柄名(大別) 例:写楽, 新政",
+  "subname": "詳細・商品名",
+  "brewery": "酒蔵またはメーカー名",
+  "region": "都道府県または産地",
+  "class": "特定名称または格付",
+  "ai_info": "お酒の豆知識・特徴(100字程度)"
+}`;
+                parts.push({ text: prompt });
 
-                        if (groupImgs.length > 0) {
-                            pendingLogs.push({
-                                tempId: `pending_${Date.now()}_${Math.random()}`,
-                                name: g.name || '不明なお酒',
-                                subname: g.subname || '',
-                                brewery: g.brewery || '',
-                                region: g.region || '',
-                                class: g.class || '',
-                                ai_info: g.ai_info || '',
-                                date: new Date().toISOString().split('T')[0],
-                                rating: 4.0,
-                                images: groupImgs
-                            });
-                        }
-                    });
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts }] })
+                });
 
-                    chunk.forEach((img, idx) => {
-                        if (!assignedIndices.has(idx) || (parsed.unassigned_indices && parsed.unassigned_indices.includes(idx))) {
-                            unassignedImages.push(img);
-                        }
-                    });
+                if (res.ok) {
+                    const data = await res.json();
+                    const text = data.candidates[0].content.parts[0].text;
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    
+                    if (jsonMatch) {
+                        const parsed = JSON.parse(jsonMatch[0]);
+                        newPending.push({
+                            name: parsed.name || '不明なお酒',
+                            subname: parsed.subname || '',
+                            brewery: parsed.brewery || '',
+                            region: parsed.region || '',
+                            class: parsed.class || '',
+                            ai_info: parsed.ai_info || '',
+                            date: group[0].dateStr, // 撮影日をセット
+                            images: group.map(img => img.data)
+                        });
+                    } else {
+                        throw new Error("JSON抽出失敗");
+                    }
                 } else {
-                    createFallbackPendingLogs(chunk, 'JSON解析エラーのため手動調整してください');
+                    throw new Error("APIレスポンスエラー");
                 }
             } catch (e) {
-                createFallbackPendingLogs(chunk, '解析エラーのため手動調整してください');
+                console.error("AI解析エラー:", e);
+                newFailed.push(group);
             }
         }
 
         progressFill.style.width = '100%';
         setTimeout(() => { document.getElementById('progress-box').style.display = 'none'; }, 500);
 
+        pendingLogs.push(...newPending);
+        failedGroups = newFailed;
+        
+        updateFailedUI();
         renderPendingSwipeCards();
+        document.getElementById('batch-file-input').value = "";
+    }
+
+    // 失敗グループ関連のUI更新
+    function updateFailedUI() {
+        const section = document.getElementById('retry-section');
+        if (failedGroups.length > 0) {
+            section.style.display = 'block';
+            document.getElementById('failed-count').textContent = failedGroups.length;
+        } else {
+            section.style.display = 'none';
+        }
+    }
+
+    // リトライ処理
+    async function retryFailedGroups() {
+        if (failedGroups.length === 0) return;
+        const progressBox = document.getElementById('progress-box');
+        progressBox.style.display = 'block';
+        
+        // 処理対象を退避してリストをクリア
+        const targets = [...failedGroups];
+        failedGroups = [];
+        
+        await analyzeImageGroups(targets, document.getElementById('progress-text'), document.getElementById('progress-fill'), 0);
+    }
+
+    // 失敗グループを諦めて未割り当てプールへ
+    function moveFailedToUnassigned() {
+        failedGroups.forEach(group => {
+            group.forEach(img => unassignedImages.push(img.data));
+        });
+        failedGroups = [];
+        updateFailedUI();
         renderUnassignedPool();
     }
 
-    function createFallbackPendingLogs(imgList, customNote) {
-        imgList.forEach((imgObj) => {
-            pendingLogs.push({
-                tempId: `pending_${Date.now()}_${Math.random()}`,
-                name: '新規なお酒',
-                subname: '',
-                brewery: '',
-                region: '',
-                class: '',
-                ai_info: customNote || '（解析未完了のため手動入力してください）',
-                date: new Date().toISOString().split('T')[0],
-                rating: 4.0,
-                images: [imgObj.data]
-            });
+    // 現在入力中の未確定カードのデータをJSオブジェクトに退避
+    function saveCurrentCardInputs() {
+        pendingLogs.forEach((item, idx) => {
+            const nameEl = document.getElementById(`p-name-${idx}`);
+            if (nameEl) {
+                item.name = nameEl.value;
+                item.subname = document.getElementById(`p-subname-${idx}`).value;
+                item.brewery = document.getElementById(`p-brewery-${idx}`).value;
+                item.region = document.getElementById(`p-region-${idx}`).value;
+                item.date = document.getElementById(`p-date-${idx}`).value;
+                item.ai_info = document.getElementById(`p-ai-${idx}`).value;
+            }
         });
     }
 
+    // スワイプ型 未確定カードの描画
     function renderPendingSwipeCards() {
         const container = document.getElementById('swipe-container');
         const section = document.getElementById('swipe-section');
@@ -495,8 +500,16 @@
             card.className = 'swipe-card';
             card.id = `swipe-card-${index}`;
             card.style.zIndex = pendingLogs.length - index;
+            if (index !== currentCardIndex) {
+                card.style.display = 'none';
+            }
 
-            const imgThumbs = item.images.map(img => `<img src="${img}">`).join('');
+            const imgThumbs = item.images.map((imgBase64, imgIdx) => `
+                <div style="position:relative;">
+                    <img src="${imgBase64}">
+                    <button class="img-remove-btn" type="button" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation(); removeImageFromPending(${index}, ${imgIdx});">✕</button>
+                </div>
+            `).join('');
 
             card.innerHTML = `
                 <div class="img-grid">${imgThumbs}</div>
@@ -519,20 +532,25 @@
                     </div>
                 </div>
                 <div class="form-group">
+                    <label>飲んだ日 (撮影日)</label>
+                    <input type="date" id="p-date-${index}" value="${item.date}">
+                </div>
+                <div class="form-group">
                     <label>🤖 AI解説</label>
                     <textarea rows="2" id="p-ai-${index}">${escapeHtml(item.ai_info)}</textarea>
                 </div>
                 <div class="card-actions">
-                    <button type="button" class="danger" onclick="skipPendingLog(${index})">🗑 破棄/未割り当てへ</button>
+                    <button type="button" class="danger" onclick="skipPendingLog(${index})">🗑 全てプールへ</button>
                     <button type="button" onclick="confirmPendingLog(${index})">✅ 確定して保存</button>
                 </div>
             `;
 
-            card.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; });
+            // タッチスワイプイベント
+            card.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive: true});
             card.addEventListener('touchend', e => {
                 touchEndX = e.changedTouches[0].screenX;
                 handleSwipe(index);
-            });
+            }, {passive: true});
 
             container.appendChild(card);
         });
@@ -542,7 +560,8 @@
 
     function handleSwipe(index) {
         const diff = touchEndX - touchStartX;
-        if (Math.abs(diff) > 60) {
+        if (Math.abs(diff) > 50) {
+            saveCurrentCardInputs();
             if (diff < 0 && currentCardIndex < pendingLogs.length - 1) {
                 currentCardIndex++;
                 updateCardVisibility();
@@ -557,49 +576,66 @@
         document.getElementById('current-card-idx').textContent = Math.min(currentCardIndex + 1, pendingLogs.length);
         pendingLogs.forEach((_, idx) => {
             const el = document.getElementById(`swipe-card-${idx}`);
-            if (el) {
-                el.style.display = (idx === currentCardIndex) ? 'block' : 'none';
-            }
+            if (el) el.style.display = (idx === currentCardIndex) ? 'block' : 'none';
         });
     }
 
+    // 指定した画像を未確定カードから弾く（プールへ移動）
+    function removeImageFromPending(cardIdx, imgIdx) {
+        saveCurrentCardInputs();
+        const item = pendingLogs[cardIdx];
+        const removedImg = item.images.splice(imgIdx, 1)[0];
+        
+        unassignedImages.push(removedImg);
+        
+        // 画像が0枚になった場合はカードごと破棄
+        if (item.images.length === 0) {
+            pendingLogs.splice(cardIdx, 1);
+            if (currentCardIndex >= pendingLogs.length && currentCardIndex > 0) currentCardIndex--;
+        }
+        
+        renderPendingSwipeCards();
+        renderUnassignedPool();
+    }
+
+    // 個別確定保存
     function confirmPendingLog(index) {
+        saveCurrentCardInputs();
         const item = pendingLogs[index];
         const newLog = {
-            id: Date.now().toString() + Math.random().toString().slice(2, 5),
-            name: document.getElementById(`p-name-${index}`).value.trim() || '無題のお酒',
-            subname: document.getElementById(`p-subname-${index}`).value.trim(),
-            brewery: document.getElementById(`p-brewery-${index}`).value.trim(),
-            region: document.getElementById(`p-region-${index}`).value.trim(),
+            id: 'log_' + Date.now().toString() + Math.random().toString(36).substr(2, 5),
+            name: item.name.trim() || '無題のお酒',
+            subname: item.subname.trim(),
+            brewery: item.brewery.trim(),
+            region: item.region.trim(),
             class: item.class || '',
             type: 'sake',
-            date: item.date,
+            date: item.date || formatDateLocal(new Date()),
             rating: 4.0,
             tags: [],
             comment: '',
-            ai_info: document.getElementById(`p-ai-${index}`).value.trim(),
-            images: item.images
+            ai_info: item.ai_info.trim(),
+            images: item.images,
+            coverImageIndex: 0
         };
 
         existingLogs.unshift(newLog);
         localStorage.setItem('sella_logs', JSON.stringify(existingLogs));
-
-        // 保存確定時のみハッシュ登録
-        item.images.forEach(imgData => {
-            existingImageHashes.add(simpleHash(imgData));
-        });
 
         pendingLogs.splice(index, 1);
         if (currentCardIndex >= pendingLogs.length && currentCardIndex > 0) {
             currentCardIndex--;
         }
         renderPendingSwipeCards();
+        alert("✅ 保存しました");
     }
 
+    // カードごとスキップして未割り当てへ移動
     function skipPendingLog(index) {
+        saveCurrentCardInputs();
         const item = pendingLogs[index];
         item.images.forEach(imgData => {
-            unassignedImages.push({ id: `img_${Date.now()}_${Math.random()}`, data: imgData });
+            unassignedImages.push(imgData);
         });
 
         pendingLogs.splice(index, 1);
@@ -610,18 +646,19 @@
         renderUnassignedPool();
     }
 
+    // 未割り当てギャラリーの描画
     function renderUnassignedPool() {
         const container = document.getElementById('unassigned-gallery');
         document.getElementById('unassigned-count').textContent = unassignedImages.length;
         container.innerHTML = '';
 
-        unassignedImages.forEach((imgObj, idx) => {
+        unassignedImages.forEach((imgBase64, idx) => {
             const div = document.createElement('div');
             div.className = 'unassigned-item';
             div.innerHTML = `
-                <img src="${imgObj.data}">
+                <img src="${imgBase64}">
                 <div class="actions">
-                    <button title="ログに追加" onclick="assignImageToExistingLog(${idx})">➕ 割当</button>
+                    <button title="既存ログに追加" onclick="assignImageToExistingLog(${idx})">➕ 割当</button>
                     <button class="danger" title="削除" onclick="removeUnassignedImage(${idx})">✕</button>
                 </div>
             `;
@@ -629,21 +666,20 @@
         });
     }
 
+    // 未割り当て画像を既存ログに手動追加
     function assignImageToExistingLog(imgIndex) {
         if (existingLogs.length === 0) return alert("割り当てる既存ログがありません。");
 
-        const options = existingLogs.map((l, i) => `${i + 1}. ${l.name} (${l.subname || '詳細なし'})`).join('\n');
-        const choice = prompt(`追加先のログ番号を入力してください:\n${options}`);
+        const options = existingLogs.slice(0, 15).map((l, i) => `${i + 1}. ${l.name} (${l.subname || '詳細なし'})`).join('\n');
+        const choice = prompt(`追加先のログ番号(直近15件)を入力してください:\n${options}`);
 
         const num = parseInt(choice);
         if (num > 0 && num <= existingLogs.length) {
             const targetLog = existingLogs[num - 1];
             if (!targetLog.images) targetLog.images = [];
-            targetLog.images.push(unassignedImages[imgIndex].data);
+            targetLog.images.push(unassignedImages[imgIndex]);
 
-            existingImageHashes.add(simpleHash(unassignedImages[imgIndex].data));
             localStorage.setItem('sella_logs', JSON.stringify(existingLogs));
-
             unassignedImages.splice(imgIndex, 1);
             renderUnassignedPool();
             alert(`「${targetLog.name}」に画像を追加しました。`);
