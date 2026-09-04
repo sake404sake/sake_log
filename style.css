@@ -1,0 +1,1325 @@
+/* ==========================================================================
+   1. テーマ定義 (CSS Variables)
+   ========================================================================== */
+:root,
+html[data-theme="dark"] {
+  --sidebar-width: 240px;
+  --right-panel-width: 320px;
+
+  /* 🌙 ダーク（デフォルト） */
+  --bg-color: #121316;
+  --panel-bg: #18191d;
+  --card-bg: #202227;
+  --border-color: #2a2c33;
+  --accent-color: #d4a359;
+  --accent-hover: #e6c594;
+  --text-main: #f0f1f5;
+  --text-sub: #8e929e;
+  --drawer-overlay-bg: rgba(0, 0, 0, 0.7);
+}
+
+/* ☀️ ライト */
+html[data-theme="light"] {
+  --sidebar-width: 240px;
+  --right-panel-width: 320px;
+
+  --bg-color: #f3f4f6;
+  --panel-bg: #ffffff;
+  --card-bg: #ffffff;
+  --border-color: #d1d5db;
+  --accent-color: #ffab2e;
+  --accent-hover: #8e5c0d;
+  --text-main: #111827;
+  --text-sub: #4b5563;
+  --drawer-overlay-bg: rgba(0, 0, 0, 0.4);
+}
+
+/* 🌸 桜（さくら） */
+html[data-theme="sakura"] {
+  --sidebar-width: 240px;
+  --right-panel-width: 320px;
+
+  --bg-color: #fcf4f6;
+  --panel-bg: #ffffff;
+  --card-bg: #fff0f3;
+  --border-color: #f3c2ce;
+  --accent-color: #d84a75;
+  --accent-hover: #b8325a;
+  --text-main: #2d1820;
+  --text-sub: #7a5865;
+  --drawer-overlay-bg: rgba(45, 24, 32, 0.4);
+}
+
+/* 🎮 ゲーム（サイバーネオン） */
+html[data-theme="gaming"] {
+  --sidebar-width: 240px;
+  --right-panel-width: 320px;
+
+  --bg-color: #0d0e15;
+  --panel-bg: #131520;
+  --card-bg: #1a1d2e;
+  --border-color: #2d3250;
+  --accent-color: #00ffcc;
+  --accent-hover: #00ccb4;
+  --text-main: #e0e6ed;
+  --text-sub: #7d8b9b;
+  --drawer-overlay-bg: rgba(0, 0, 0, 0.8);
+}
+
+/* 🏯 モダン（墨・朱・金） */
+html[data-theme="japan-modern"] {
+  --sidebar-width: 240px;
+  --right-panel-width: 320px;
+
+  --bg-color: #161a1d;
+  --panel-bg: #1f2428;
+  --card-bg: #2a3036;
+  --border-color: #3e464f;
+  --accent-color: #c84b31;
+  --accent-hover: #a93822;
+  --text-main: #f0ebd8;
+  --text-sub: #8d99ae;
+  --drawer-overlay-bg: rgba(0, 0, 0, 0.75);
+}
+
+/* ==========================================================================
+   2. リセット & 基本スタイル
+   ========================================================================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+a {
+  color: #38bdf8;
+  font-weight: 600;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #00ffcc;
+}
+
+.app-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+  min-height: 100dvh;
+  position: relative;
+}
+
+/* ==========================================================================
+   3. サイドバー & ヘッダー
+   ========================================================================== */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-width);
+  height: 100%;
+  background-color: var(--panel-bg);
+  border-right: 1px solid var(--border-color);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.open {
+  transform: translateX(0);
+}
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 190;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.drawer-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.brand {
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.brand-title {
+  font-size: 1.3rem;
+  letter-spacing: 2px;
+  color: var(--accent-color);
+}
+
+.side-nav {
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  font-size: 0.95rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-item:hover, .nav-item.active {
+  background-color: var(--card-bg);
+  color: var(--accent-color);
+}
+
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.icon-btn-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  color: #000;
+  display: grid;
+  place-items: center;
+  font-weight: bold;
+}
+
+.main-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  position: relative;
+}
+
+.mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mobile-title {
+  font-size: 1.1rem;
+  color: var(--accent-color);
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-main);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.app-main {
+  flex: 1;
+  padding: 16px;
+}
+
+.right-panel {
+  display: none;
+}
+
+.fab-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  color: #000;
+  font-size: 1.8rem;
+  border: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   4. 共通フォーム・ボタン・設定画面
+   ========================================================================== */
+.input-dark {
+  width: 100%;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.input-dark:focus {
+  border-color: var(--accent-color);
+}
+
+.input-dark.ai-preview-active {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 5px rgba(212, 163, 89, 0.3);
+}
+
+.btn-primary {
+  background-color: var(--accent-color);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+#btn-save-api-key {
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: max-content;
+}
+
+.settings-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.settings-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.card-title h3 {
+  font-size: 1.05rem;
+  color: var(--text-main);
+}
+
+.card-desc {
+  font-size: 0.85rem;
+  color: var(--text-sub);
+  margin-bottom: 16px;
+}
+
+.input-group {
+  display: flex;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   5. 酒ログカード & グリッド
+   ========================================================================== */
+.log-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.log-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-card-image-wrapper {
+  width: 100%;
+  height: 180px;
+  background-color: var(--bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.log-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.log-card-no-image {
+  color: var(--text-sub);
+  font-size: 0.9rem;
+}
+
+.log-card-content {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.log-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.log-card-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--text-main);
+}
+
+.btn-delete-log {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.btn-delete-log:hover {
+  opacity: 1;
+}
+
+.log-card-sub {
+  font-size: 0.8rem;
+  color: var(--text-sub);
+}
+
+.log-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.log-rating {
+  color: var(--accent-color);
+}
+
+.log-abv, .log-date {
+  color: var(--text-sub);
+}
+
+.log-card-notes {
+  font-size: 0.85rem;
+  color: var(--text-main);
+  background-color: var(--bg-color);
+  padding: 8px;
+  border-radius: 6px;
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
+.log-card-subtitle {
+  font-size: 0.9rem;
+  color: var(--accent-color);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.log-card-spec {
+  font-size: 0.78rem;
+  color: var(--text-sub);
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.tag-badge {
+  font-size: 0.72rem;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  color: var(--accent-color);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.card-ai-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background-color: rgba(212, 163, 89, 0.08);
+  border: 1px solid rgba(212, 163, 89, 0.25);
+  border-radius: 8px;
+}
+
+.card-ai-header {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: var(--accent-color);
+  margin-bottom: 4px;
+}
+
+.card-ai-text {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.card-category-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: bold;
+  color: #000;
+  background-color: var(--accent-color);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   6. モーダル (ポップアップ) & 閲覧表示
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-card {
+  background-color: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.modal-header h3 {
+  font-size: 1.1rem;
+  color: var(--text-main);
+}
+
+.modal-close-btn,
+.btn-close {
+  background: transparent;
+  border: none;
+  color: var(--text-sub);
+  font-size: 1.4rem;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.modal-close-btn:hover,
+.btn-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+/* ★ 強力修正: 詳細モーダル内画像エリアの高さ潰れ防止 */
+.modal-body > div:first-child,
+.modal-body [class*="carousel"],
+.modal-body [class*="detail-image"],
+.modal-body [class*="detail-main"],
+.modal-body [class*="gallery-container"] {
+  width: 100% !important;
+  height: 240px !important;
+  min-height: 240px !important;
+  flex-shrink: 0 !important;
+  background-color: var(--bg-color) !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+/* 画像自体のリサイズ設定 */
+.modal-body > div:first-child img,
+.modal-body [class*="carousel"] img,
+.modal-body [class*="detail-image"] img,
+.modal-body [class*="detail-main"] img,
+.modal-body [class*="gallery"] img {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 240px !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+.modal-form-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.form-group label {
+  font-size: 0.82rem;
+  color: var(--text-sub);
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.required {
+  color: #ff5252;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+/* 閲覧専用フィールド */
+.read-only-field {
+  width: 100%;
+  padding: 10px 14px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  word-break: break-word;
+}
+
+.read-only-field.text-box {
+  white-space: pre-wrap;
+  display: block;
+  min-height: 70px;
+  line-height: 1.5;
+}
+
+.read-only-field.ai-info-box {
+  background-color: rgba(212, 163, 89, 0.08);
+  border-color: rgba(212, 163, 89, 0.3);
+  color: var(--text-main);
+}
+
+/* アップロードエリア */
+.image-upload-zone {
+  width: 100%;
+  height: 220px;
+  min-height: 220px;
+  flex-shrink: 0;
+  background-color: var(--card-bg);
+  border: 2px dashed var(--border-color);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s;
+}
+
+.image-upload-zone:hover {
+  border-color: var(--accent-color);
+}
+
+.upload-placeholder {
+  text-align: center;
+  padding: 12px;
+  color: var(--text-sub);
+}
+
+.upload-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.upload-text {
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+/* サムネイル一覧コンテナ（編集画面用） */
+#image-preview-list,
+.image-preview-grid {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 90px !important;
+  margin-bottom: 12px !important;
+}
+
+.preview-item {
+  position: relative;
+  width: 90px !important;
+  height: 90px !important;
+  min-height: 90px !important;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid var(--border-color);
+  background-color: var(--bg-color);
+  flex-shrink: 0 !important;
+}
+
+.preview-item.is-thumb {
+  border-color: var(--accent-color);
+}
+
+.preview-item img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+.preview-actions {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.preview-item:hover .preview-actions {
+  opacity: 1;
+}
+
+.preview-actions button {
+  font-size: 0.65rem;
+  padding: 2px 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-thumb-set {
+  width: 90%;
+  color: var(--accent-color) !important;
+  font-weight: bold;
+}
+
+.add-more-item {
+  width: 90px !important;
+  height: 90px !important;
+  min-height: 90px !important;
+  border-radius: 8px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #334155;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  flex-shrink: 0 !important;
+}
+
+.add-more-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+/* カルーセル操作ボタン */
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  font-size: 1.2rem;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+.carousel-btn.prev { left: 8px; }
+.carousel-btn.next { right: 8px; }
+
+.carousel-dots {
+  position: absolute;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+}
+
+.carousel-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.carousel-dots .dot.active {
+  background: var(--accent-color);
+}
+
+/* ==========================================================================
+   7. 画像拡大（ライトボックス）
+   ========================================================================== */
+.lightbox-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+  cursor: zoom-out;
+}
+
+.lightbox-overlay.active {
+  display: flex !important;
+}
+
+.lightbox-content {
+  position: relative;
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-content img {
+  max-width: 92vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: -44px;
+  right: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  font-size: 1.6rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* 解析中ローディング表示 */
+.analyzing-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--accent-color);
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.tag-selector-wrapper {
+  margin-top: 6px;
+}
+
+.tag-selector-label {
+  font-size: 0.72rem;
+  color: var(--text-sub);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.tag-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip-btn {
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tag-chip-btn:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.ai-info-input {
+  border-color: rgba(212, 163, 89, 0.4);
+}
+
+/* モーダルフッター */
+.modal-footer,
+.editor-actions {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  background-color: var(--panel-bg);
+  flex-shrink: 0;
+}
+
+#btn-analyze {
+  margin-right: auto !important;
+}
+
+#btn-analyze.btn-ai-action {
+  all: unset;
+  box-sizing: border-box;
+  background-color: rgba(212, 163, 89, 0.15) !important;
+  border: 1px solid var(--accent-color) !important;
+  color: var(--accent-color) !important;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#btn-analyze.btn-ai-action:hover {
+  background-color: var(--accent-color) !important;
+  color: #111 !important;
+}
+
+.btn-sub {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.btn-revert-field {
+  background: rgba(212, 163, 89, 0.12);
+  border: 1px solid var(--accent-color);
+  color: var(--accent-color);
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: normal;
+  margin-left: auto;
+}
+
+.btn-revert-field:hover {
+  background: var(--accent-color);
+  color: #000;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ==========================================================================
+   8. PC表示用メディアクエリ (1024px以上)
+   ========================================================================== */
+@media (min-width: 1024px) {
+  .app-container {
+    grid-template-columns: var(--sidebar-width) 1fr var(--right-panel-width);
+  }
+
+  .sidebar {
+    position: relative;
+    transform: none !important;
+  }
+
+  .drawer-overlay, 
+  .mobile-header {
+    display: none !important;
+  }
+
+  .fab-btn {
+    display: flex !important;
+    right: 340px;
+    bottom: 24px;
+    z-index: 900;
+  }
+
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+    background-color: var(--panel-bg);
+    border-left: 1px solid var(--border-color);
+    overflow-y: auto;
+  }
+
+  .widget-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .widget-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: var(--accent-color);
+    font-size: 0.9rem;
+  }
+
+  .ai-chat-body {
+    min-height: 150px;
+    background-color: var(--bg-color);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+  }
+
+  .chat-bubble.ai {
+    color: var(--text-sub);
+  }
+
+  .chat-input-wrapper {
+    display: flex;
+    gap: 8px;
+  }
+
+  .chat-input-wrapper input {
+    flex: 1;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text-main);
+    font-size: 0.85rem;
+  }
+
+  .send-btn {
+    background-color: var(--accent-color);
+    border: none;
+    border-radius: 6px;
+    padding: 0 12px;
+    cursor: pointer;
+  }
+
+  .plugin-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-main);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .category-accordion {
+    background: var(--card-bg, #1a1e29);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color, #2d3243);
+    overflow: hidden;
+  }
+
+  .category-summary {
+    padding: 14px 16px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .category-title {
+    font-size: 1.05rem;
+    color: var(--accent-color, #4cd964);
+  }
+
+  .category-count {
+    font-size: 0.85rem;
+    color: var(--text-sub, #8e8e93);
+  }
+
+  .category-content {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .brand-group-card {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px;
+  }
+
+  .brand-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  }
+
+  .brand-title {
+    font-weight: bold;
+    font-size: 0.95rem;
+  }
+
+  .brand-badge {
+    font-size: 0.75rem;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 12px;
+    color: var(--text-sub);
+  }
+
+  .log-row-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-bottom: 6px;
+  }
+
+  .log-row-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .row-thumb-box {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .row-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .row-thumb-placeholder {
+    font-size: 1.2rem;
+  }
+
+  .row-main-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .row-date-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+  }
+
+  .row-date {
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+
+  .row-rating {
+    font-size: 0.8rem;
+    color: #ffcc00;
+  }
+
+  .row-sub-info {
+    font-size: 0.78rem;
+    color: var(--text-sub);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .row-arrow {
+    color: var(--text-sub);
+    font-size: 0.8rem;
+  }
+}
