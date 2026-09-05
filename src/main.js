@@ -1982,7 +1982,7 @@ function initApp() {
         activeSwipeThumb.style.boxShadow = '0 10px 25px rgba(0,0,0,0.35)';
 
         // 🌟【大本命】オートギャップ（隙間空け）アニメーションの実装 🌟
-const isEditor = activeSwipeThumb.classList.contains('preview-item');
+        const isEditor = activeSwipeThumb.classList.contains('preview-item');
         const isBatch = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'group';
         const isPool = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'pool';
         
@@ -2000,7 +2000,45 @@ const isEditor = activeSwipeThumb.classList.contains('preview-item');
           curIdx = Number(activeSwipeThumb.dataset.idx);
         }
 
-        if (curIdx !== -1 && !isNaN(curIdx)) {
+        // 🌟【新機能】コンテナ間（別グループ、またはプールとグループの間）のドラッグ検出🌟
+        let isCrossContainerDrag = false;
+        if (!isEditor) {
+          // ドラッグ中のタッチ座標(またはマウス座標)でホバー先のコンテナを特定
+          activeSwipeThumb.style.pointerEvents = 'none';
+          const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+          activeSwipeThumb.style.pointerEvents = 'auto';
+
+          const targetCard = hoveredEl ? hoveredEl.closest('.batch-group-card') : null;
+          const targetPool = hoveredEl ? hoveredEl.closest('#ungrouped-pool-container') : null;
+
+          // 全ての .drag-over スタイルをクリア
+          document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
+          const poolContainer = document.getElementById('ungrouped-pool-container');
+          if (poolContainer) poolContainer.classList.remove('drag-over');
+
+          if (targetCard) {
+            const targetGIdx = Number(targetCard.dataset.gidx);
+            const isSelf = isBatch && Number(activeSwipeThumb.dataset.gidx) === targetGIdx;
+            if (!isSelf) {
+              targetCard.classList.add('drag-over');
+              isCrossContainerDrag = true;
+            }
+          } else if (targetPool) {
+            const isSelf = isPool;
+            if (!isSelf) {
+              targetPool.classList.add('drag-over');
+              isCrossContainerDrag = true;
+            }
+          }
+        }
+
+        // ホバー中の別コンテナがある、またはドラッグ要素がコンテナから大きく離れた(Y軸ブレ80px以上)場合は
+        // 兄弟要素(siblings)の隙間空けを一旦キャンセルしてリセットする
+        if (isCrossContainerDrag || Math.abs(diffY) > 80) {
+          siblings.forEach(sib => {
+            if (sib !== activeSwipeThumb) sib.style.transform = 'none';
+          });
+        } else if (curIdx !== -1 && !isNaN(curIdx)) {
           const itemWidth = activeSwipeThumb.offsetWidth || 90;
           const step = itemWidth + 10; // アイテム幅 + マージン（10px）
           
@@ -2115,6 +2153,67 @@ const isEditor = activeSwipeThumb.classList.contains('preview-item');
         sib.style.transition = 'none';
         sib.style.transform = 'none';
       });
+
+      // 🌟【新機能】コンテナ間移動（別グループ、またはプールとグループの間）のポインタードロップ判定🌟
+      let isContainerMoved = false;
+      if (!isEditor && isMoveTriggered) {
+        thumb.style.pointerEvents = 'none';
+        const droppedEl = document.elementFromPoint(e.clientX, e.clientY);
+        thumb.style.pointerEvents = '';
+
+        const targetCard = droppedEl ? droppedEl.closest('.batch-group-card') : null;
+        const targetPool = droppedEl ? droppedEl.closest('#ungrouped-pool-container') : null;
+
+        // 全ての .drag-over スタイルをクリア
+        document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
+        const poolContainer = document.getElementById('ungrouped-pool-container');
+        if (poolContainer) poolContainer.classList.remove('drag-over');
+
+        if (targetCard) {
+          const targetGIdx = Number(targetCard.dataset.gidx);
+          if (!isNaN(targetGIdx) && batchGroups[targetGIdx]) {
+            if (isPool) {
+              // プールからグループへ直接スワイプ移動！
+              const idx = Number(thumb.dataset.idx);
+              if (!isNaN(idx) && ungroupedImages[idx]) {
+                const [movedItem] = ungroupedImages.splice(idx, 1);
+                batchGroups[targetGIdx].push(movedItem);
+                isContainerMoved = true;
+              }
+            } else if (isBatch) {
+              // グループ間での直接スワイプ移動！
+              const srcGIdx = Number(thumb.dataset.gidx);
+              const srcIIdx = Number(thumb.dataset.iidx);
+              if (srcGIdx !== targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && batchGroups[srcGIdx] && batchGroups[srcGIdx][srcIIdx]) {
+                const [movedItem] = batchGroups[srcGIdx].splice(srcIIdx, 1);
+                batchGroups[targetGIdx].push(movedItem);
+                if (batchGroups[srcGIdx].length === 0) {
+                  batchGroups.splice(srcGIdx, 1);
+                }
+                isContainerMoved = true;
+              }
+            }
+          }
+        } else if (targetPool && isBatch) {
+          // グループからプールへ直接スワイプ戻し！
+          const srcGIdx = Number(thumb.dataset.gidx);
+          const srcIIdx = Number(thumb.dataset.iidx);
+          if (!isNaN(srcGIdx) && !isNaN(srcIIdx) && batchGroups[srcGIdx] && batchGroups[srcGIdx][srcIIdx]) {
+            const [movedItem] = batchGroups[srcGIdx].splice(srcIIdx, 1);
+            ungroupedImages.push(movedItem);
+            if (batchGroups[srcGIdx].length === 0) {
+              batchGroups.splice(srcGIdx, 1);
+            }
+            isContainerMoved = true;
+          }
+        }
+      }
+
+      if (isContainerMoved) {
+        // コンテナ間移動が完了した場合は、再描画して処理を終了！
+        renderBatchGroupsUI();
+        return;
+      }
 
       thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
 
