@@ -1249,9 +1249,7 @@ function initApp() {
       const batchInput = document.getElementById('batch-file-input');
       if (batchInput) batchInput.click();
       return;
-    }
-
-    const saveAllBtn = e.target.closest('#btn-save-all-batches');
+    }    const saveAllBtn = e.target.closest('#btn-save-all-batches');
     if (saveAllBtn) {
       if (batchGroups.length === 0) {
         alert('登録するグループがありません。');
@@ -1267,6 +1265,12 @@ function initApp() {
       try {
         for (let gIdx = 0; gIdx < batchGroups.length; gIdx++) {
           const group = batchGroups[gIdx];
+          
+          // 🛡️ 【重大安全ガード1】写真が1枚もない空のグループは処理をスキップする
+          if (!group || group.length === 0) {
+            console.warn(`警告: 空のお酒グループ #${gIdx + 1} をスキップしました。`);
+            continue;
+          }
           const card = document.querySelector(`.batch-group-card[data-gidx="${gIdx}"]`);
           const nameInput = card?.querySelector('.batch-name-input');
           const breweryInput = card?.querySelector('.batch-brewery-input');
@@ -1285,7 +1289,15 @@ function initApp() {
             return img.blob;
           }).filter(blob => blob instanceof Blob); // 🌟確実にBlobオブジェクトであるもののみに絞り込む！
 
-          const mainDate = group[0]?.date ? (group[0].date instanceof Date ? group[0].date.toISOString().split('T')[0] : new Date(group[0].date).toISOString().split('T')[0]) : '';
+          // 🛡️ 【重大安全ガード2】無効な日付（Invalid Date）による toISOString() の停止バグを完全に回避する
+          let mainDate = '';
+          const rawDate = group[0]?.date;
+          if (rawDate) {
+            const dateObj = (rawDate instanceof Date) ? rawDate : new Date(rawDate);
+            if (!isNaN(dateObj.getTime())) {
+              mainDate = dateObj.toISOString().split('T')[0];
+            }
+          }
 
           const logData = {
             category: group.category || '日本酒',
