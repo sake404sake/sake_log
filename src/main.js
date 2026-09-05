@@ -129,6 +129,7 @@ let ungroupedImages = [];
 let returnToBatchOnClose = false; 
 let currentBatchGroupIndex = null; 
 let draggedItemInfo = null;       
+let isPoolCollapsed = false; // ★ 追加：プールの折りたたみ状態
 
 function base64ToBlob(base64, mimeType = 'image/jpeg') {
   const byteCharacters = atob(base64);
@@ -165,22 +166,30 @@ function renderBatchGroupsUI() {
 
   let ungroupedHTML = '';
   if (ungroupedImages.length > 0) {
-    const thumbs = ungroupedImages.map((item, idx) => `
-      <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
-      style="position:relative; width:70px; height:70px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
-        <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
-        <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-        style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:10px; cursor:pointer;">✕</button>
+    // 畳まれている時はサムネイルを表示しない
+    const thumbs = isPoolCollapsed ? '' : `
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;">
+        ${ungroupedImages.map((item, idx) => `
+          <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
+          style="position:relative; width:70px; height:70px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
+            <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
+            <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
+            style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:10px; cursor:pointer;">✕</button>
+          </div>
+        `).join('')}
       </div>
-    `).join('');
+    `;
 
     ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="background: var(--card-bg); border: 1px dashed var(--accent-color); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-          <span style="font-weight: bold; color: var(--text-main);">📂 未所属の画像プール (${ungroupedImages.length}枚) <span style="font-size:0.75rem; color:var(--text-sub); font-weight:normal;">(ここにドラッグして画像を外せます)</span></span>
+      <div id="ungrouped-pool-container" style="position: sticky; top: 16px; z-index: 50; background: var(--card-bg); border: 1px dashed var(--accent-color); border-radius: 12px; padding: 16px; margin-bottom: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); backdrop-filter: blur(8px);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px;">${isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
+            <span style="font-weight: bold; color: var(--text-main);">📂 未所属の画像プール (${ungroupedImages.length}枚) <span style="font-size:0.75rem; color:var(--text-sub); font-weight:normal;">(ここにドラッグして画像を外せます)</span></span>
+          </div>
           <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">✨ これらからグループを作成</button>
         </div>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px;">${thumbs}</div>
+        ${thumbs}
       </div>
     `;
   } else {
@@ -815,6 +824,13 @@ function initApp() {
   });
 
   document.addEventListener('click', async (e) => {
+    // ★ 追加：プールの折りたたみボタン
+    if (e.target.id === 'btn-toggle-pool-collapse') {
+      isPoolCollapsed = !isPoolCollapsed;
+      renderBatchGroupsUI();
+      return;
+    }
+
     if (e.target && e.target.id === 'btn-save-api-key') {
       const keyInput = document.getElementById('gemini-api-key');
       if (keyInput) {
@@ -1260,8 +1276,6 @@ function initApp() {
 
       closeEditorModal();
       
-      // ★ 修正: 単体登録後に強制的にログ一覧へ飛ばさないように変更
-      // 現在の画面（カレンダーや設定など、開いていた画面）をそのまま維持して再描画します
       if (!returnToBatchOnClose) {
         navigateTo(currentViewName);
       }
