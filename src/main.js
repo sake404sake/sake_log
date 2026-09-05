@@ -1248,88 +1248,7 @@ function initApp() {
         batchGroups = [];
         ungroupedImages = [];
         renderBatchGroupsUI();
-        
-  // ==========================================================================
-  // 📱 スマホ専用：スワイプジェスチャーによる「並び替え」＆「画像切り替え」の統合ロジック
-  // ==========================================================================
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchStartTime = 0;
-
-  document.addEventListener('touchstart', (e) => {
-    const touch = e.touches[0];
-    touchStartX = touch.clientX;
-    touchStartY = touch.clientY;
-    touchStartTime = Date.now();
-  }, { passive: true });
-
-  document.addEventListener('touchend', (e) => {
-    if (e.changedTouches.length === 0) return;
-    const touch = e.changedTouches[0];
-    const diffX = touch.clientX - touchStartX;
-    const diffY = touch.clientY - touchStartY;
-    const duration = Date.now() - touchStartTime;
-
-    // 高速なフリック操作 (時間300ms以下、かつ横方向移動50px以上、縦ブレが少なめ) を検知
-    if (duration < 350 && Math.abs(diffX) > 45 && Math.abs(diffY) < 45) {
-      // 1. 【ライトボックス展開時】 左右スワイプで前後の画像へサクサク切り替え
-      const lightbox = document.getElementById('lightbox-modal');
-      if (lightbox && lightbox.classList.contains('active')) {
-        if (diffX < 0) {
-          // 左スワイプ（指を左へ滑らせる ➔ 次の写真へ進む）
-          triggerLightboxNext();
-        } else {
-          // 右スワイプ（指を右へ滑らせる ➔ 前の写真へ戻る）
-          triggerLightboxPrev();
-        }
-        return;
-      }
-
-      // 2. 【サムネイル状態】 左右スワイプで画像の「並び順」を直感的に入れ替え！
-      const thumb = e.target.closest('.preview-item, .draggable-thumb');
-      if (thumb) {
-        // 指の滑った方向（スワイプ方向）に合わせて画像を移動させる
-        // 右にスワイプ（diffX > 0）した場合はインデックスを増やし（右（次）へ動かす）、左なら減らす（左（前）へ動かす）
-        const direction = diffX > 0 ? 1 : -1;
-        
-        // 2-a. 単体登録画面（エディタ）のサムネイルの場合
-        if (thumb.classList.contains('preview-item')) {
-          const imgEl = thumb.querySelector('img');
-          const idx = imgEl ? Number(imgEl.dataset.idx) : null;
-          if (idx !== null && !isNaN(idx)) {
-            const targetIdx = idx + direction;
-            if (targetIdx >= 0 && targetIdx < uploadedImages.length) {
-              const temp = uploadedImages[idx];
-              uploadedImages[idx] = uploadedImages[targetIdx];
-              uploadedImages[targetIdx] = temp;
-              // メイン画像の選択位置も連動
-              if (activeThumbnailIndex === idx) activeThumbnailIndex = targetIdx;
-              else if (activeThumbnailIndex === targetIdx) activeThumbnailIndex = idx;
-              
-              renderImagePreviewList();
-            }
-          }
-        }
-        // 2-b. 一括インポート画面のグループ内サムネイルの場合
-        else if (thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group') {
-          const gIdx = Number(thumb.dataset.gidx);
-          const iIdx = Number(thumb.dataset.iidx);
-          const group = batchGroups[gIdx];
-          if (group) {
-            const targetIIdx = iIdx + direction;
-            if (targetIIdx >= 0 && targetIIdx < group.length) {
-              const temp = group[iIdx];
-              group[iIdx] = group[targetIIdx];
-              group[targetIIdx] = temp;
-              
-              renderBatchGroupsUI();
-            }
-          }
-        }
-      }
-    }
-  }, { passive: true });
-\n  navigateTo('logList');
+        navigateTo('logList');
       } catch (err) {
         console.error('一括登録エラー:', err);
         alert('一括登録中にエラーが発生しました。');
@@ -1511,88 +1430,7 @@ function initApp() {
       if (confirm('この酒ログを削除してもよろしいですか？')) {
         await deleteLog(id);
         closeDetailModal();
-        
-  // ==========================================================================
-  // 📱 スマホ専用：スワイプジェスチャーによる「並び替え」＆「画像切り替え」の統合ロジック
-  // ==========================================================================
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchStartTime = 0;
-
-  document.addEventListener('touchstart', (e) => {
-    const touch = e.touches[0];
-    touchStartX = touch.clientX;
-    touchStartY = touch.clientY;
-    touchStartTime = Date.now();
-  }, { passive: true });
-
-  document.addEventListener('touchend', (e) => {
-    if (e.changedTouches.length === 0) return;
-    const touch = e.changedTouches[0];
-    const diffX = touch.clientX - touchStartX;
-    const diffY = touch.clientY - touchStartY;
-    const duration = Date.now() - touchStartTime;
-
-    // 高速なフリック操作 (時間300ms以下、かつ横方向移動50px以上、縦ブレが少なめ) を検知
-    if (duration < 350 && Math.abs(diffX) > 45 && Math.abs(diffY) < 45) {
-      // 1. 【ライトボックス展開時】 左右スワイプで前後の画像へサクサク切り替え
-      const lightbox = document.getElementById('lightbox-modal');
-      if (lightbox && lightbox.classList.contains('active')) {
-        if (diffX < 0) {
-          // 左スワイプ（指を左へ滑らせる ➔ 次の写真へ進む）
-          triggerLightboxNext();
-        } else {
-          // 右スワイプ（指を右へ滑らせる ➔ 前の写真へ戻る）
-          triggerLightboxPrev();
-        }
-        return;
-      }
-
-      // 2. 【サムネイル状態】 左右スワイプで画像の「並び順」を直感的に入れ替え！
-      const thumb = e.target.closest('.preview-item, .draggable-thumb');
-      if (thumb) {
-        // 指の滑った方向（スワイプ方向）に合わせて画像を移動させる
-        // 右にスワイプ（diffX > 0）した場合はインデックスを増やし（右（次）へ動かす）、左なら減らす（左（前）へ動かす）
-        const direction = diffX > 0 ? 1 : -1;
-        
-        // 2-a. 単体登録画面（エディタ）のサムネイルの場合
-        if (thumb.classList.contains('preview-item')) {
-          const imgEl = thumb.querySelector('img');
-          const idx = imgEl ? Number(imgEl.dataset.idx) : null;
-          if (idx !== null && !isNaN(idx)) {
-            const targetIdx = idx + direction;
-            if (targetIdx >= 0 && targetIdx < uploadedImages.length) {
-              const temp = uploadedImages[idx];
-              uploadedImages[idx] = uploadedImages[targetIdx];
-              uploadedImages[targetIdx] = temp;
-              // メイン画像の選択位置も連動
-              if (activeThumbnailIndex === idx) activeThumbnailIndex = targetIdx;
-              else if (activeThumbnailIndex === targetIdx) activeThumbnailIndex = idx;
-              
-              renderImagePreviewList();
-            }
-          }
-        }
-        // 2-b. 一括インポート画面のグループ内サムネイルの場合
-        else if (thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group') {
-          const gIdx = Number(thumb.dataset.gidx);
-          const iIdx = Number(thumb.dataset.iidx);
-          const group = batchGroups[gIdx];
-          if (group) {
-            const targetIIdx = iIdx + direction;
-            if (targetIIdx >= 0 && targetIIdx < group.length) {
-              const temp = group[iIdx];
-              group[iIdx] = group[targetIIdx];
-              group[targetIIdx] = temp;
-              
-              renderBatchGroupsUI();
-            }
-          }
-        }
-      }
-    }
-  }, { passive: true });
-\n  navigateTo('logList');
+        navigateTo('logList');
       }
       return;
     }
@@ -1813,10 +1651,7 @@ function initApp() {
     }
   });
 
-  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
-  overlay?.addEventListener('click', closeSidebar);
 
-  
   // ==========================================================================
   // 📱 スマホ専用：スワイプジェスチャーによる「並び替え」＆「画像切り替え」の統合ロジック
   // ==========================================================================
@@ -1838,8 +1673,8 @@ function initApp() {
     const diffY = touch.clientY - touchStartY;
     const duration = Date.now() - touchStartTime;
 
-    // 高速なフリック操作 (時間300ms以下、かつ横方向移動50px以上、縦ブレが少なめ) を検知
-    if (duration < 350 && Math.abs(diffX) > 45 && Math.abs(diffY) < 45) {
+    // 高速なフリック操作 (時間350ms以下、かつ横方向移動40px以上、縦ブレが少なめ) を検知
+    if (duration < 350 && Math.abs(diffX) > 40 && Math.abs(diffY) < 40) {
       // 1. 【ライトボックス展開時】 左右スワイプで前後の画像へサクサク切り替え
       const lightbox = document.getElementById('lightbox-modal');
       if (lightbox && lightbox.classList.contains('active')) {
@@ -1857,33 +1692,35 @@ function initApp() {
       const thumb = e.target.closest('.preview-item, .draggable-thumb');
       if (thumb) {
         // 指の滑った方向（スワイプ方向）に合わせて画像を移動させる
-        // 右にスワイプ（diffX > 0）した場合はインデックスを増やし（右（次）へ動かす）、左なら減らす（左（前）へ動かす）
+        // 右にスワイプ（diffX > 0）した場合は右（次）へ、左にスワイプなら左（前）へ
         const direction = diffX > 0 ? 1 : -1;
         
         // 2-a. 単体登録画面（エディタ）のサムネイルの場合
         if (thumb.classList.contains('preview-item')) {
           const imgEl = thumb.querySelector('img');
-          const idx = imgEl ? Number(imgEl.dataset.idx) : null;
-          if (idx !== null && !isNaN(idx)) {
-            const targetIdx = idx + direction;
-            if (targetIdx >= 0 && targetIdx < uploadedImages.length) {
-              const temp = uploadedImages[idx];
-              uploadedImages[idx] = uploadedImages[targetIdx];
-              uploadedImages[targetIdx] = temp;
-              // メイン画像の選択位置も連動
-              if (activeThumbnailIndex === idx) activeThumbnailIndex = targetIdx;
-              else if (activeThumbnailIndex === targetIdx) activeThumbnailIndex = idx;
-              
-              renderImagePreviewList();
+          if (imgEl && imgEl.dataset.idx !== undefined) {
+            const idx = Number(imgEl.dataset.idx);
+            if (!isNaN(idx)) {
+              const targetIdx = idx + direction;
+              if (targetIdx >= 0 && targetIdx < uploadedImages.length) {
+                const temp = uploadedImages[idx];
+                uploadedImages[idx] = uploadedImages[targetIdx];
+                uploadedImages[targetIdx] = temp;
+                // メイン画像の選択位置も連動
+                if (activeThumbnailIndex === idx) activeThumbnailIndex = targetIdx;
+                else if (activeThumbnailIndex === targetIdx) activeThumbnailIndex = idx;
+                
+                renderImagePreviewList();
+              }
             }
           }
         }
-        // 2-b. 一括インポート画面のグループ内サムネイルの場合
+        // 2-b. 一括インポートグループのサムネイルの場合
         else if (thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group') {
           const gIdx = Number(thumb.dataset.gidx);
           const iIdx = Number(thumb.dataset.iidx);
-          const group = batchGroups[gIdx];
-          if (group) {
+          if (!isNaN(gIdx) && !isNaN(iIdx) && batchGroups[gIdx]) {
+            const group = batchGroups[gIdx];
             const targetIIdx = iIdx + direction;
             if (targetIIdx >= 0 && targetIIdx < group.length) {
               const temp = group[iIdx];
@@ -1896,8 +1733,12 @@ function initApp() {
         }
       }
     }
-  }, { passive: true });
-\n  navigateTo('logList');
+  });
+
+  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
+  overlay?.addEventListener('click', closeSidebar);
+
+  navigateTo('logList');
 }
 
 if (document.readyState === 'loading') {
