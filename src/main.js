@@ -51,6 +51,7 @@ function ensureSpinnerStyles() {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      cursor: pointer;
     }
     .preview-actions button {
       padding: 4px 8px !important;
@@ -253,7 +254,7 @@ function renderBatchGroupsUI() {
         ${ungroupedImages.map((item, idx) => `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
           style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
-            <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
+            <img src="${item.previewUrl}" data-action="enlarge-image" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
             style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
           </div>
@@ -286,7 +287,7 @@ function renderBatchGroupsUI() {
     const thumbsHTML = group.map((item, iIdx) => `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
       style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
-        <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
+        <img src="${item.previewUrl}" data-action="enlarge-image" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
         style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
@@ -583,7 +584,7 @@ function renderImagePreviewList() {
 
   const itemsHTML = uploadedImages.map((img, idx) => `
     <div class="preview-item ${idx === activeThumbnailIndex ? 'is-thumb' : ''}">
-      <img src="${img.previewUrl}" alt="Preview" />
+      <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" />
       <div class="preview-actions">
         <button type="button" class="btn-thumb-set" data-idx="${idx}">${idx === activeThumbnailIndex ? '★メイン' : '☆選択'}</button>
         <button type="button" class="btn-img-move" data-idx="${idx}" data-dir="-1" ${idx === 0 ? 'disabled' : ''}>◄</button>
