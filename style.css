@@ -328,16 +328,22 @@ a:hover {
   font-weight: bold;
   cursor: pointer;
   transition: background-color 0.2s;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 
 .btn-primary:hover {
   background-color: var(--accent-hover);
 }
 
-#btn-save-api-key {
-  white-space: nowrap;
-  flex-shrink: 0;
-  min-width: max-content;
+.btn-secondary,
+.settings-card button,
+.input-group button,
+#btn-save-api-key,
+#btn-fetch-models,
+.btn-fetch-models {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 
 .settings-container {
@@ -370,11 +376,23 @@ a:hover {
   font-size: 0.85rem;
   color: var(--text-sub);
   margin-bottom: 16px;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.card-title-bulk + .card-desc,
+.bulk-analyze-desc,
+.card-desc.bulk-desc {
+  display: block !important;
+  margin-top: 6px;
+  clear: both;
 }
 
 .input-group {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* ==========================================================================
@@ -621,8 +639,8 @@ a:hover {
   flex: 1;
 }
 
-/* ★ 強力修正: 詳細モーダル内画像エリアの高さ潰れ防止 */
-.modal-body > div:first-child,
+/* 修正: JSで生成する画像専用のクラスにのみ高さ固定を適用し、他フォームの崩れを防止 */
+.modal-body .image-preview-wrapper,
 .modal-body [class*="carousel"],
 .modal-body [class*="detail-image"],
 .modal-body [class*="detail-main"],
@@ -641,8 +659,8 @@ a:hover {
   border: 1px solid var(--border-color) !important;
 }
 
-/* 画像自体のリサイズ設定 */
-.modal-body > div:first-child img,
+/* 修正: 画像自体のリサイズ設定 */
+.modal-body .image-preview-wrapper img,
 .modal-body [class*="carousel"] img,
 .modal-body [class*="detail-image"] img,
 .modal-body [class*="detail-main"] img,
@@ -756,7 +774,7 @@ a:hover {
   line-height: 1.3;
 }
 
-/* サムネイル一覧コンテナ（編集画面用） */
+/* サムネイル一覧コンテナ */
 #image-preview-list,
 .image-preview-grid {
   display: flex !important;
@@ -886,7 +904,7 @@ a:hover {
 }
 
 /* ==========================================================================
-   7. 画像拡大（ライトボックス）
+   7. 画像拡大（ライトボックス）& インタラクティブUI
    ========================================================================== */
 .lightbox-overlay {
   display: none;
@@ -1003,22 +1021,30 @@ a:hover {
   border-color: rgba(212, 163, 89, 0.4);
 }
 
-/* モーダルフッター */
+/* モーダルフッター（左右グループ配置 & AIモデル選択） */
 .modal-footer,
 .editor-actions {
   padding: 12px 20px;
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
   background-color: var(--panel-bg);
   flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.footer-left,
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 #btn-analyze {
-  margin-right: auto !important;
+  margin-right: 0 !important;
 }
 
 #btn-analyze.btn-ai-action {
@@ -1036,11 +1062,29 @@ a:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap !important;
 }
 
 #btn-analyze.btn-ai-action:hover {
   background-color: var(--accent-color) !important;
   color: #111 !important;
+}
+
+.model-select {
+  width: auto;
+  min-width: 130px;
+  height: 36px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.model-select:focus {
+  border-color: var(--accent-color);
 }
 
 .btn-sub {
@@ -1080,13 +1124,28 @@ a:hover {
   color: #000;
 }
 
+/* 修正: スマホなど狭い画面でモーダルフッターが綺麗に収まるようにメディアクエリを追加 */
+@media (max-width: 600px) {
+  .modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .footer-left, .footer-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .model-select {
+    flex: 1;
+  }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
 }
 
 /* ==========================================================================
-   8. PC表示用メディアクエリ (1024px以上)
+   8. PC表示用メディアクエリ & カテゴリ表示 (1024px以上)
    ========================================================================== */
 @media (min-width: 1024px) {
   .app-container {
@@ -1134,6 +1193,15 @@ a:hover {
     margin-bottom: 12px;
     color: var(--accent-color);
     font-size: 0.9rem;
+  }
+
+  .right-panel .widget-card,
+  .right-panel .plugin-btn,
+  .right-panel .card-desc,
+  .right-panel p {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    line-height: 1.4;
   }
 
   .ai-chat-body {

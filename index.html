@@ -10,7 +10,6 @@
   <div id="drawer-overlay" class="drawer-overlay"></div>
 
   <div class="app-container">
-    <!-- 1. 左サイドメニュー -->
     <aside id="sidebar" class="sidebar">
       <div class="brand">
         <div class="brand-icon">🌙</div>
@@ -43,7 +42,6 @@
       </div>
     </aside>
 
-    <!-- 2. メインコンテンツエリア -->
     <div class="main-wrapper">
       <header class="mobile-header">
         <button id="btn-menu-toggle" class="icon-btn">☰</button>
@@ -55,11 +53,9 @@
       </header>
 
       <main id="app" class="app-main">
-        <!-- JSで画面切り替え -->
-      </main>
+        </main>
     </div>
 
-    <!-- 3. 右ウィジェットパネル -->
     <aside class="right-panel">
       <div class="widget-card ai-widget">
         <div class="widget-header">
@@ -93,35 +89,6 @@
   </div>
 
   <button id="fab-add" class="fab-btn" data-view="logEditor" title="酒ログを追加">＋</button>
-
-  <!-- 設定用モーダル（APIキー・モデル選択） -->
-  <div id="settings-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-card" style="max-width: 500px;">
-      <div class="modal-header">
-        <h3>⚙️ Gemini API 設定</h3>
-        <button id="btn-close-settings" class="modal-close-btn">✕</button>
-      </div>
-      <div class="modal-body" style="grid-template-columns: 1fr; gap: 16px;">
-        <div class="form-group">
-          <label for="input-api-key">Gemini API Key</label>
-          <div class="input-group">
-            <input type="password" id="input-api-key" class="input-dark" placeholder="AIzaSy..." />
-            <button type="button" id="btn-save-api-key" class="btn-primary">保存</button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="select-gemini-model">使用するAIモデル</label>
-          <div class="input-group">
-            <select id="select-gemini-model" class="input-dark">
-              <option value="">APIキーを入力してください</option>
-            </select>
-            <button type="button" id="btn-reload-models" class="btn-secondary">再取得</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <script type="module" src="src/main.js"></script>
 </body>
