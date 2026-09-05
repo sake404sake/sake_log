@@ -141,6 +141,29 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
   return new Blob([byteArray], { type: mimeType });
 }
 
+// スマホ対応：ファイル選択インプットを確実に生成・取得する関数
+function ensureFileInput() {
+  let fileInput = document.getElementById('file-input');
+  if (!fileInput) {
+    fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.id = 'file-input';
+    fileInput.multiple = true;
+    fileInput.accept = 'image/*';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    fileInput.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleImageFiles(files);
+      }
+      fileInput.value = ''; 
+    });
+  }
+  return fileInput;
+}
+
 function renderBatchGroupsUI() {
   const previewSection = document.getElementById('batch-preview-section');
   if (!previewSection) return;
@@ -226,7 +249,7 @@ function renderBatchGroupsUI() {
           </div>
         </div>
 
-        <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真を別の位置やグループ、未所属プールにドラッグ＆ドロップして並び替え・整理できます。（先頭にドロップするとメイン画像になります）</div>
+        <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真をドラッグ＆ドロップして並び替え・整理できます。（先頭にドロップするとメイン画像になります）</div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; min-height: 50px;">
           ${thumbsHTML}
         </div>
@@ -568,7 +591,7 @@ function updateFieldRevertUI() {
   });
 }
 
-// アップロード時は自動解析せず、プレビュー追加と日付抽出のみ行うよう修正
+// プレビュー追加と日付抽出のみ行う（自動解析はボタン押下時のみ）
 async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
 
@@ -648,31 +671,6 @@ async function processFilesForBatch(files, append = true) {
 
 function triggerBatchFileInput() {
   let fileInput = document.getElementById('batch-file-input');
-  if (fileInput) {
-    fileInput.remove();
-  }
-
-  fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.id = 'batch-file-input';
-  fileInput.multiple = true;
-  fileInput.accept = 'image/*';
-  fileInput.style.display = 'none';
-  
-  fileInput.addEventListener('change', async (e) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      await processFilesForBatch(files, true);
-    }
-    fileInput.value = ''; 
-  });
-  
-  document.body.appendChild(fileInput);
-  fileInput.click();
-}
-
-function ensureBatchFileInput() {
-  let fileInput = document.getElementById('batch-file-input');
   if (!fileInput) {
     fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -680,8 +678,7 @@ function ensureBatchFileInput() {
     fileInput.multiple = true;
     fileInput.accept = 'image/*';
     fileInput.style.display = 'none';
-    document.body.appendChild(fileInput);
-
+    
     fileInput.addEventListener('change', async (e) => {
       const files = e.target.files;
       if (files && files.length > 0) {
@@ -689,7 +686,13 @@ function ensureBatchFileInput() {
       }
       fileInput.value = ''; 
     });
+    document.body.appendChild(fileInput);
   }
+  fileInput.click();
+}
+
+function ensureBatchFileInput() {
+  ensureFileInput();
 }
 
 async function runAIAnalysis(targetImg) {
@@ -738,6 +741,7 @@ async function runAIAnalysis(targetImg) {
 }
 
 function initApp() {
+  ensureFileInput();
   ensureBatchFileInput();
 
   document.addEventListener('dragover', (e) => {
@@ -1242,7 +1246,9 @@ function initApp() {
     }
 
     if (e.target.closest('#upload-zone') || e.target.closest('#btn-trigger-upload')) {
-      document.getElementById('file-input')?.click();
+      e.preventDefault();
+      const fileInput = ensureFileInput();
+      fileInput.click();
       return;
     }
 
