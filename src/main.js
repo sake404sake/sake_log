@@ -1138,14 +1138,12 @@ async function processFilesForBatch(files, append = true) {
 
       if (failedFiles.length > 0) {
         alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。HEIC形式や破損している可能性があります：
-・` + failedFiles.join('
-・'));
+・` + failedFiles.join('\\n・'));
       }
     } else {
       if (failedFiles.length > 0) {
         alert(`画像の読み込みに失敗しました。対応していない形式（HEIC等）の可能性があります：
-・` + failedFiles.join('
-・'));
+・` + failedFiles.join('\\n・'));
       } else {
         alert('有効な画像ファイルが見つかりませんでした。');
       }
