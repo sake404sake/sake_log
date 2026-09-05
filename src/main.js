@@ -1,6 +1,6 @@
 import { 
   analyzeLabelImage, hasApiKey, saveApiKey, 
-  fetchAvailableModels, getSavedModel, setSavedModel, autoSelectBestModel 
+  getSavedModel, setSavedModel, populateModelDropdown 
 } from './services/gemini.js';
 import { renderSettingsView } from './views/settings.js';
 import { renderLogEditorModal } from './views/logEditor.js';
@@ -8,6 +8,7 @@ import { renderLogDetailModal } from './views/logDetail.js';
 import { renderLogListView } from './views/logList.js';
 import { saveLog, deleteLog, getLogById } from './store/db.js';
 import { extractPhotoDate, compressImage } from './utils/image.js';
+import { renderBatchImportView } from './views/batchImport.js';
 
 // テーマ適用と保存
 export function setTheme(themeName) {
@@ -28,26 +29,11 @@ function initTheme() {
 initTheme();
 
 // 設定画面のモデルドロップダウンを非同期更新
-export async function updateModelDropdown() {
+export async function updateModelDropdown(forceRefresh = false) {
   const selectEl = document.getElementById('select-gemini-model');
-  if (!selectEl) return;
-
-  selectEl.innerHTML = '<option value="">モデルを取得中...</option>';
-  const models = await fetchAvailableModels();
-
-  if (models.length === 0) {
-    selectEl.innerHTML = '<option value="">有効なAPIキーを設定してください</option>';
-    return;
+  if (selectEl) {
+    await populateModelDropdown(selectEl, forceRefresh);
   }
-
-  const currentSaved = getSavedModel() || autoSelectBestModel(models);
-
-  selectEl.innerHTML = models.map(m => {
-    const isSelected = (m.name === currentSaved) ? 'selected' : '';
-    return `<option value="${m.name}" ${isSelected}>${m.displayName || m.name}</option>`;
-  }).join('');
-
-  setSavedModel(selectEl.value);
 }
 
 // 画面ビューの対応表
@@ -56,6 +42,7 @@ const views = {
   loglist: renderLogListView,
   'log-list': renderLogListView,
   logs: renderLogListView,
+  batchimport: renderBatchImportView,
   settings: renderSettingsView,
   setting: renderSettingsView
 };
@@ -119,7 +106,6 @@ function blobToBase64(blob) {
   });
 }
 
-// 動的ライトボックス表示用ヘルパー関数
 function openLightbox(imageSrc) {
   let lightbox = document.getElementById('lightbox-modal');
   if (!lightbox) {
@@ -146,7 +132,6 @@ function closeLightbox() {
   }
 }
 
-// 詳細カードを表示するモーダル
 async function openDetailModal(logId) {
   closeDetailModal();
   const detailHTML = await renderLogDetailModal(logId);
@@ -160,12 +145,10 @@ function closeDetailModal() {
   if (modal) modal.remove();
 }
 
-// 編集モーダルを開く
 async function openEditorModal(logId = null) {
   closeEditorModal();
   closeDetailModal();
   
-  // モーダルオープン時に配列・状態を確実に初期化
   uploadedImages = [];
   activeThumbnailIndex = 0;
   backupFormData = {};
@@ -173,6 +156,12 @@ async function openEditorModal(logId = null) {
 
   const modalHTML = await renderLogEditorModal();
   document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  // モーダルオープン時にモデルリストを確実にロード
+  const modalModelSelect = document.getElementById('modal-model-select');
+  if (modalModelSelect) {
+    await populateModelDropdown(modalModelSelect);
+  }
 
   if (logId) {
     const log = await getLogById(logId);
@@ -411,16 +400,73 @@ function initApp() {
           msg.style.display = 'block';
           setTimeout(() => { msg.style.display = 'none'; }, 3000);
         }
-        updateModelDropdown();
+        updateModelDropdown(true);
       }
       return;
     }
 
-    // モデル再取得
+    // モデル再取得（設定画面）
     if (e.target && e.target.id === 'btn-reload-models') {
-      updateModelDropdown();
+      updateModelDropdown(true);
       return;
     }
+
+    // モデル再取得（モーダル内）
+    const reloadModalModelsBtn = e.target.closest('#btn-reload-modal-models');
+    if (reloadModalModelsBtn) {
+      if (!hasApiKey()) {
+        alert('APIキーが設定されていません。設定画面から登録してください。');
+        return;
+      }
+      reloadModalModelsBtn.textContent = '⏳';
+      reloadModalModelsBtn.disabled = true;
+      const modalSelect = document.getElementById('modal-model-select');
+      if (modalSelect) {
+        await populateModelDropdown(modalSelect, true);
+      }
+      reloadModalModelsBtn.textContent = '✅';
+      setTimeout(() => {
+        reloadModalModelsBtn.textContent = '↺';
+        reloadModalModelsBtn.disabled = false;
+      }, 1500);
+      return;
+    }
+
+    // --- ドラッグ＆ドロップのイベント処理を追加 ---
+    document.addEventListener('dragover', (e) => {
+    e.preventDefault(); // ブラウザがファイルを勝手に開くのを防ぐ
+    });
+
+    document.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    
+    // バッチインポート画面のアップロードゾーンにドロップされたか確認
+    const uploadZone = e.target.closest('#batch-upload-zone');
+    if (!uploadZone) return;
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const items = [];
+    for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const compressed = await compressImage(file);
+        const date = file.lastModified ? new Date(file.lastModified) : null;
+        items.push({
+        file,
+        date,
+        blob: compressed.blob,
+        base64: compressed.base64,
+        mimeType: compressed.mimeType,
+        previewUrl: URL.createObjectURL(compressed.blob)
+        });
+    }
+
+    if (items.length > 0) {
+        batchGroups = groupImagesByTime(items, 3 * 60 * 1000, 5);
+        renderBatchGroupsUI();
+    }
+    });
 
     // 行タップで閲覧専用詳細カードを開く
     const rowItem = e.target.closest('[data-action="open-detail"]');
@@ -620,8 +666,13 @@ function initApp() {
     if (e.target && e.target.id === 'theme-select') {
       setTheme(e.target.value);
     }
-    if (e.target && e.target.id === 'select-gemini-model') {
+    if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
       setSavedModel(e.target.value);
+      // セレクトボックス間での値を相互同期
+      const globalSelect = document.getElementById('select-gemini-model');
+      const modalSelect = document.getElementById('modal-model-select');
+      if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
+      if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
     }
     if (e.target && e.target.id === 'file-input') {
       handleImageFiles(e.target.files);
@@ -635,6 +686,63 @@ function initApp() {
   overlay?.addEventListener('click', closeSidebar);
 
   navigateTo('logList');
+
+    // --- 一括インポート用の状態 ---
+    let batchGroups = []; // [ [ {file, date, compressed, previewUrl}, ... ], ... ]
+
+    // グループ描画関数
+    function renderBatchGroupsUI() {
+    const container = document.getElementById('batch-groups-container');
+    const countTitle = document.getElementById('batch-group-count-title');
+    const previewSection = document.getElementById('batch-preview-section');
+    if (!container) return;
+
+    if (batchGroups.length === 0) {
+        if (previewSection) previewSection.style.display = 'none';
+        return;
+    }
+
+    if (previewSection) previewSection.style.display = 'block';
+    if (countTitle) countTitle.textContent = `✨ 検出されたお酒グループ (${batchGroups.length} 本)` ;
+
+    container.innerHTML = batchGroups.map((group, gIdx) => {
+        const mainImg = group[0];
+        const dateStr = mainImg && mainImg.date ? mainImg.date.toLocaleString() : '日時不明';
+
+        const thumbsHTML = group.map((item, iIdx) => `
+        <div class="batch-thumb-item" style="position:relative; width:70px; height:70px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
+            <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
+            <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
+            style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:10px; cursor:pointer;">✕</button>
+        </div>
+        `).join('');
+
+        return `
+        <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;" data-gidx="${gIdx}">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+            <div>
+                <span style="font-weight: bold; color: var(--accent-color);">🍶 お酒グループ #${gIdx + 1}</span>
+                <span style="font-size: 0.8rem; color: var(--text-sub); margin-left: 8px;">撮影目安: ${dateStr} (${group.length}枚)</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+                <button type="button" class="btn-secondary btn-batch-analyze" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;">🤖 このグループをAI解析</button>
+                <button type="button" class="btn-secondary btn-batch-split" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;" title="中央でグループを分割">✂️ 分割</button>
+            </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+            ${thumbsHTML}
+            </div>
+
+            <!-- 簡易入力フォーム（グループごとにAI解析結果や手動入力を反映） -->
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <input type="text" class="input-dark batch-name-input" data-gidx="${gIdx}" placeholder="銘柄名 (例: 寫樂)" style="font-size: 0.85rem;" />
+            <input type="text" class="input-dark batch-brewery-input" data-gidx="${gIdx}" placeholder="酒蔵・メーカー" style="font-size: 0.85rem;" />
+            </div>
+        </div>
+        `;
+    }).join('');
+    }
 }
 
 if (document.readyState === 'loading') {
