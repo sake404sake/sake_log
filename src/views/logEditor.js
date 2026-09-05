@@ -1,4 +1,5 @@
 import { getAllTags } from '../store/db.js';
+import { getApiKey, getSavedModel } from '../services/gemini.js';
 
 export async function renderLogEditorModal() {
   const today = new Date().toISOString().split('T')[0];
@@ -7,6 +8,18 @@ export async function renderLogEditorModal() {
   const tagChipsHTML = existingTags.map(tag => `
     <button type="button" class="tag-chip-btn" data-tag="${tag}">+ ${tag}</button>
   `).join('');
+
+  const apiKey = getApiKey();
+  const savedModel = getSavedModel();
+
+  let initialOptionHTML = '<option value="">APIキーを入力してください</option>';
+  if (apiKey) {
+    if (savedModel) {
+      initialOptionHTML = `<option value="${savedModel}" selected>${savedModel}</option>`;
+    } else {
+      initialOptionHTML = `<option value="">モデルを読み込み中...</option>`;
+    }
+  }
 
   return `
   <div id="modal-overlay" class="modal-overlay">
@@ -21,7 +34,6 @@ export async function renderLogEditorModal() {
         <div class="modal-image-col">
           <input type="file" id="file-input" accept="image/*" multiple style="display: none;" />
           
-          <!-- 初期状態（画像0枚時）のドラッグ＆ドロップエリア -->
           <div class="image-upload-zone" id="upload-zone">
             <div class="upload-placeholder" id="upload-placeholder">
               <span class="upload-icon">📸</span>
@@ -33,7 +45,6 @@ export async function renderLogEditorModal() {
             </div>
           </div>
 
-          <!-- 選択中画像リスト（2枚目以降の「＋追加」ボタンもここに自動生成） -->
           <div id="image-preview-list" class="image-preview-grid"></div>
         </div>
 
@@ -128,14 +139,30 @@ export async function renderLogEditorModal() {
       </div>
 
       <!-- フッター -->
-      <div class="modal-footer">
-        <div class="modal-footer-left">
-          <button type="button" id="btn-analyze" class="btn-ai-action" style="display: none;">🤖 AI解析実行</button>
+      <div class="modal-footer" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; justify-content: space-between; padding-top: 10px;">
+        
+        <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 260px;">
+          
+          <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
+            <select id="modal-model-select" class="input-dark model-select" title="使用するAIモデルを選択" 
+              style="flex: 1; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
+              ${initialOptionHTML}
+            </select>
+            
+            <button type="button" id="btn-reload-modal-models" class="btn-secondary" style="padding: 4px 12px; font-size: 1.2rem; line-height: 1; flex-shrink: 0;" title="モデルリストを更新">
+              ↺
+            </button>
+          </div>
+
+          <button type="button" id="btn-analyze" class="btn-ai-action" style="width: fit-content;">🤖 AI解析実行</button>
+          
         </div>
-        <div class="modal-footer-right">
+        
+        <div style="display: flex; gap: 10px; margin-left: auto;">
           <button type="button" id="btn-cancel-modal" class="btn-sub">キャンセル</button>
           <button type="button" id="btn-save-log" class="btn-primary">保存</button>
         </div>
+        
       </div>
     </div>
   </div>
