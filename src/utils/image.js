@@ -56,13 +56,11 @@ export function compressImage(file, maxWidth = 1600, quality = 0.75) {
 }
 
 /**
- * 画像配列を撮影時間ベースで2段階スマート・グルーピングする
- * 
- * @param {Array} imageItems - { file: File, date: Date, ... } の形式を持つオブジェクトの配列
- * @param {number} maxTimeGapMs - 第1段階の分割閾値（デフォルト: 3分 = 3 * 60 * 1000 ミリ秒）
- * @param {number} maxGroupSize - 1グループの最大許容枚数（デフォルト: 5枚）
- * @returns {Array<Array>} グルーピングされた2次元配列
- */
+*  画像配列を撮影時間ベースで2段階スマート・グルーピングする
+*  @param {Array} imageItems - { file: File, date: Date, ... } の形式を持つオブジェクトの配列
+*  @param {number} maxTimeGapMs - 第1段階の分割閾値（デフォルト: 3分 = 3 * 60 * 1000 ミリ秒）
+*  @param {number} maxGroupSize - 1グループの最大許容枚数（デフォルト: 5枚）
+*  @returns {Array<Array>} グルーピングされた2次元配列 */
 export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxGroupSize = 5) {
   if (!imageItems || imageItems.length === 0) return [];
 
@@ -88,7 +86,6 @@ export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxG
       const prevItem = currentGroup[currentGroup.length - 1];
       const timeA = prevItem.date ? prevItem.date.getTime() : 0;
       const timeB = item.date ? item.date.getTime() : 0;
-      
       const gap = Math.abs(timeB - timeA);
 
       // EXIFが存在し、かつ設定時間（3分）を超える空白があればグループを区切る
@@ -100,6 +97,7 @@ export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxG
       }
     }
   }
+
   if (currentGroup.length > 0) {
     initialGroups.push(currentGroup);
   }
