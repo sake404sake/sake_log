@@ -10,7 +10,7 @@ import { saveLog, deleteLog, getLogById } from './store/db.js';
 import { extractPhotoDate, compressImage, groupImagesByTime } from './utils/image.js';
 import { renderBatchImportView } from './views/batchImport.js';
 
-// --- スピナー用CSSの動的注入 ---
+// --- スピナー用CSSおよびプレビュー拡大用CSSの動的注入 ---
 function ensureSpinnerStyles() {
   if (document.getElementById('sella-spinner-style')) return;
   const style = document.createElement('style');
@@ -41,6 +41,20 @@ function ensureSpinnerStyles() {
     .batch-group-card.drag-over {
       border-color: var(--accent-color) !important;
       background: var(--card-hover-bg, rgba(255,255,255,0.03));
+    }
+    /* 登録時の画像プレビュー枠をスマホでも押しやすいように倍のサイズに拡大 */
+    .preview-item, .add-more-item {
+      width: 120px !important;
+      height: 120px !important;
+    }
+    .preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .preview-actions button {
+      padding: 4px 8px !important;
+      font-size: 11px !important;
     }
   `;
   document.head.appendChild(style);
@@ -141,17 +155,17 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
   return new Blob([byteArray], { type: mimeType });
 }
 
-// どんな環境でも確実に動作するファイル選択インプット生成関数（修正済み）
+// どんな環境でも確実に動作するファイル選択インプット生成関数
 function ensureFileInput() {
   let fileInput = document.getElementById('file-input');
   if (fileInput) {
-    fileInput.remove(); // 既存の要素があれば一旦削除して競合を防ぐ
+    fileInput.remove(); 
   }
   
   fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.id = 'file-input';
-  fileInput.multiple = true; // 複数選択を確実に有効化
+  fileInput.multiple = true; 
   fileInput.accept = 'image/*';
   fileInput.style.position = 'fixed';
   fileInput.style.top = '0';
@@ -175,13 +189,13 @@ function ensureFileInput() {
 function ensureBatchFileInput() {
   let batchInput = document.getElementById('batch-file-input');
   if (batchInput) {
-    batchInput.remove(); // 既存の要素があれば一旦削除して競合を防ぐ
+    batchInput.remove(); 
   }
   
   batchInput = document.createElement('input');
   batchInput.type = 'file';
   batchInput.id = 'batch-file-input';
-  batchInput.multiple = true; // 複数選択を確実に有効化
+  batchInput.multiple = true; 
   batchInput.accept = 'image/*';
   batchInput.style.position = 'fixed';
   batchInput.style.top = '0';
@@ -238,10 +252,10 @@ function renderBatchGroupsUI() {
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;">
         ${ungroupedImages.map((item, idx) => `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
-          style="position:relative; width:70px; height:70px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
+          style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
             <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-            style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:10px; cursor:pointer;">✕</button>
+            style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
           </div>
         `).join('')}
       </div>
@@ -271,11 +285,11 @@ function renderBatchGroupsUI() {
 
     const thumbsHTML = group.map((item, iIdx) => `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
-      style="position:relative; width:70px; height:70px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
+      style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
         <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-        style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:10px; cursor:pointer;">✕</button>
+        style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
       </div>
     `).join('');
 
