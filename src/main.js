@@ -141,7 +141,7 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
   return new Blob([byteArray], { type: mimeType });
 }
 
-// スマホ対応：ファイル選択インプットを確実に生成・取得する関数
+// どんな環境でも確実に動作するファイル選択インプット生成関数
 function ensureFileInput() {
   let fileInput = document.getElementById('file-input');
   if (!fileInput) {
@@ -150,7 +150,12 @@ function ensureFileInput() {
     fileInput.id = 'file-input';
     fileInput.multiple = true;
     fileInput.accept = 'image/*';
-    fileInput.style.display = 'none';
+    fileInput.style.position = 'fixed';
+    fileInput.style.top = '0';
+    fileInput.style.left = '0';
+    fileInput.style.opacity = '0';
+    fileInput.style.pointerEvents = 'none';
+    fileInput.style.zIndex = '-1';
     document.body.appendChild(fileInput);
 
     fileInput.addEventListener('change', (e) => {
@@ -162,6 +167,40 @@ function ensureFileInput() {
     });
   }
   return fileInput;
+}
+
+function ensureBatchFileInput() {
+  let batchInput = document.getElementById('batch-file-input');
+  if (!batchInput) {
+    batchInput = document.createElement('input');
+    batchInput.type = 'file';
+    batchInput.id = 'batch-file-input';
+    batchInput.multiple = true;
+    batchInput.accept = 'image/*';
+    batchInput.style.position = 'fixed';
+    batchInput.style.top = '0';
+    batchInput.style.left = '0';
+    batchInput.style.opacity = '0';
+    batchInput.style.pointerEvents = 'none';
+    batchInput.style.zIndex = '-1';
+    
+    batchInput.addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        await processFilesForBatch(files, true);
+      }
+      batchInput.value = ''; 
+    });
+    document.body.appendChild(batchInput);
+  }
+  return batchInput;
+}
+
+function triggerBatchFileInput() {
+  const batchInput = ensureBatchFileInput();
+  batchInput.style.pointerEvents = 'auto';
+  batchInput.click();
+  batchInput.style.pointerEvents = 'none';
 }
 
 function renderBatchGroupsUI() {
@@ -270,7 +309,7 @@ function renderBatchGroupsUI() {
         ${batchGroups.length > 0 ? `<button type="button" id="btn-save-all-batches" class="btn-primary" style="background: #10b981; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">🚀 すべてまとめて登録する</button>` : ''}
       </div>
     </div>
-    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 16px; padding-bottom: ${ungroupedImages.length > 0 ? '120px' : '20px'};">
+    <div id="batch-groups-container" style="display: flex; flexDirection: column; gap: 16px; padding-bottom: ${ungroupedImages.length > 0 ? '120px' : '20px'};">
       ${groupsHTML}
     </div>
     ${ungroupedHTML}
@@ -591,7 +630,6 @@ function updateFieldRevertUI() {
   });
 }
 
-// プレビュー追加と日付抽出のみ行う（自動解析はボタン押下時のみ）
 async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
 
@@ -667,32 +705,6 @@ async function processFilesForBatch(files, append = true) {
   } finally {
     renderBatchGroupsUI();
   }
-}
-
-function triggerBatchFileInput() {
-  let fileInput = document.getElementById('batch-file-input');
-  if (!fileInput) {
-    fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.id = 'batch-file-input';
-    fileInput.multiple = true;
-    fileInput.accept = 'image/*';
-    fileInput.style.display = 'none';
-    
-    fileInput.addEventListener('change', async (e) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        await processFilesForBatch(files, true);
-      }
-      fileInput.value = ''; 
-    });
-    document.body.appendChild(fileInput);
-  }
-  fileInput.click();
-}
-
-function ensureBatchFileInput() {
-  ensureFileInput();
 }
 
 async function runAIAnalysis(targetImg) {
@@ -1245,10 +1257,13 @@ function initApp() {
       return;
     }
 
+    // ★ ここでスマホのファイル選択ダイアログを確実に呼び出す処理
     if (e.target.closest('#upload-zone') || e.target.closest('#btn-trigger-upload')) {
       e.preventDefault();
       const fileInput = ensureFileInput();
+      fileInput.style.pointerEvents = 'auto';
       fileInput.click();
+      fileInput.style.pointerEvents = 'none';
       return;
     }
 
