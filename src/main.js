@@ -129,7 +129,7 @@ let ungroupedImages = [];
 let returnToBatchOnClose = false; 
 let currentBatchGroupIndex = null; 
 let draggedItemInfo = null;       
-let isPoolCollapsed = false; // ★ 追加：プールの折りたたみ状態
+let isPoolCollapsed = false; 
 
 function base64ToBlob(base64, mimeType = 'image/jpeg') {
   const byteCharacters = atob(base64);
@@ -145,20 +145,21 @@ function renderBatchGroupsUI() {
   const previewSection = document.getElementById('batch-preview-section');
   if (!previewSection) return;
 
+  // ぐるぐる（ローディング表示）を確実に解除するためにアップロードゾーンを初期状態に戻す
+  const uploadZone = document.getElementById('batch-upload-zone');
+  if (uploadZone) {
+    uploadZone.innerHTML = `
+      <div style="padding: 30px; text-align: center; border: 2px dashed var(--border-color); border-radius: 12px; cursor: pointer; background: var(--card-bg);">
+        <div style="font-size: 1.8rem; margin-bottom: 6px;">📁</div>
+        <div style="font-weight: bold; color: var(--text-main);">さらに写真を追加する</div>
+      </div>
+    `;
+  }
+
   const hasItems = batchGroups.length > 0 || ungroupedImages.length > 0;
 
   if (!hasItems) {
     previewSection.style.display = 'none';
-    const uploadZone = document.getElementById('batch-upload-zone');
-    if (uploadZone) {
-      uploadZone.innerHTML = `
-        <div style="padding: 40px; text-align: center; border: 2px dashed var(--border-color); border-radius: 12px; cursor: pointer; background: var(--card-bg);">
-          <div style="font-size: 2rem; margin-bottom: 8px;">📁</div>
-          <div style="font-weight: bold; color: var(--text-main);">ここに写真をまとめてドロップ</div>
-          <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 4px;">または、ここをクリックして画像ファイルを選択</div>
-        </div>
-      `;
-    }
     return;
   }
 
@@ -166,7 +167,6 @@ function renderBatchGroupsUI() {
 
   let ungroupedHTML = '';
   if (ungroupedImages.length > 0) {
-    // 畳まれている時はサムネイルを表示しない
     const thumbs = isPoolCollapsed ? '' : `
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;">
         ${ungroupedImages.map((item, idx) => `
@@ -180,12 +180,13 @@ function renderBatchGroupsUI() {
       </div>
     `;
 
+    // ▼ position: fixed にして親の overflow の影響を受けず確実に画面下部に固定
     ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="position: sticky; top: 16px; z-index: 50; background: var(--card-bg); border: 1px dashed var(--accent-color); border-radius: 12px; padding: 16px; margin-bottom: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); backdrop-filter: blur(8px);">
+      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 16px; max-width: 800px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px;">${isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
-            <span style="font-weight: bold; color: var(--text-main);">📂 未所属の画像プール (${ungroupedImages.length}枚) <span style="font-size:0.75rem; color:var(--text-sub); font-weight:normal;">(ここにドラッグして画像を外せます)</span></span>
+            <span style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">📂 未所属の画像プール (${ungroupedImages.length}枚)</span>
           </div>
           <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">✨ これらからグループを作成</button>
         </div>
@@ -213,7 +214,7 @@ function renderBatchGroupsUI() {
     `).join('');
 
     return `
-      <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; transition: border-color 0.2s;" data-gidx="${gIdx}">
+      <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; transition: border-color 0.2s; margin-bottom: 12px;" data-gidx="${gIdx}">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
           <div>
             <span style="font-weight: bold; color: var(--accent-color);">🍶 未保存お酒グループ #${gIdx + 1}</span>
@@ -248,10 +249,10 @@ function renderBatchGroupsUI() {
         ${batchGroups.length > 0 ? `<button type="button" id="btn-save-all-batches" class="btn-primary" style="background: #10b981; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">🚀 すべてまとめて登録する</button>` : ''}
       </div>
     </div>
-    ${ungroupedHTML}
-    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 16px;">
+    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 16px; padding-bottom: ${ungroupedImages.length > 0 ? '120px' : '20px'};">
       ${groupsHTML}
     </div>
+    ${ungroupedHTML}
   `;
 }
 
@@ -650,8 +651,34 @@ async function processFilesForBatch(files, append = true) {
     console.error('Batch Processing Error:', err);
     alert('画像の処理中にエラーが発生しました。');
   } finally {
+    // 処理完了後に必ず renderBatchGroupsUI を呼び出してローディング（ぐるぐる）を解除する
     renderBatchGroupsUI();
   }
+}
+
+function triggerBatchFileInput() {
+  let fileInput = document.getElementById('batch-file-input');
+  if (fileInput) {
+    fileInput.remove();
+  }
+
+  fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.id = 'batch-file-input';
+  fileInput.multiple = true;
+  fileInput.accept = 'image/*';
+  fileInput.style.display = 'none';
+  
+  fileInput.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      await processFilesForBatch(files, true);
+    }
+    fileInput.value = ''; 
+  });
+  
+  document.body.appendChild(fileInput);
+  fileInput.click();
 }
 
 function ensureBatchFileInput() {
@@ -824,7 +851,6 @@ function initApp() {
   });
 
   document.addEventListener('click', async (e) => {
-    // ★ 追加：プールの折りたたみボタン
     if (e.target.id === 'btn-toggle-pool-collapse') {
       isPoolCollapsed = !isPoolCollapsed;
       renderBatchGroupsUI();
@@ -872,8 +898,8 @@ function initApp() {
     }
 
     if (e.target.closest('#batch-upload-zone') || e.target.closest('#btn-add-more-batch')) {
-      const fileInput = document.getElementById('batch-file-input');
-      if (fileInput) fileInput.click();
+      e.preventDefault();
+      triggerBatchFileInput();
       return;
     }
     
