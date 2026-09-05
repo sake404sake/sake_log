@@ -568,11 +568,9 @@ function updateFieldRevertUI() {
   });
 }
 
+// アップロード時は自動解析せず、プレビュー追加と日付抽出のみ行うよう修正
 async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
-
-  const analyzingStatus = document.getElementById('analyzing-status');
-  if (analyzingStatus) analyzingStatus.style.display = 'flex';
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -597,7 +595,6 @@ async function handleImageFiles(files) {
     });
   }
 
-  if (analyzingStatus) analyzingStatus.style.display = 'none';
   renderImagePreviewList();
 }
 
@@ -703,35 +700,40 @@ async function runAIAnalysis(targetImg) {
   const analyzingStatus = document.getElementById('analyzing-status');
   if (analyzingStatus) analyzingStatus.style.display = 'flex';
 
-  const result = await analyzeLabelImage(targetImg.base64, targetImg.mimeType);
-  if (analyzingStatus) analyzingStatus.style.display = 'none';
+  try {
+    const result = await analyzeLabelImage(targetImg.base64, targetImg.mimeType);
+    if (result) {
+      const resolvedName = result.name || result.productName || '';
+      const resolvedProduct = result.productName || '';
+      const resolvedBrewery = result.brewery || '';
 
-  if (result) {
-    const resolvedName = result.name || result.productName || '';
-    const resolvedProduct = result.productName || '';
-    const resolvedBrewery = result.brewery || '';
+      const fieldMapping = {
+        'sake-category': result.category,
+        'sake-name': resolvedName,
+        'sake-product': resolvedProduct,
+        'sake-brewery': resolvedBrewery,
+        'sake-region': result.region,
+        'sake-type': result.type,
+        'sake-abv': result.abv,
+        'sake-ai-info': result.aiInfo
+      };
 
-    const fieldMapping = {
-      'sake-category': result.category,
-      'sake-name': resolvedName,
-      'sake-product': resolvedProduct,
-      'sake-brewery': resolvedBrewery,
-      'sake-region': result.region,
-      'sake-type': result.type,
-      'sake-abv': result.abv,
-      'sake-ai-info': result.aiInfo
-    };
+      Object.keys(fieldMapping).forEach(id => {
+        const val = fieldMapping[id];
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null && val !== '') {
+          el.value = val;
+        }
+      });
 
-    Object.keys(fieldMapping).forEach(id => {
-      const val = fieldMapping[id];
-      const el = document.getElementById(id);
-      if (el && val !== undefined && val !== null && val !== '') {
-        el.value = val;
-      }
-    });
-
-    updateFieldRevertUI();
-    syncEditorFormToCurrentBatchGroup();
+      updateFieldRevertUI();
+      syncEditorFormToCurrentBatchGroup();
+    }
+  } catch (err) {
+    console.error('AI Analysis Error:', err);
+    alert('AI解析中にエラーが発生しました。APIキーやモデル設定をご確認ください。');
+  } finally {
+    if (analyzingStatus) analyzingStatus.style.display = 'none';
   }
 }
 
