@@ -39,35 +39,55 @@ function ensureSpinnerStyles() {
       border-color: var(--accent-color) !important;
       background: var(--card-hover-bg, rgba(255,255,255,0.03));
     }
+    
     /* 登録時の画像プレビュー枠をスマホでも押しやすいように調整 */
     .preview-item, .add-more-item {
       width: 90px !important;
       height: 90px !important;
+      min-height: 90px !important;
     }
     .preview-item img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      cursor: pointer;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      cursor: pointer !important;
     }
-    /* スマホで画像が覆われてタップできなくなるのを防ぐため、元々のCSSホバーのみに限定する */
-    .preview-actions {
-      display: none;
-    }
-    @media (min-width: 601px) {
-      .preview-item:hover .preview-actions {
-        display: flex;
-        position: absolute;
-        inset: 0;
-        background: rgba(0,0,0,0.6);
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: center;
-        gap: 2px;
-        opacity: 1;
-        pointer-events: auto;
+
+    /* スマホ（画面幅600px以下）用の超強力なオーバーライド：ホバーメニューの完全封印とタップの直接透過 */
+    @media (max-width: 600px) {
+      .preview-item .preview-actions,
+      .preview-item:hover .preview-actions,
+      #image-preview-list .preview-item .preview-actions,
+      #image-preview-list .preview-item:hover .preview-actions {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      
+      .preview-item, .add-more-item {
+        width: 100px !important;
+        height: 100px !important;
+        min-height: 100px !important;
       }
     }
+
+    /* PC用のホバーアクションメニュー */
+    @media (min-width: 601px) {
+      .preview-item:hover .preview-actions {
+        display: flex !important;
+        position: absolute !important;
+        inset: 0 !important;
+        background: rgba(0,0,0,0.6) !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 2px !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+    }
+
     /* ライトボックス本体のスタイル */
     .lightbox-overlay {
       position: fixed;
@@ -75,7 +95,7 @@ function ensureSpinnerStyles() {
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.92);
+      background: rgba(0, 0, 0, 0.95);
       display: none;
       align-items: center;
       justify-content: center;
@@ -83,7 +103,7 @@ function ensureSpinnerStyles() {
       backdrop-filter: blur(8px);
     }
     .lightbox-overlay.active {
-      display: flex;
+      display: flex !important;
     }
     .lightbox-content {
       position: relative;
