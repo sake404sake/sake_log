@@ -346,21 +346,37 @@ function ensureSpinnerStyles() {
 }
 ensureSpinnerStyles();
 
+// 🛡️ 【鉄壁のテーマ適用と自己復旧機能】
 export function setTheme(themeName) {
-  if (!themeName) return;
-  document.documentElement.setAttribute('data-theme', themeName);
-  localStorage.setItem('sella_theme', themeName);
+  // アプリに定義されている5種類の有効なテーマ名
+  const validThemes = ['dark', 'light', 'sakura', 'gaming', 'japan-modern'];
+  
+  // もし空、または無効なテーマ名（undefinedなど）が渡された場合は、デフォルトの 'dark' に自動復旧
+  let targetTheme = themeName;
+  if (!targetTheme || !validThemes.includes(targetTheme)) {
+    console.warn(`無効なテーマ名 "${themeName}" が検出されたため、デフォルトの "dark" テーマに自己復旧しました。`);
+    targetTheme = 'dark';
+  }
 
+  // <html> 要素にテーマ属性を設定（これがCSSと連動して瞬時に配色を切り替える）
+  document.documentElement.setAttribute('data-theme', targetTheme);
+  
+  // ローカルストレージをクレンジング保存
+  localStorage.setItem('sella_theme', targetTheme);
+
+  // 設定画面のセレクトボックスが存在すれば同期
   const themeSelect = document.getElementById('theme-select');
-  if (themeSelect && themeSelect.value !== themeName) {
-    themeSelect.value = themeName;
+  if (themeSelect && themeSelect.value !== targetTheme) {
+    themeSelect.value = targetTheme;
   }
 }
 
 function initTheme() {
-  const savedTheme = localStorage.getItem('sella_theme') || 'dark';
+  // 起動時にローカルストレージから読み出し、厳格にバリデーションをかけて適用
+  const savedTheme = localStorage.getItem('sella_theme');
   setTheme(savedTheme);
 }
+// ⚡ チラつきを防ぐため、ロードされた瞬間にトップレベルで即座に実行！
 initTheme();
 
 export async function updateModelDropdown(forceRefresh = false) {
