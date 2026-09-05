@@ -1,29 +1,11 @@
-const STORAGE_KEY_API = 'gemini_api_key';
-const STORAGE_KEY_MODEL = 'gemini_selected_model';
+const STORAGE_KEY_API = 'gemini_api_key'; const STORAGE_KEY_MODEL = 'gemini_selected_model';
+export function getApiKey() { return localStorage.getItem(STORAGE_KEY_API) || ''; }
+export function saveApiKey(key) { localStorage.setItem(STORAGE_KEY_API, key.trim()); }
+export function getSavedModel() { return localStorage.getItem(STORAGE_KEY_MODEL) || ''; }
+export function setSavedModel(modelName) { localStorage.setItem(STORAGE_KEY_MODEL, modelName); }
+export function hasApiKey() { return Boolean(getApiKey().trim()); }
 
-export function getApiKey() {
-  return localStorage.getItem(STORAGE_KEY_API) || '';
-}
-
-export function saveApiKey(key) {
-  localStorage.setItem(STORAGE_KEY_API, key.trim());
-}
-
-export function getSavedModel() {
-  return localStorage.getItem(STORAGE_KEY_MODEL) || '';
-}
-
-export function setSavedModel(modelName) {
-  localStorage.setItem(STORAGE_KEY_MODEL, modelName);
-}
-
-export function hasApiKey() {
-  return Boolean(getApiKey().trim());
-}
-
-let cachedModels = null;
-let lastApiKey = null;
-
+let cachedModels = null; let lastApiKey = null;
 const DEFAULT_MODELS = [
   { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (推奨・安定)', supportedGenerationMethods: ['generateContent'] },
   { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', supportedGenerationMethods: ['generateContent'] },
@@ -33,8 +15,7 @@ const DEFAULT_MODELS = [
 ];
 
 /**
- * 利用可能なGeminiモデル一覧を取得
- */
+*  利用可能なGeminiモデル一覧を取得 */
 export async function fetchAvailableModels(forceRefresh = false) {
   const apiKey = getApiKey().trim();
   if (!apiKey) return [];
@@ -85,8 +66,7 @@ export async function fetchAvailableModels(forceRefresh = false) {
 }
 
 /**
- * リストの中から最適なデフォルトモデルを自動決定
- */
+*  リストの中から最適なデフォルトモデルを自動決定 */
 export function autoSelectBestModel(models) {
   if (!models || models.length === 0) return 'models/gemini-2.5-flash';
   const flash25 = models.find(m => m.name.includes('gemini-2.5-flash'));
@@ -99,8 +79,7 @@ export function autoSelectBestModel(models) {
 }
 
 /**
- * 実際に使用するモデル名を確定する
- */
+*  実際に使用するモデル名を確定する */
 export async function getOrDetermineModel() {
   const modalSelect = document.querySelector('.modal-overlay .model-select') || document.getElementById('select-gemini-model');
   if (modalSelect && modalSelect.value) {
@@ -121,8 +100,7 @@ export async function getOrDetermineModel() {
 }
 
 /**
- * 任意のセレクトボックス要素にモデル一覧を同期・反映する共通関数
- */
+*  任意のセレクトボックス要素にモデル一覧を同期・反映する共通関数 */
 export async function populateModelDropdown(selectElement, forceRefresh = false) {
   if (!selectElement) return;
 
@@ -155,8 +133,7 @@ export async function populateModelDropdown(selectElement, forceRefresh = false)
 }
 
 /**
- * 酒ラベル画像解析の実行
- */
+*  酒ラベル画像解析の実行 */
 export async function analyzeLabelImage(base64Image, mimeType = 'image/jpeg') {
   const apiKey = getApiKey().trim();
   if (!apiKey) {
@@ -180,31 +157,15 @@ export async function analyzeLabelImage(base64Image, mimeType = 'image/jpeg') {
   const modelPath = targetModel.startsWith('models/') ? targetModel : `models/${targetModel}`;
   const url = `https://generativelanguage.googleapis.com/v1beta/${modelPath}:generateContent?key=${apiKey}`;
 
-  const prompt = `あなたは日本酒・お酒のラベル解析のエキスパートです。
-画像から情報を読み取り、以下のJSONフォーマットのみを出力してください（Markdown記法や前置きテキストは一切含めないでください）。
-
-{
-  "category": "日本酒",
-  "name": "銘柄名",
-  "productName": "商品名・特定名称等",
-  "brewery": "酒蔵・メーカー名",
-  "region": "産地（都道府県など）",
-  "type": "特定名称・格付",
-  "abv": "16",
-  "aiInfo": "味の特徴、おすすめの飲み方や補足情報"
-}`;
+  const prompt = `あなたは日本酒・お酒のラベル解析のエキスパートです。 画像から情報を読み取り、以下のJSONフォーマットのみを出力してください（Markdown記法や前置きテキストは一切含めないでください）。
+{ "category": "日本酒", "name": "銘柄名", "productName": "商品名・特定名称等", "brewery": "酒蔵・メーカー名", "region": "産地（都道府県など）", "type": "特定名称・格付", "abv": "16", "aiInfo": "味の特徴、おすすめの飲み方や補足情報" }`;
 
   const payload = {
     contents: [
       {
         parts: [
           { text: prompt },
-          {
-            inline_data: {
-              mime_type: mimeType,
-              data: base64Image
-            }
-          }
+          { inline_data: { mime_type: mimeType, data: base64Image } }
         ]
       }
     ],
