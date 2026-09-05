@@ -1,7 +1,4 @@
-import { 
-  analyzeLabelImage, hasApiKey, saveApiKey, 
-  getSavedModel, setSavedModel, populateModelDropdown 
-} from './services/gemini.js';
+import { analyzeLabelImage, hasApiKey, saveApiKey, getSavedModel, setSavedModel, populateModelDropdown } from './services/gemini.js';
 import { renderSettingsView } from './views/settings.js';
 import { renderLogEditorModal } from './views/logEditor.js';
 import { renderLogDetailModal } from './views/logDetail.js';
@@ -53,6 +50,12 @@ function ensureSpinnerStyles() {
       object-fit: cover;
       cursor: pointer;
     }
+    .preview-actions {
+      display: flex !important;
+      opacity: 1 !important;
+      background: rgba(0, 0, 0, 0.4) !important;
+      pointer-events: auto !important;
+    }
     .preview-actions button {
       padding: 4px 8px !important;
       font-size: 11px !important;
@@ -60,7 +63,10 @@ function ensureSpinnerStyles() {
     /* ライトボックス本体のスタイル */
     .lightbox-overlay {
       position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       background: rgba(0, 0, 0, 0.85);
       display: none;
       align-items: center;
@@ -101,7 +107,10 @@ function ensureSpinnerStyles() {
     /* カスタムアクションメニュー用モーダル */
     .lightbox-action-menu {
       position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       background: rgba(0, 0, 0, 0.6);
       display: flex;
       align-items: center;
@@ -221,30 +230,41 @@ export async function navigateTo(viewName) {
     const btnView = btn.dataset.view ? btn.dataset.view.toLowerCase() : '';
     btn.classList.toggle('active', btnView === key || btn.dataset.view === viewName);
   });
-
   closeSidebar();
 }
 
-let uploadedImages = []; 
+// --------------------------------------------------
+// グローバル管理状態
+// --------------------------------------------------
+let uploadedImages = [];
 let activeThumbnailIndex = 0;
 let backupFormData = {};
 let currentEditingLogId = null;
 
-let batchGroups = [];        
-let ungroupedImages = [];     
-let returnToBatchOnClose = false; 
-let currentBatchGroupIndex = null; 
-let draggedItemInfo = null;       
-let isPoolCollapsed = false; 
+let batchGroups = [];
+let ungroupedImages = [];
+let returnToBatchOnClose = false;
+let currentBatchGroupIndex = null;
+let draggedItemInfo = null;
+let isPoolCollapsed = false;
+
+// ライトボックスを閉じたときに呼び出すアクションメニューのコンテキスト
+let activeLightboxCtx = null; 
 
 function base64ToBlob(base64, mimeType = 'image/jpeg') {
-  const byteCharacters = atob(base64);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  if (!base64) return null;
+  try {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
+  } catch (e) {
+    console.error('Base64デコードに失敗しました:', e);
+    return null;
   }
-  const byteArray = new Uint8Array(byteNumbers);
-  return new Blob([byteArray], { type: mimeType });
 }
 
 function ensureFileInput() {
@@ -253,7 +273,7 @@ function ensureFileInput() {
     fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.id = 'file-input';
-    fileInput.multiple = true; 
+    fileInput.multiple = true;
     fileInput.accept = 'image/*';
     fileInput.style.position = 'fixed';
     fileInput.style.top = '0';
@@ -261,7 +281,7 @@ function ensureFileInput() {
     fileInput.style.opacity = '0';
     fileInput.style.pointerEvents = 'none';
     fileInput.style.zIndex = '-1';
-    
+
     fileInput.addEventListener('change', async (e) => {
       const files = e.target.files;
       if (files && files.length > 0) {
@@ -280,7 +300,7 @@ function ensureBatchFileInput() {
     batchInput = document.createElement('input');
     batchInput.type = 'file';
     batchInput.id = 'batch-file-input';
-    batchInput.multiple = true; 
+    batchInput.multiple = true;
     batchInput.accept = 'image/*';
     batchInput.style.position = 'fixed';
     batchInput.style.top = '0';
@@ -288,7 +308,7 @@ function ensureBatchFileInput() {
     batchInput.style.opacity = '0';
     batchInput.style.pointerEvents = 'none';
     batchInput.style.zIndex = '-1';
-    
+
     batchInput.addEventListener('change', async (e) => {
       const files = e.target.files;
       if (files && files.length > 0) {
@@ -321,12 +341,10 @@ function renderBatchGroupsUI() {
   }
 
   const hasItems = batchGroups.length > 0 || ungroupedImages.length > 0;
-
   if (!hasItems) {
     previewSection.style.display = 'none';
     return;
   }
-
   previewSection.style.display = 'block';
 
   let ungroupedHTML = '';
@@ -335,10 +353,10 @@ function renderBatchGroupsUI() {
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;">
         ${ungroupedImages.map((item, idx) => `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
-          style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
+               style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
             <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-            style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
+                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
           </div>
         `).join('')}
       </div>
@@ -357,22 +375,20 @@ function renderBatchGroupsUI() {
       </div>
     `;
   } else {
-    ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="display:none;"></div>
-    `;
+    ungroupedHTML = `<div id="ungrouped-pool-container" style="display:none;"></div>`;
   }
 
   const groupsHTML = batchGroups.map((group, gIdx) => {
-    const mainImg = group[0];
+    const mainImg = group;
     const dateStr = mainImg && mainImg.date ? new Date(mainImg.date).toLocaleString() : '日時不明';
 
     const thumbsHTML = group.map((item, iIdx) => `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
-      style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
+           style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
         <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-        style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
+                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
       </div>
     `).join('');
 
@@ -412,7 +428,7 @@ function renderBatchGroupsUI() {
         ${batchGroups.length > 0 ? `<button type="button" id="btn-save-all-batches" class="btn-primary" style="background: #10b981; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">🚀 すべてまとめて登録する</button>` : ''}
       </div>
     </div>
-    <div id="batch-groups-container" style="display: flex; flexDirection: column; gap: 16px; padding-bottom: ${ungroupedImages.length > 0 ? '120px' : '20px'};">
+    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 16px; padding-bottom: ${ungroupedImages.length > 0 ? '120px' : '20px'};">
       ${groupsHTML}
     </div>
     ${ungroupedHTML}
@@ -435,7 +451,7 @@ function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
-      const base64 = reader.result.split(',')[1];
+      const base64 = reader.result.split(',');
       resolve(base64);
     };
     reader.onerror = reject;
@@ -466,6 +482,15 @@ function closeLightbox() {
   const lightbox = document.getElementById('lightbox-modal');
   if (lightbox) {
     lightbox.classList.remove('active');
+  }
+  
+  // スマホ最適化: ライトボックスを閉じたときに、対応するコンテキストのアクションメニューを自動トリガーする
+  if (activeLightboxCtx) {
+    const ctx = { ...activeLightboxCtx };
+    activeLightboxCtx = null; // リセットして重複・ループを防止する
+    setTimeout(() => {
+      showLightboxActionMenu(ctx);
+    }, 150);
   }
 }
 
@@ -548,7 +573,7 @@ function syncEditorFormToCurrentBatchGroup() {
 async function openEditorModal(logId = null, initialBatchGroup = null, batchIdx = null) {
   closeEditorModal();
   closeDetailModal();
-  
+
   uploadedImages = [];
   activeThumbnailIndex = 0;
   backupFormData = {};
@@ -597,9 +622,9 @@ async function openEditorModal(logId = null, initialBatchGroup = null, batchIdx 
     setVal('sake-region', initialBatchGroup.region || '');
     setVal('sake-type', initialBatchGroup.type || '');
     setVal('sake-abv', initialBatchGroup.abv || '');
-    if (initialBatchGroup[0] && initialBatchGroup[0].date) {
-      const d = initialBatchGroup[0].date instanceof Date ? initialBatchGroup[0].date : new Date(initialBatchGroup[0].date);
-      setVal('sake-date', !isNaN(d) ? d.toISOString().split('T')[0] : '');
+    if (initialBatchGroup && initialBatchGroup.date) {
+      const d = initialBatchGroup.date instanceof Date ? initialBatchGroup.date : new Date(initialBatchGroup.date);
+      setVal('sake-date', !isNaN(d) ? d.toISOString().split('T') : '');
     }
     setVal('sake-notes', initialBatchGroup.notes || '');
     setVal('sake-ai-info', initialBatchGroup.aiInfo || '');
@@ -684,6 +709,7 @@ function openSidebar() {
   overlay?.classList.add('active');
 }
 
+// ドロワーを閉じる処理
 function closeSidebar() {
   sidebar?.classList.remove('open');
   overlay?.classList.remove('active');
@@ -704,7 +730,6 @@ function renderImagePreviewList() {
   }
 
   if (uploadZone) uploadZone.style.display = 'none';
-
   if (btnAnalyze) {
     btnAnalyze.style.display = (hasApiKey() && uploadedImages.length > 0) ? 'inline-flex' : 'none';
   }
@@ -793,15 +818,19 @@ async function handleImageFiles(files) {
       }
     }
 
-    const compressed = await compressImage(file);
-    const previewUrl = URL.createObjectURL(compressed.blob);
+    try {
+      const compressed = await compressImage(file);
+      const previewUrl = URL.createObjectURL(compressed.blob);
 
-    uploadedImages.push({
-      blob: compressed.blob,
-      base64: compressed.base64,
-      mimeType: compressed.mimeType,
-      previewUrl
-    });
+      uploadedImages.push({
+        blob: compressed.blob,
+        base64: compressed.base64,
+        mimeType: compressed.mimeType,
+        previewUrl
+      });
+    } catch (e) {
+      console.error('画像圧縮に失敗しました:', e);
+    }
   }
 
   renderImagePreviewList();
@@ -1009,11 +1038,11 @@ function initApp() {
     renderBatchGroupsUI();
   });
 
-  // 長押し（コンテキストメニュー）でメニューを表示するハンドラー
+  // 長押し（コンテキストメニュー）でも一応動作を抑制してアクションメニューを表示するハンドラー
   document.addEventListener('contextmenu', (e) => {
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
     if (enlargeTarget) {
-      e.preventDefault(); // ブラウザ標準のコンテキストメニューを抑制
+      e.preventDefault(); 
       const contextType = enlargeTarget.dataset.contextType;
       let ctxData = null;
 
@@ -1150,7 +1179,7 @@ function initApp() {
       triggerBatchFileInput();
       return;
     }
-    
+
     const saveAllBtn = e.target.closest('#btn-save-all-batches');
     if (saveAllBtn) {
       if (batchGroups.length === 0) {
@@ -1177,12 +1206,14 @@ function initApp() {
           const name = cardName !== '' ? cardName : (group.name || `お酒グループ #${gIdx + 1}`);
           const brewery = cardBrewery !== '' ? cardBrewery : (group.brewery || '');
 
+          // スマホバグ治療: Blob化が不完全または欠落している場合に備えてクレンジング
           const orderedBlobs = group.map(img => {
             if (!img.blob && img.base64) {
               img.blob = base64ToBlob(img.base64, img.mimeType || 'image/jpeg');
             }
             return img.blob;
-          });
+          }).filter(blob => blob instanceof Blob); // 🌟確実にBlobオブジェクトであるもののみに絞り込む！
+
           const mainDate = group[0]?.date ? (group[0].date instanceof Date ? group[0].date.toISOString().split('T')[0] : new Date(group[0].date).toISOString().split('T')[0]) : '';
 
           const logData = {
@@ -1470,12 +1501,26 @@ function initApp() {
       return;
     }
 
+    // --- プレビューサムネイル画像をタップして拡大するロジック ---
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
     if (enlargeTarget) {
+      const contextType = enlargeTarget.dataset.contextType;
+      activeLightboxCtx = null;
+
+      // 拡大した画像のコンテキスト情報を退避する
+      if (contextType === 'editor-preview') {
+        activeLightboxCtx = { type: 'editor-preview', idx: Number(enlargeTarget.dataset.idx) };
+      } else if (contextType === 'batch-group') {
+        activeLightboxCtx = { type: 'batch-group', gidx: Number(enlargeTarget.dataset.gidx), iidx: Number(enlargeTarget.dataset.iidx) };
+      } else if (contextType === 'pool') {
+        activeLightboxCtx = { type: 'pool', poolIdx: Number(enlargeTarget.dataset.poolIdx) };
+      }
+
       openLightbox(enlargeTarget.src);
       return;
     }
 
+    // --- ライトボックス（拡大画像）をタップまたは✕ボタンで閉じる ---
     if (e.target.id === 'lightbox-modal' || e.target.classList.contains('lightbox-close') || e.target.closest('.lightbox-close')) {
       closeLightbox();
       return;
@@ -1502,6 +1547,7 @@ function initApp() {
       return;
     }
 
+    // --- 単体酒ログの保存ロジック ---
     if (e.target && e.target.id === 'btn-save-log') {
       const name = document.getElementById('sake-name')?.value.trim();
       if (!name) {
@@ -1514,12 +1560,14 @@ function initApp() {
       const rawTags = document.getElementById('sake-tags')?.value.trim() || '';
       const tags = rawTags ? rawTags.split(/\s+/).filter(Boolean) : [];
 
+      // スマホバグ治療: 順序変更やアップロードタイミングで Blob が欠落していた場合を検知して復元
       let orderedBlobs = uploadedImages.map(img => {
         if (!img.blob && img.base64) {
           img.blob = base64ToBlob(img.base64, img.mimeType || 'image/jpeg');
         }
         return img.blob;
-      });
+      }).filter(blob => blob instanceof Blob); // 🌟確実にBlobオブジェクトであるもののみにクレンジング！
+
       if (activeThumbnailIndex > 0 && activeThumbnailIndex < orderedBlobs.length) {
         const mainBlob = orderedBlobs.splice(activeThumbnailIndex, 1)[0];
         orderedBlobs.unshift(mainBlob);
