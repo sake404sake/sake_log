@@ -179,7 +179,6 @@ function renderBatchGroupsUI() {
       </div>
     `;
 
-    // ▼ 【修正1】右下のFABボタンと被らないように right を 80px に変更し max-width を調整
     ungroupedHTML = `
       <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 80px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -600,8 +599,6 @@ async function handleImageFiles(files) {
 
   if (analyzingStatus) analyzingStatus.style.display = 'none';
   renderImagePreviewList();
-
-  // ▼ 【修正2】画像選択後の勝手な自動AI解析ブロックを削除しました（これによりぐるぐるしたままフリーズする不具合が解消されます）
 }
 
 async function processFilesForBatch(files, append = true) {
