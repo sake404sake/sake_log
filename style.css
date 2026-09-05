@@ -971,10 +971,12 @@ a:hover {
   gap: 2px;
   opacity: 0;
   transition: opacity 0.2s;
+  pointer-events: none; /* 💡 修正: 非表示時はクリックを透過させる */
 }
 
 .preview-item:hover .preview-actions {
   opacity: 1;
+  pointer-events: auto; /* 💡 修正: ホバー時はクリックを有効化する */
 }
 
 .preview-actions button {
