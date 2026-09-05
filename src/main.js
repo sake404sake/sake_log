@@ -158,10 +158,10 @@ function ensureFileInput() {
     fileInput.style.zIndex = '-1';
     document.body.appendChild(fileInput);
 
-    fileInput.addEventListener('change', (e) => {
+    fileInput.addEventListener('change', async (e) => { // ★ ここを修正（asyncを追加）
       const files = e.target.files;
       if (files && files.length > 0) {
-        handleImageFiles(files);
+        await handleImageFiles(files); // ★ ここを修正（awaitを追加）
       }
       fileInput.value = ''; 
     });
