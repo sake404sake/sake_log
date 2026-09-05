@@ -35,9 +35,87 @@ function ensureSpinnerStyles() {
     .draggable-thumb:active {
       cursor: grabbing;
     }
-    .batch-group-card.drag-over {
+.batch-group-card.drag-over {
       border-color: var(--accent-color) !important;
       background: var(--card-hover-bg, rgba(255,255,255,0.03));
+    }
+    
+    /* 📱 スマホ用一括インポート（batchImport）レイアウト崩れ防止と超絶最適化 */
+    .batch-group-btn-container {
+      display: flex !important;
+      gap: 6px !important;
+      overflow-x: auto !important;
+      white-space: nowrap !important;
+      -webkit-overflow-scrolling: touch !important;
+      scrollbar-width: none !important;
+      padding-bottom: 2px !important;
+      width: auto !important;
+    }
+    .batch-group-btn-container::-webkit-scrollbar {
+      display: none !important;
+    }
+    .batch-group-btn-container button {
+      flex-shrink: 0 !important;
+      font-size: 0.72rem !important;
+      padding: 6px 10px !important;
+    }
+
+    @media (max-width: 600px) {
+      #ungrouped-pool-container {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: 8px !important;
+        width: calc(100% - 16px) !important;
+        max-width: 100% !important;
+        border-radius: 12px !important;
+        padding: 10px 12px !important;
+        box-shadow: 0 -8px 24px rgba(0,0,0,0.6) !important;
+        position: fixed !important;
+        z-index: 9999 !important; /* ライトボックスのすぐ下に配置 */
+      }
+      #ungrouped-pool-container .thumbs-scroll-container {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        gap: 8px !important;
+        padding-bottom: 4px !important;
+        scrollbar-width: none !important;
+        min-height: 80px !important;
+      }
+      #ungrouped-pool-container .thumbs-scroll-container::-webkit-scrollbar {
+        display: none !important;
+      }
+      #ungrouped-pool-container .draggable-thumb {
+        width: 80px !important;
+        height: 80px !important;
+        min-height: 80px !important;
+        flex-shrink: 0 !important;
+      }
+      
+      /* 一括インポートのカードレイアウト調整 */
+      .batch-group-card {
+        padding: 12px !important;
+        margin-bottom: 10px !important;
+      }
+      .batch-group-card .thumbs-scroll-container {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        gap: 8px !important;
+        scrollbar-width: none !important;
+        padding-bottom: 4px !important;
+      }
+      .batch-group-card .thumbs-scroll-container::-webkit-scrollbar {
+        display: none !important;
+      }
+      .batch-group-card .draggable-thumb {
+        width: 80px !important;
+        height: 80px !important;
+        min-height: 80px !important;
+        flex-shrink: 0 !important;
+      }
     }
     
     
@@ -396,7 +474,7 @@ function renderBatchGroupsUI() {
   let ungroupedHTML = '';
   if (ungroupedImages.length > 0) {
     const thumbs = isPoolCollapsed ? '' : `
-      <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
         ${ungroupedImages.map((item, idx) => `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
                style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
@@ -445,7 +523,7 @@ function renderBatchGroupsUI() {
             <span style="font-weight: bold; color: var(--accent-color);">🍶 未保存お酒グループ #${gIdx + 1}</span>
             <span style="font-size: 0.8rem; color: var(--text-sub); margin-left: 8px;">目安: ${dateStr} (${group.length}枚)</span>
           </div>
-          <div style="display: flex; gap: 6px;">
+          <div class="batch-group-btn-container">
             <button type="button" class="btn-secondary btn-batch-open-editor" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;">✏️ 詳細編集</button>
             <button type="button" class="btn-secondary btn-batch-analyze" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;">🤖 AI解析</button>
             <button type="button" class="btn-secondary btn-batch-split" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;" title="分割">✂️ 分割</button>
@@ -454,7 +532,7 @@ function renderBatchGroupsUI() {
         </div>
 
         <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真をタップすると拡大操作メニューが開きます。ドラッグ＆ドロップでも並び替えできます。</div>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; min-height: 50px;">
+        <div class="thumbs-scroll-container" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; min-height: 50px;">
           ${thumbsHTML}
         </div>
 
@@ -570,11 +648,35 @@ function openLightbox(imageSrc, ctx) {
           <button type="button" class="lightbox-ctrl-btn btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}">📤 プールへ外す</button>
         </div>
       `;
-    } else if (ctx.type === 'pool') {
+} else if (ctx.type === 'pool') {
       const idx = ctx.poolIdx;
+      total = ungroupedImages.length;
+      indicatorHTML = `<div class="lightbox-indicator">${idx + 1} / ${total}</div>`;
+
+      // プール内の画像めくりアロー
+      if (total > 1) {
+        arrowPrevHTML = `<button type="button" class="lightbox-arrow-btn prev" ${idx > 0 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="前の写真へ">‹</button>`;
+        arrowNextHTML = `<button type="button" class="lightbox-arrow-btn next" ${idx < total - 1 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="次の写真へ">›</button>`;
+      }
+
+      // 既存の未保存グループ一覧を選択できるセレクトドロップダウン
+      let groupOptionsHTML = '';
+      if (batchGroups.length > 0) {
+        groupOptionsHTML = `
+          <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.15); pointer-events: auto;">
+            <select class="lightbox-group-selector" style="background: transparent; color: #fff; border: none; font-size: 0.8rem; outline: none; max-width: 140px; cursor: pointer; font-weight: bold;">
+              ${batchGroups.map((g, i) => `<option value="${i}" style="background: #1e293b; color: #fff;">🍶 グループ #${i+1} (${g.length}枚)</option>`).join('')}
+            </select>
+            <button type="button" class="lightbox-ctrl-btn btn-pool-add-to-group" data-idx="${idx}" style="background: var(--accent-color) !important; color: #000 !important; border: none !important; padding: 6px 14px !important; font-size: 0.8rem !important; border-radius: 16px !important; height: auto !important; margin: 0 !important; box-shadow: none !important;">➕ 追加</button>
+          </div>
+        `;
+      }
+
       controlsHTML = `
-        <div class="lightbox-controls" style="display: flex; gap: 8px; justify-content: center; margin-top: 16px; width: 100%; max-width: 480px; pointer-events: auto;">
-          <button type="button" class="lightbox-ctrl-btn btn-pool-delete-img" data-idx="${idx}">🗑️ 完全に削除する</button>
+        <div class="lightbox-controls" style="display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; width: 100%; max-width: 480px; pointer-events: auto;">
+          <button type="button" class="lightbox-ctrl-btn btn-pool-create-group" data-idx="${idx}" style="background: #10b981 !important; border-color: #10b981 !important; color: #fff !important;">✨ 新しいお酒にする</button>
+          ${groupOptionsHTML}
+          <button type="button" class="lightbox-ctrl-btn btn-pool-delete-img" data-idx="${idx}" style="background: rgba(239, 68, 68, 0.15) !important; border-color: rgba(239, 68, 68, 0.3) !important; color: #ef4444 !important;">🗑️ 完全に削除</button>
         </div>
       `;
     }
@@ -622,6 +724,13 @@ function triggerLightboxNext() {
       ctx.iidx = nextIIdx;
       openLightbox(group[nextIIdx].previewUrl, ctx);
     }
+  } else if (ctx.type === 'pool') {
+    const idx = ctx.poolIdx;
+    if (idx < ungroupedImages.length - 1) {
+      const nextIdx = idx + 1;
+      ctx.poolIdx = nextIdx;
+      openLightbox(ungroupedImages[nextIdx].previewUrl, ctx);
+    }
   }
 }
 
@@ -643,6 +752,13 @@ function triggerLightboxPrev() {
       const prevIIdx = iIdx - 1;
       ctx.iidx = prevIIdx;
       openLightbox(group[prevIIdx].previewUrl, ctx);
+    }
+  } else if (ctx.type === 'pool') {
+    const idx = ctx.poolIdx;
+    if (idx > 0) {
+      const prevIdx = idx - 1;
+      ctx.poolIdx = prevIdx;
+      openLightbox(ungroupedImages[prevIdx].previewUrl, ctx);
     }
   }
 }
@@ -1220,11 +1336,39 @@ function initApp() {
         return;
       }
 
-      // [プール] 画像の完全削除
+// [プール] 画像の完全削除
       if (lbBtn.classList.contains('btn-pool-delete-img')) {
         const idx = Number(lbBtn.dataset.idx);
         ungroupedImages.splice(idx, 1);
         renderBatchGroupsUI();
+        closeLightbox();
+        return;
+      }
+
+      // [プール] 新しいお酒グループとして独立登録
+      if (lbBtn.classList.contains('btn-pool-create-group')) {
+        const idx = Number(lbBtn.dataset.idx);
+        const item = ungroupedImages.splice(idx, 1)[0];
+        if (item) {
+          batchGroups.push([item]);
+          renderBatchGroupsUI();
+        }
+        closeLightbox();
+        return;
+      }
+
+      // [プール] 既存の特定お酒グループに追加
+      if (lbBtn.classList.contains('btn-pool-add-to-group')) {
+        const idx = Number(lbBtn.dataset.idx);
+        const selector = document.querySelector('.lightbox-group-selector');
+        const gIdx = selector ? Number(selector.value) : -1;
+        if (!isNaN(gIdx) && gIdx >= 0 && gIdx < batchGroups.length) {
+          const item = ungroupedImages.splice(idx, 1)[0];
+          if (item) {
+            batchGroups[gIdx].push(item);
+            renderBatchGroupsUI();
+          }
+        }
         closeLightbox();
         return;
       }
@@ -1801,8 +1945,9 @@ function initApp() {
         activeSwipeThumb.style.boxShadow = '0 10px 25px rgba(0,0,0,0.35)';
 
         // 🌟【大本命】オートギャップ（隙間空け）アニメーションの実装 🌟
-        const isEditor = activeSwipeThumb.classList.contains('preview-item');
+const isEditor = activeSwipeThumb.classList.contains('preview-item');
         const isBatch = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'group';
+        const isPool = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'pool';
         
         let siblings = [];
         let curIdx = -1;
@@ -1813,6 +1958,9 @@ function initApp() {
           const gIdx = Number(activeSwipeThumb.dataset.gidx);
           siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
           curIdx = Number(activeSwipeThumb.dataset.iidx);
+        } else if (isPool) {
+          siblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
+          curIdx = Number(activeSwipeThumb.dataset.idx);
         }
 
         if (curIdx !== -1 && !isNaN(curIdx)) {
@@ -1912,9 +2060,10 @@ function initApp() {
         thumb.releasePointerCapture(e.pointerId);
       }
 
-      // スライドされた周りの要素（siblings）のスタイルを綺麗にリセットする
+// スライドされた周りの要素（siblings）のスタイルを綺麗にリセットする
       const isEditor = thumb.classList.contains('preview-item');
       const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
+      const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
       
       let siblings = [];
       if (isEditor) {
@@ -1922,6 +2071,8 @@ function initApp() {
       } else if (isBatch) {
         const gIdx = Number(thumb.dataset.gidx);
         siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
+      } else if (isPool) {
+        siblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
       }
       siblings.forEach(sib => {
         sib.style.transition = 'none';
@@ -1983,7 +2134,7 @@ function initApp() {
               }
             }
           }
-        } else if (isBatch) {
+} else if (isBatch) {
           const gIdx = Number(thumb.dataset.gidx);
           const iIdx = Number(thumb.dataset.iidx);
           if (!isNaN(gIdx) && !isNaN(iIdx) && batchGroups[gIdx]) {
@@ -1994,6 +2145,23 @@ function initApp() {
             if (targetIIdx !== iIdx) {
               const [movedItem] = group.splice(iIdx, 1);
               group.splice(targetIIdx, 0, movedItem);
+              
+              thumb.style.transform = `translateX(${-offsetIndices * step}px) scale(0.9)`;
+              setTimeout(() => {
+                renderBatchGroupsUI();
+              }, 120);
+              return;
+            }
+          }
+        } else if (isPool) {
+          const idx = Number(thumb.dataset.idx);
+          if (!isNaN(idx)) {
+            let targetIdx = idx + offsetIndices;
+            targetIdx = Math.max(0, Math.min(ungroupedImages.length - 1, targetIdx));
+            
+            if (targetIdx !== idx) {
+              const [movedItem] = ungroupedImages.splice(idx, 1);
+              ungroupedImages.splice(targetIdx, 0, movedItem);
               
               thumb.style.transform = `translateX(${-offsetIndices * step}px) scale(0.9)`;
               setTimeout(() => {
