@@ -21,7 +21,6 @@ function openDB() {
   });
 }
 
-// IDから特定のログと画像データ(Blob)を取得する関数を追加
 export async function getLogById(id) {
   const db = await openDB();
   const tx = db.transaction(['logs', 'images'], 'readonly');
@@ -49,11 +48,9 @@ export async function getLogById(id) {
       }
     }
   }
-
   return { ...log, images };
 }
 
-// 新規作成と更新(put)の両方に対応する saveLog
 export async function saveLog(logData, imageBlobs = []) {
   const db = await openDB();
   const tx = db.transaction(['logs', 'images'], 'readwrite');
@@ -63,7 +60,6 @@ export async function saveLog(logData, imageBlobs = []) {
   const isUpdate = Boolean(logData.id);
   const targetId = isUpdate ? Number(logData.id) : null;
 
-  // 更新の場合は既存の画像レコードを一旦削除
   if (isUpdate) {
     const existingLog = await new Promise((res) => {
       const req = logStore.get(targetId);
@@ -75,7 +71,6 @@ export async function saveLog(logData, imageBlobs = []) {
     }
   }
 
-  // 新しい画像をすべてIndexedDBへ保存
   const imageIds = await Promise.all(
     imageBlobs.map(blob => new Promise((res, rej) => {
       const req = imgStore.add({ blob, createdAt: new Date() });
@@ -84,12 +79,7 @@ export async function saveLog(logData, imageBlobs = []) {
     }))
   );
 
-  const fullLog = {
-    ...logData,
-    imageIds,
-    updatedAt: new Date()
-  };
-
+  const fullLog = { ...logData, imageIds, updatedAt: new Date() };
   if (isUpdate) {
     fullLog.id = targetId;
   } else {
@@ -97,7 +87,6 @@ export async function saveLog(logData, imageBlobs = []) {
   }
 
   return new Promise((res, rej) => {
-    // 新規登録なら add、既存更新なら put を使う
     const req = isUpdate ? logStore.put(fullLog) : logStore.add(fullLog);
     req.onsuccess = () => res(req.result);
     req.onerror = () => rej(req.error);
