@@ -92,6 +92,12 @@ html[data-theme="japan-modern"] {
   -webkit-tap-highlight-color: transparent;
 }
 
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
 html, body {
   width: 100%;
   min-height: 100dvh;
@@ -400,7 +406,7 @@ a:hover {
 }
 
 /* ==========================================================================
-   5. 酒ログカード & グリッド
+   5. 酒ログカード & グリッド (および カテゴリ・リスト表示)
    ========================================================================== */
 .log-grid {
   display: grid;
@@ -426,12 +432,14 @@ a:hover {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .log-card-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .log-card-no-image {
@@ -569,6 +577,147 @@ a:hover {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* 💡【共通化】カテゴリ別アコーディオン & サムネイル付きリスト表示 */
+.category-accordion {
+  background: var(--card-bg, #1a1e29);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-color, #2d3243);
+  overflow: hidden;
+}
+
+.category-summary {
+  padding: 14px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.category-title {
+  font-size: 1.05rem;
+  color: var(--accent-color, #4cd964);
+}
+
+.category-count {
+  font-size: 0.85rem;
+  color: var(--text-sub, #8e8e93);
+}
+
+.category-content {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.brand-group-card {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 10px;
+}
+
+.brand-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.brand-group-card .brand-title {
+  font-weight: bold;
+  font-size: 0.95rem;
+}
+
+.brand-badge {
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 12px;
+  color: var(--text-sub);
+}
+
+.log-row-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-bottom: 6px;
+}
+
+.log-row-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.row-thumb-box {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.row-thumb-placeholder {
+  font-size: 1.2rem;
+}
+
+.row-main-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-date-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.row-date {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.row-rating {
+  font-size: 0.8rem;
+  color: #ffcc00;
+}
+
+.row-sub-info {
+  font-size: 0.78rem;
+  color: var(--text-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-arrow {
+  color: var(--text-sub);
+  font-size: 0.8rem;
+}
+
 
 /* ==========================================================================
    6. モーダル (ポップアップ) & 閲覧表示
@@ -1125,14 +1274,28 @@ a:hover {
   color: #000;
 }
 
-/* スマホ表示での崩れ防止対応（追加・修正箇所） */
+/* スマホ表示での崩れ防止対応 */
 @media (max-width: 600px) {
-  /* フォームの行を強制的に1列に変更し、画面からはみ出さないようにする */
+  .log-card-image-wrapper {
+    width: 100% !important;
+    height: 160px !important;
+    max-height: 160px !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+  }
+
+  .log-card-image {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 160px !important;
+    object-fit: cover !important;
+  }
+
+  /* フォームの行を1列に変更 */
   .form-row {
     grid-template-columns: 1fr !important;
   }
   
-  /* モーダルカードが画面端からはみ出さないようにする */
   .modal-card {
     max-width: 95vw !important;
     margin: 0 auto;
@@ -1142,7 +1305,6 @@ a:hover {
     padding: 10px !important;
   }
 
-  /* 入力欄やセレクトボックスがはみ出さないように設定 */
   .input-dark, .model-select, select, input {
     max-width: 100% !important;
     box-sizing: border-box !important;
@@ -1190,7 +1352,7 @@ a:hover {
 }
 
 /* ==========================================================================
-   8. PC表示用メディアクエリ & カテゴリ表示 (1024px以上)
+   8. PC表示用メディアクエリ (1024px以上)
    ========================================================================== */
 @media (min-width: 1024px) {
   .app-container {
@@ -1297,142 +1459,5 @@ a:hover {
     color: var(--text-main);
     cursor: pointer;
     text-align: left;
-  }
-
-  .category-accordion {
-    background: var(--card-bg, #1a1e29);
-    border-radius: 12px;
-    margin-bottom: 12px;
-    border: 1px solid var(--border-color, #2d3243);
-    overflow: hidden;
-  }
-
-  .category-summary {
-    padding: 14px 16px;
-    font-weight: bold;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  .category-title {
-    font-size: 1.05rem;
-    color: var(--accent-color, #4cd964);
-  }
-
-  .category-count {
-    font-size: 0.85rem;
-    color: var(--text-sub, #8e8e93);
-  }
-
-  .category-content {
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .brand-group-card {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 10px;
-  }
-
-  .brand-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
-  }
-
-  .brand-title {
-    font-weight: bold;
-    font-size: 0.95rem;
-  }
-
-  .brand-badge {
-    font-size: 0.75rem;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 2px 8px;
-    border-radius: 12px;
-    color: var(--text-sub);
-  }
-
-  .log-row-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 10px;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.02);
-    cursor: pointer;
-    transition: background 0.2s;
-    margin-bottom: 6px;
-  }
-
-  .log-row-item:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .row-thumb-box {
-    width: 44px;
-    height: 44px;
-    flex-shrink: 0;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .row-thumb-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .row-thumb-placeholder {
-    font-size: 1.2rem;
-  }
-
-  .row-main-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .row-date-line {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2px;
-  }
-
-  .row-date {
-    font-size: 0.85rem;
-    font-weight: 500;
-  }
-
-  .row-rating {
-    font-size: 0.8rem;
-    color: #ffcc00;
-  }
-
-  .row-sub-info {
-    font-size: 0.78rem;
-    color: var(--text-sub);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .row-arrow {
-    color: var(--text-sub);
-    font-size: 0.8rem;
   }
 }
