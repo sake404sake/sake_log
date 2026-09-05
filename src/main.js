@@ -10,7 +10,7 @@ import { saveLog, deleteLog, getLogById } from './store/db.js';
 import { extractPhotoDate, compressImage, groupImagesByTime } from './utils/image.js';
 import { renderBatchImportView } from './views/batchImport.js';
 
-// --- スピナー用CSSおよびプレビュー拡大用CSSの動的注入 ---
+// --- スピナー用CSSおよびプレビュー拡大・ライトボックス用CSSの動的注入 ---
 function ensureSpinnerStyles() {
   if (document.getElementById('sella-spinner-style')) return;
   const style = document.createElement('style');
@@ -57,7 +57,48 @@ function ensureSpinnerStyles() {
       padding: 4px 8px !important;
       font-size: 11px !important;
     }
-    /* ライトボックス閉じたあとに表示するカスタムアクションメニュー用モーダル */
+    /* ライトボックス本体のスタイル */
+    .lightbox-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      backdrop-filter: blur(4px);
+    }
+    .lightbox-overlay.active {
+      display: flex;
+    }
+    .lightbox-content {
+      position: relative;
+      max-width: 90%;
+      max-height: 90%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .lightbox-content img {
+      max-width: 100%;
+      max-height: 85vh;
+      border-radius: 12px;
+      object-fit: contain;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .lightbox-close {
+      position: absolute;
+      top: -45px;
+      right: 0;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 2.5rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px 8px;
+    }
+    /* カスタムアクションメニュー用モーダル */
     .lightbox-action-menu {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -196,9 +237,6 @@ let currentBatchGroupIndex = null;
 let draggedItemInfo = null;       
 let isPoolCollapsed = false; 
 
-// ライトボックス関連の状態管理
-let currentLightboxImageContext = null;
-
 function base64ToBlob(base64, mimeType = 'image/jpeg') {
   const byteCharacters = atob(base64);
   const byteNumbers = new Array(byteCharacters.length);
@@ -209,7 +247,6 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
   return new Blob([byteArray], { type: mimeType });
 }
 
-// ファイル入力を常駐・再利用するように修正
 function ensureFileInput() {
   let fileInput = document.getElementById('file-input');
   if (!fileInput) {
@@ -237,7 +274,6 @@ function ensureFileInput() {
   return fileInput;
 }
 
-// バッチファイル入力を常駐・再利用するように修正
 function ensureBatchFileInput() {
   let batchInput = document.getElementById('batch-file-input');
   if (!batchInput) {
@@ -407,8 +443,7 @@ function blobToBase64(blob) {
   });
 }
 
-function openLightbox(imageSrc, contextData = null) {
-  currentLightboxImageContext = contextData;
+function openLightbox(imageSrc) {
   let lightbox = document.getElementById('lightbox-modal');
   if (!lightbox) {
     lightbox = document.createElement('div');
@@ -431,12 +466,6 @@ function closeLightbox() {
   const lightbox = document.getElementById('lightbox-modal');
   if (lightbox) {
     lightbox.classList.remove('active');
-  }
-  
-  const ctx = currentLightboxImageContext;
-  currentLightboxImageContext = null;
-  if (ctx) {
-    showLightboxActionMenu(ctx);
   }
 }
 
@@ -980,6 +1009,28 @@ function initApp() {
     renderBatchGroupsUI();
   });
 
+  // 長押し（コンテキストメニュー）でメニューを表示するハンドラー
+  document.addEventListener('contextmenu', (e) => {
+    const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
+    if (enlargeTarget) {
+      e.preventDefault(); // ブラウザ標準のコンテキストメニューを抑制
+      const contextType = enlargeTarget.dataset.contextType;
+      let ctxData = null;
+
+      if (contextType === 'editor-preview') {
+        ctxData = { type: 'editor-preview', idx: Number(enlargeTarget.dataset.idx) };
+      } else if (contextType === 'batch-group') {
+        ctxData = { type: 'batch-group', gidx: Number(enlargeTarget.dataset.gidx), iidx: Number(enlargeTarget.dataset.iidx) };
+      } else if (contextType === 'pool') {
+        ctxData = { type: 'pool', poolIdx: Number(enlargeTarget.dataset.poolIdx) };
+      }
+
+      if (ctxData) {
+        showLightboxActionMenu(ctxData);
+      }
+    }
+  });
+
   document.addEventListener('click', async (e) => {
     const menuCancelBtn = e.target.closest('[data-action="menu-cancel"]');
     if (menuCancelBtn || e.target.id === 'lightbox-action-menu-modal') {
@@ -1421,18 +1472,7 @@ function initApp() {
 
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
     if (enlargeTarget) {
-      const contextType = enlargeTarget.dataset.contextType;
-      let ctxData = null;
-
-      if (contextType === 'editor-preview') {
-        ctxData = { type: 'editor-preview', idx: Number(enlargeTarget.dataset.idx) };
-      } else if (contextType === 'batch-group') {
-        ctxData = { type: 'batch-group', gidx: Number(enlargeTarget.dataset.gidx), iidx: Number(enlargeTarget.dataset.iidx) };
-      } else if (contextType === 'pool') {
-        ctxData = { type: 'pool', poolIdx: Number(enlargeTarget.dataset.poolIdx) };
-      }
-
-      openLightbox(enlargeTarget.src, ctxData);
+      openLightbox(enlargeTarget.src);
       return;
     }
 
@@ -1455,7 +1495,6 @@ function initApp() {
       return;
     }
 
-    // スマホのファイル選択ダイアログを確実に呼び出す処理（常駐インプットのclickを呼ぶ）
     if (e.target.closest('#upload-zone') || e.target.closest('#btn-trigger-upload')) {
       e.preventDefault();
       const fileInput = ensureFileInput();
