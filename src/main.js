@@ -1257,7 +1257,7 @@ function initApp() {
       return;
     }
 
-    // ★ ここでスマホのファイル選択ダイアログを確実に呼び出す処理
+    // スマホのファイル選択ダイアログを確実に呼び出す処理
     if (e.target.closest('#upload-zone') || e.target.closest('#btn-trigger-upload')) {
       e.preventDefault();
       const fileInput = ensureFileInput();
@@ -1354,9 +1354,7 @@ function initApp() {
       if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
       if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
     }
-    if (e.target && e.target.id === 'file-input') {
-      handleImageFiles(e.target.files);
-    }
+    // 注: file-input の処理は ensureFileInput 内の専用リスナーに一本化し、ここで重複して handleImageFiles を呼ばないように修正しました
     if (TRACKED_FIELDS.includes(e.target.id)) {
       updateFieldRevertUI();
     }
