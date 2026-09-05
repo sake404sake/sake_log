@@ -141,58 +141,64 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
   return new Blob([byteArray], { type: mimeType });
 }
 
-// どんな環境でも確実に動作するファイル選択インプット生成関数
+// どんな環境でも確実に動作するファイル選択インプット生成関数（修正済み）
 function ensureFileInput() {
   let fileInput = document.getElementById('file-input');
-  if (!fileInput) {
-    fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.id = 'file-input';
-    fileInput.multiple = true;
-    fileInput.accept = 'image/*';
-    fileInput.style.position = 'fixed';
-    fileInput.style.top = '0';
-    fileInput.style.left = '0';
-    fileInput.style.opacity = '0';
-    fileInput.style.pointerEvents = 'none';
-    fileInput.style.zIndex = '-1';
-    document.body.appendChild(fileInput);
-
-    fileInput.addEventListener('change', async (e) => { // ★ ここを修正（asyncを追加）
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        await handleImageFiles(files); // ★ ここを修正（awaitを追加）
-      }
-      fileInput.value = ''; 
-    });
+  if (fileInput) {
+    fileInput.remove(); // 既存の要素があれば一旦削除して競合を防ぐ
   }
+  
+  fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.id = 'file-input';
+  fileInput.multiple = true; // 複数選択を確実に有効化
+  fileInput.accept = 'image/*';
+  fileInput.style.position = 'fixed';
+  fileInput.style.top = '0';
+  fileInput.style.left = '0';
+  fileInput.style.opacity = '0';
+  fileInput.style.pointerEvents = 'none';
+  fileInput.style.zIndex = '-1';
+  document.body.appendChild(fileInput);
+
+  fileInput.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      await handleImageFiles(files);
+    }
+    fileInput.value = ''; 
+  });
+
   return fileInput;
 }
 
 function ensureBatchFileInput() {
   let batchInput = document.getElementById('batch-file-input');
-  if (!batchInput) {
-    batchInput = document.createElement('input');
-    batchInput.type = 'file';
-    batchInput.id = 'batch-file-input';
-    batchInput.multiple = true;
-    batchInput.accept = 'image/*';
-    batchInput.style.position = 'fixed';
-    batchInput.style.top = '0';
-    batchInput.style.left = '0';
-    batchInput.style.opacity = '0';
-    batchInput.style.pointerEvents = 'none';
-    batchInput.style.zIndex = '-1';
-    
-    batchInput.addEventListener('change', async (e) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        await processFilesForBatch(files, true);
-      }
-      batchInput.value = ''; 
-    });
-    document.body.appendChild(batchInput);
+  if (batchInput) {
+    batchInput.remove(); // 既存の要素があれば一旦削除して競合を防ぐ
   }
+  
+  batchInput = document.createElement('input');
+  batchInput.type = 'file';
+  batchInput.id = 'batch-file-input';
+  batchInput.multiple = true; // 複数選択を確実に有効化
+  batchInput.accept = 'image/*';
+  batchInput.style.position = 'fixed';
+  batchInput.style.top = '0';
+  batchInput.style.left = '0';
+  batchInput.style.opacity = '0';
+  batchInput.style.pointerEvents = 'none';
+  batchInput.style.zIndex = '-1';
+  
+  batchInput.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      await processFilesForBatch(files, true);
+    }
+    batchInput.value = ''; 
+  });
+  document.body.appendChild(batchInput);
+  
   return batchInput;
 }
 
@@ -1354,7 +1360,6 @@ function initApp() {
       if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
       if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
     }
-    // 注: file-input の処理は ensureFileInput 内の専用リスナーに一本化し、ここで重複して handleImageFiles を呼ばないように修正しました
     if (TRACKED_FIELDS.includes(e.target.id)) {
       updateFieldRevertUI();
     }
