@@ -39,10 +39,10 @@ function ensureSpinnerStyles() {
       border-color: var(--accent-color) !important;
       background: var(--card-hover-bg, rgba(255,255,255,0.03));
     }
-    /* 登録時の画像プレビュー枠をスマホでも押しやすいように倍のサイズに拡大 */
+    /* 登録時の画像プレビュー枠をスマホでも押しやすいように調整 */
     .preview-item, .add-more-item {
-      width: 120px !important;
-      height: 120px !important;
+      width: 90px !important;
+      height: 90px !important;
     }
     .preview-item img {
       width: 100%;
@@ -50,15 +50,23 @@ function ensureSpinnerStyles() {
       object-fit: cover;
       cursor: pointer;
     }
+    /* スマホで画像が覆われてタップできなくなるのを防ぐため、元々のCSSホバーのみに限定する */
     .preview-actions {
-      display: flex !important;
-      opacity: 1 !important;
-      background: rgba(0, 0, 0, 0.4) !important;
-      pointer-events: auto !important;
+      display: none;
     }
-    .preview-actions button {
-      padding: 4px 8px !important;
-      font-size: 11px !important;
+    @media (min-width: 601px) {
+      .preview-item:hover .preview-actions {
+        display: flex;
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        opacity: 1;
+        pointer-events: auto;
+      }
     }
     /* ライトボックス本体のスタイル */
     .lightbox-overlay {
@@ -67,30 +75,31 @@ function ensureSpinnerStyles() {
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.92);
       display: none;
       align-items: center;
       justify-content: center;
       z-index: 99999;
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(8px);
     }
     .lightbox-overlay.active {
       display: flex;
     }
     .lightbox-content {
       position: relative;
-      max-width: 90%;
-      max-height: 90%;
+      max-width: 95%;
+      max-height: 95%;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
     }
     .lightbox-content img {
       max-width: 100%;
-      max-height: 85vh;
+      max-height: 65vh;
       border-radius: 12px;
       object-fit: contain;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     }
     .lightbox-close {
       position: absolute;
@@ -104,58 +113,11 @@ function ensureSpinnerStyles() {
       line-height: 1;
       padding: 4px 8px;
     }
-    /* カスタムアクションメニュー用モーダル */
-    .lightbox-action-menu {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      backdrop-filter: blur(4px);
+    .lightbox-ctrl-btn {
+      transition: all 0.2s;
     }
-    .lightbox-action-menu-content {
-      background: var(--card-bg, #1e293b);
-      border: 1px solid var(--border-color, #334155);
-      border-radius: 16px;
-      padding: 24px;
-      width: 90%;
-      max-width: 320px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-      text-align: center;
-    }
-    .lightbox-action-menu-content h4 {
-      margin: 0 0 16px 0;
-      font-size: 1rem;
-      color: var(--text-main, #f8fafc);
-    }
-    .lightbox-action-btn {
-      display: block;
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 8px;
-      border-radius: 8px;
-      border: 1px solid var(--border-color, #334155);
-      background: var(--bg-main, #0f172a);
-      color: var(--text-main, #f8fafc);
-      font-weight: bold;
-      cursor: pointer;
-      font-size: 0.95rem;
-    }
-    .lightbox-action-btn.danger {
-      color: #ef4444;
-      border-color: rgba(239, 68, 68, 0.3);
-    }
-    .lightbox-action-btn.cancel {
-      background: transparent;
-      border: none;
-      color: var(--text-sub, #94a3b8);
-      margin-top: 8px;
-      margin-bottom: 0;
+    .lightbox-ctrl-btn:active {
+      transform: scale(0.95);
     }
   `;
   document.head.appendChild(style);
@@ -211,7 +173,6 @@ export async function navigateTo(viewName) {
     appContainer.innerHTML = content;
 
     if (key === 'batchimport') {
-      ensureBatchFileInput();
       renderBatchGroupsUI(); 
     }
 
@@ -248,7 +209,7 @@ let currentBatchGroupIndex = null;
 let draggedItemInfo = null;
 let isPoolCollapsed = false;
 
-// ライトボックスを閉じたときに呼び出すアクションメニューのコンテキスト
+// ライトボックス用のコンテキスト
 let activeLightboxCtx = null; 
 
 function base64ToBlob(base64, mimeType = 'image/jpeg') {
@@ -265,65 +226,6 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
     console.error('Base64デコードに失敗しました:', e);
     return null;
   }
-}
-
-function ensureFileInput() {
-  let fileInput = document.getElementById('file-input');
-  if (!fileInput) {
-    fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.id = 'file-input';
-    fileInput.multiple = true;
-    fileInput.accept = 'image/*';
-    fileInput.style.position = 'fixed';
-    fileInput.style.top = '0';
-    fileInput.style.left = '0';
-    fileInput.style.opacity = '0';
-    fileInput.style.pointerEvents = 'none';
-    fileInput.style.zIndex = '-1';
-
-    fileInput.addEventListener('change', async (e) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        await handleImageFiles(files);
-      }
-      fileInput.value = ''; 
-    });
-    document.body.appendChild(fileInput);
-  }
-  return fileInput;
-}
-
-function ensureBatchFileInput() {
-  let batchInput = document.getElementById('batch-file-input');
-  if (!batchInput) {
-    batchInput = document.createElement('input');
-    batchInput.type = 'file';
-    batchInput.id = 'batch-file-input';
-    batchInput.multiple = true;
-    batchInput.accept = 'image/*';
-    batchInput.style.position = 'fixed';
-    batchInput.style.top = '0';
-    batchInput.style.left = '0';
-    batchInput.style.opacity = '0';
-    batchInput.style.pointerEvents = 'none';
-    batchInput.style.zIndex = '-1';
-
-    batchInput.addEventListener('change', async (e) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-        await processFilesForBatch(files, true);
-      }
-      batchInput.value = ''; 
-    });
-    document.body.appendChild(batchInput);
-  }
-  return batchInput;
-}
-
-function triggerBatchFileInput() {
-  const batchInput = ensureBatchFileInput();
-  batchInput.click();
 }
 
 function renderBatchGroupsUI() {
@@ -356,7 +258,7 @@ function renderBatchGroupsUI() {
                style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
             <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
+                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
           </div>
         `).join('')}
       </div>
@@ -379,16 +281,16 @@ function renderBatchGroupsUI() {
   }
 
   const groupsHTML = batchGroups.map((group, gIdx) => {
-    const mainImg = group;
+    const mainImg = group[0];
     const dateStr = mainImg && mainImg.date ? new Date(mainImg.date).toLocaleString() : '日時不明';
 
     const thumbsHTML = group.map((item, iIdx) => `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
            style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
         <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
-        ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold;">★メイン</span>' : ''}
+        ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
+                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
       </div>
     `).join('');
 
@@ -407,7 +309,7 @@ function renderBatchGroupsUI() {
           </div>
         </div>
 
-        <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真をドラッグ＆ドロップして並び替え・整理できます。（先頭にドロップするとメイン画像になります）</div>
+        <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真をタップすると拡大操作メニューが開きます。ドラッグ＆ドロップでも並び替えできます。</div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; min-height: 50px;">
           ${thumbsHTML}
         </div>
@@ -452,29 +354,87 @@ function blobToBase64(blob) {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64 = reader.result.split(',');
-      resolve(base64);
+      resolve(base64[1] || base64[0]);
     };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
 }
 
-function openLightbox(imageSrc) {
+// 📸 【超強化】スマホでも圧倒的に使いやすい、操作コントロール内蔵型ライトボックス
+function openLightbox(imageSrc, ctx) {
   let lightbox = document.getElementById('lightbox-modal');
   if (!lightbox) {
     lightbox = document.createElement('div');
     lightbox.id = 'lightbox-modal';
     lightbox.className = 'lightbox-overlay';
-    lightbox.innerHTML = `
-      <div class="lightbox-content">
-        <button type="button" class="lightbox-close">&times;</button>
-        <img id="lightbox-img" src="" alt="拡大画像" />
-      </div>
-    `;
     document.body.appendChild(lightbox);
   }
-  const img = lightbox.querySelector('#lightbox-img');
-  if (img) img.src = imageSrc;
+
+  activeLightboxCtx = ctx;
+
+  let controlsHTML = '';
+  if (ctx) {
+    if (ctx.type === 'editor-preview') {
+      const idx = ctx.idx;
+      const isMain = idx === activeThumbnailIndex;
+      controlsHTML = `
+        <div class="lightbox-controls" style="display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; width: 100%; max-width: 480px; pointer-events: auto;">
+          <button type="button" class="lightbox-ctrl-btn btn-main-set" data-idx="${idx}" style="background: ${isMain ? '#10b981' : '#1e293b'}; color: #fff; border: 1px solid var(--border-color); padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
+            ${isMain ? '★ メイン画像です' : '☆ メインに設定'}
+          </button>
+          <button type="button" class="lightbox-ctrl-btn btn-move-left" data-idx="${idx}" ${idx === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed; background: #0f172a;"' : 'style="background: #1e293b; color: #fff;"'} style="border: 1px solid var(--border-color); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">
+            ◄ 前へ
+          </button>
+          <button type="button" class="lightbox-ctrl-btn btn-move-right" data-idx="${idx}" ${idx === uploadedImages.length - 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed; background: #0f172a;"' : 'style="background: #1e293b; color: #fff;"'} style="border: 1px solid var(--border-color); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">
+            ► 次へ
+          </button>
+          <button type="button" class="lightbox-ctrl-btn btn-delete-img" data-idx="${idx}" style="background: #ef4444; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
+            🗑️ 削除
+          </button>
+        </div>
+      `;
+    } else if (ctx.type === 'batch-group') {
+      const gIdx = ctx.gidx;
+      const iIdx = ctx.iidx;
+      const group = batchGroups[gIdx];
+      const isMain = iIdx === 0;
+      controlsHTML = `
+        <div class="lightbox-controls" style="display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; width: 100%; max-width: 480px; pointer-events: auto;">
+          <button type="button" class="lightbox-ctrl-btn btn-batch-main-set" data-gidx="${gIdx}" data-iidx="${iIdx}" style="background: ${isMain ? '#10b981' : '#1e293b'}; color: #fff; border: 1px solid var(--border-color); padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
+            ${isMain ? '★ メイン画像です' : '☆ メインに設定'}
+          </button>
+          <button type="button" class="lightbox-ctrl-btn btn-batch-move-left" data-gidx="${gIdx}" data-iidx="${iIdx}" ${iIdx === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed; background: #0f172a;"' : 'style="background: #1e293b; color: #fff;"'} style="border: 1px solid var(--border-color); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">
+            ◄ 前へ
+          </button>
+          <button type="button" class="lightbox-ctrl-btn btn-batch-move-right" data-gidx="${gIdx}" data-iidx="${iIdx}" ${group && iIdx === group.length - 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed; background: #0f172a;"' : 'style="background: #1e293b; color: #fff;"'} style="border: 1px solid var(--border-color); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">
+            ► 次へ
+          </button>
+          <button type="button" class="lightbox-ctrl-btn btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" style="background: #ef4444; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
+            📤 プールへ外す
+          </button>
+        </div>
+      `;
+    } else if (ctx.type === 'pool') {
+      const idx = ctx.poolIdx;
+      controlsHTML = `
+        <div class="lightbox-controls" style="display: flex; gap: 8px; justify-content: center; margin-top: 16px; width: 100%; max-width: 480px; pointer-events: auto;">
+          <button type="button" class="lightbox-ctrl-btn btn-pool-delete-img" data-idx="${idx}" style="background: #ef4444; color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
+            🗑️ この未所属写真を完全に削除する
+          </button>
+        </div>
+      `;
+    }
+  }
+
+  lightbox.innerHTML = `
+    <div class="lightbox-content" style="display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; width: 100%;">
+      <button type="button" class="lightbox-close" style="pointer-events: auto;">&times;</button>
+      <img id="lightbox-img" src="${imageSrc}" alt="拡大画像" style="max-height: 60vh !important; pointer-events: auto; cursor: zoom-out;" />
+      ${controlsHTML}
+    </div>
+  `;
+
   lightbox.classList.add('active');
 }
 
@@ -483,60 +443,7 @@ function closeLightbox() {
   if (lightbox) {
     lightbox.classList.remove('active');
   }
-  
-  // スマホ最適化: ライトボックスを閉じたときに、対応するコンテキストのアクションメニューを自動トリガーする
-  if (activeLightboxCtx) {
-    const ctx = { ...activeLightboxCtx };
-    activeLightboxCtx = null; // リセットして重複・ループを防止する
-    setTimeout(() => {
-      showLightboxActionMenu(ctx);
-    }, 150);
-  }
-}
-
-function showLightboxActionMenu(ctx) {
-  const existingMenu = document.getElementById('lightbox-action-menu-modal');
-  if (existingMenu) existingMenu.remove();
-
-  const menuOverlay = document.createElement('div');
-  menuOverlay.id = 'lightbox-action-menu-modal';
-  menuOverlay.className = 'lightbox-action-menu';
-
-  let menuButtonsHTML = '';
-
-  if (ctx.type === 'editor-preview') {
-    const idx = ctx.idx;
-    const isMain = idx === activeThumbnailIndex;
-    menuButtonsHTML = `
-      ${!isMain ? `<button type="button" class="lightbox-action-btn" data-action="menu-set-main" data-idx="${idx}">★ メイン画像に設定する</button>` : '<div style="font-size:0.85rem; color:var(--accent-color); font-weight:bold; margin-bottom:12px;">★ 現在のメイン画像です</div>'}
-      <button type="button" class="lightbox-action-btn danger" data-action="menu-delete-img" data-idx="${idx}">🗑️ この画像を削除する</button>
-    `;
-  } else if (ctx.type === 'batch-group') {
-    const gIdx = ctx.gidx;
-    const iIdx = ctx.iidx;
-    const isMain = iIdx === 0;
-    menuButtonsHTML = `
-      ${!isMain ? `<button type="button" class="lightbox-action-btn" data-action="menu-batch-set-main" data-gidx="${gIdx}" data-iidx="${iIdx}">★ このグループのメインにする</button>` : '<div style="font-size:0.85rem; color:var(--accent-color); font-weight:bold; margin-bottom:12px;">★ このグループのメイン画像です</div>'}
-      <button type="button" class="lightbox-action-btn danger" data-action="menu-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}">📤 グループから未所属プールへ外す</button>
-    `;
-  } else if (ctx.type === 'pool') {
-    const idx = ctx.poolIdx;
-    menuButtonsHTML = `
-      <button type="button" class="lightbox-action-btn danger" data-action="menu-pool-remove-img" data-idx="${idx}">🗑️ 未所属画像を削除する</button>
-    `;
-  } else {
-    return;
-  }
-
-  menuOverlay.innerHTML = `
-    <div class="lightbox-action-menu-content">
-      <h4>写真の操作メニュー</h4>
-      ${menuButtonsHTML}
-      <button type="button" class="lightbox-action-btn cancel" data-action="menu-cancel">閉じる</button>
-    </div>
-  `;
-
-  document.body.appendChild(menuOverlay);
+  activeLightboxCtx = null;
 }
 
 async function openDetailModal(logId) {
@@ -622,9 +529,9 @@ async function openEditorModal(logId = null, initialBatchGroup = null, batchIdx 
     setVal('sake-region', initialBatchGroup.region || '');
     setVal('sake-type', initialBatchGroup.type || '');
     setVal('sake-abv', initialBatchGroup.abv || '');
-    if (initialBatchGroup && initialBatchGroup.date) {
-      const d = initialBatchGroup.date instanceof Date ? initialBatchGroup.date : new Date(initialBatchGroup.date);
-      setVal('sake-date', !isNaN(d) ? d.toISOString().split('T') : '');
+    if (initialBatchGroup[0] && initialBatchGroup[0].date) {
+      const d = initialBatchGroup[0].date instanceof Date ? initialBatchGroup[0].date : new Date(initialBatchGroup[0].date);
+      setVal('sake-date', !isNaN(d) ? d.toISOString().split('T')[0] : '');
     }
     setVal('sake-notes', initialBatchGroup.notes || '');
     setVal('sake-ai-info', initialBatchGroup.aiInfo || '');
@@ -709,7 +616,6 @@ function openSidebar() {
   overlay?.classList.add('active');
 }
 
-// ドロワーを閉じる処理
 function closeSidebar() {
   sidebar?.classList.remove('open');
   overlay?.classList.remove('active');
@@ -907,7 +813,7 @@ async function runAIAnalysis(targetImg) {
         'sake-region': result.region,
         'sake-type': result.type,
         'sake-abv': result.abv,
-        'sake-ai-info': result.aiInfo
+        'sake-notes': result.aiInfo
       };
 
       Object.keys(fieldMapping).forEach(id => {
@@ -930,8 +836,24 @@ async function runAIAnalysis(targetImg) {
 }
 
 function initApp() {
-  ensureFileInput();
-  ensureBatchFileInput();
+  // 🌟【重要リファクタリング】グローバルなファイルチェンジイベント委譲
+  // これにより、DOM置換によるイベントリスナーの消失や複数選択（multiple）のバグを完璧に解消する
+  document.addEventListener('change', async (e) => {
+    if (e.target && e.target.id === 'file-input') {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        await handleImageFiles(files);
+      }
+      e.target.value = ''; 
+    }
+    if (e.target && e.target.id === 'batch-file-input') {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        await processFilesForBatch(files, true);
+      }
+      e.target.value = ''; 
+    }
+  });
 
   document.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -1038,94 +960,114 @@ function initApp() {
     renderBatchGroupsUI();
   });
 
-  // 長押し（コンテキストメニュー）でも一応動作を抑制してアクションメニューを表示するハンドラー
-  document.addEventListener('contextmenu', (e) => {
-    const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
-    if (enlargeTarget) {
-      e.preventDefault(); 
-      const contextType = enlargeTarget.dataset.contextType;
-      let ctxData = null;
-
-      if (contextType === 'editor-preview') {
-        ctxData = { type: 'editor-preview', idx: Number(enlargeTarget.dataset.idx) };
-      } else if (contextType === 'batch-group') {
-        ctxData = { type: 'batch-group', gidx: Number(enlargeTarget.dataset.gidx), iidx: Number(enlargeTarget.dataset.iidx) };
-      } else if (contextType === 'pool') {
-        ctxData = { type: 'pool', poolIdx: Number(enlargeTarget.dataset.poolIdx) };
-      }
-
-      if (ctxData) {
-        showLightboxActionMenu(ctxData);
-      }
-    }
-  });
-
   document.addEventListener('click', async (e) => {
-    const menuCancelBtn = e.target.closest('[data-action="menu-cancel"]');
-    if (menuCancelBtn || e.target.id === 'lightbox-action-menu-modal') {
-      const menuModal = document.getElementById('lightbox-action-menu-modal');
-      if (menuModal) menuModal.remove();
-      return;
-    }
+    // --- 📸 操作型ライトボックス内ボタンの統合イベント処理 ---
+    const lbBtn = e.target.closest('.lightbox-ctrl-btn');
+    if (lbBtn) {
+      e.stopPropagation();
+      e.preventDefault();
 
-    const setMainBtn = e.target.closest('[data-action="menu-set-main"]');
-    if (setMainBtn) {
-      activeThumbnailIndex = Number(setMainBtn.dataset.idx);
-      renderImagePreviewList();
-      document.getElementById('lightbox-action-menu-modal')?.remove();
-      return;
-    }
-
-    const deleteImgBtn = e.target.closest('[data-action="menu-delete-img"]');
-    if (deleteImgBtn) {
-      const idx = Number(deleteImgBtn.dataset.idx);
-      uploadedImages.splice(idx, 1);
-      if (activeThumbnailIndex >= uploadedImages.length) {
-        activeThumbnailIndex = Math.max(0, uploadedImages.length - 1);
-      }
-      renderImagePreviewList();
-      document.getElementById('lightbox-action-menu-modal')?.remove();
-      return;
-    }
-
-    const batchSetMainBtn = e.target.closest('[data-action="menu-batch-set-main"]');
-    if (batchSetMainBtn) {
-      const gIdx = Number(batchSetMainBtn.dataset.gidx);
-      const iIdx = Number(batchSetMainBtn.dataset.iidx);
-      if (batchGroups[gIdx] && iIdx > 0) {
-        const item = batchGroups[gIdx].splice(iIdx, 1)[0];
-        batchGroups[gIdx].unshift(item);
-        renderBatchGroupsUI();
-      }
-      document.getElementById('lightbox-action-menu-modal')?.remove();
-      return;
-    }
-
-    const batchRemoveImgBtnMenu = e.target.closest('[data-action="menu-batch-remove-img"]');
-    if (batchRemoveImgBtnMenu) {
-      const gIdx = Number(batchRemoveImgBtnMenu.dataset.gidx);
-      const iIdx = Number(batchRemoveImgBtnMenu.dataset.iidx);
-      if (batchGroups[gIdx]) {
-        const detached = batchGroups[gIdx].splice(iIdx, 1)[0];
-        if (detached) {
-          ungroupedImages.push(detached);
+      // [単体登録エディタ] メイン画像設定
+      if (lbBtn.classList.contains('btn-main-set')) {
+        activeThumbnailIndex = Number(lbBtn.dataset.idx);
+        renderImagePreviewList();
+        if (activeLightboxCtx) {
+          openLightbox(uploadedImages[activeThumbnailIndex].previewUrl, activeLightboxCtx);
         }
-        if (batchGroups[gIdx].length === 0) {
-          batchGroups.splice(gIdx, 1);
-        }
-        renderBatchGroupsUI();
+        return;
       }
-      document.getElementById('lightbox-action-menu-modal')?.remove();
-      return;
-    }
 
-    const poolRemoveImgBtn = e.target.closest('[data-action="menu-pool-remove-img"]');
-    if (poolRemoveImgBtn) {
-      const idx = Number(poolRemoveImgBtn.dataset.idx);
-      ungroupedImages.splice(idx, 1);
-      renderBatchGroupsUI();
-      document.getElementById('lightbox-action-menu-modal')?.remove();
-      return;
+      // [単体登録エディタ] 画像の順序移動
+      if (lbBtn.classList.contains('btn-move-left') || lbBtn.classList.contains('btn-move-right')) {
+        const idx = Number(lbBtn.dataset.idx);
+        const dir = lbBtn.classList.contains('btn-move-left') ? -1 : 1;
+        const targetIdx = idx + dir;
+        if (targetIdx >= 0 && targetIdx < uploadedImages.length) {
+          const temp = uploadedImages[idx];
+          uploadedImages[idx] = uploadedImages[targetIdx];
+          uploadedImages[targetIdx] = temp;
+          if (activeThumbnailIndex === idx) activeThumbnailIndex = targetIdx;
+          else if (activeThumbnailIndex === targetIdx) activeThumbnailIndex = idx;
+          
+          renderImagePreviewList();
+          
+          activeLightboxCtx.idx = targetIdx;
+          openLightbox(uploadedImages[targetIdx].previewUrl, activeLightboxCtx);
+        }
+        return;
+      }
+
+      // [単体登録エディタ] 画像の削除
+      if (lbBtn.classList.contains('btn-delete-img')) {
+        const idx = Number(lbBtn.dataset.idx);
+        uploadedImages.splice(idx, 1);
+        if (activeThumbnailIndex >= uploadedImages.length) {
+          activeThumbnailIndex = Math.max(0, uploadedImages.length - 1);
+        }
+        renderImagePreviewList();
+        closeLightbox();
+        return;
+      }
+
+      // [一括登録グループ] メイン画像設定
+      if (lbBtn.classList.contains('btn-batch-main-set')) {
+        const gIdx = Number(lbBtn.dataset.gidx);
+        const iIdx = Number(lbBtn.dataset.iidx);
+        if (batchGroups[gIdx] && iIdx > 0) {
+          const item = batchGroups[gIdx].splice(iIdx, 1)[0];
+          batchGroups[gIdx].unshift(item);
+          renderBatchGroupsUI();
+          activeLightboxCtx.iidx = 0;
+          openLightbox(batchGroups[gIdx][0].previewUrl, activeLightboxCtx);
+        }
+        return;
+      }
+
+      // [一括登録グループ] 画像の順序移動
+      if (lbBtn.classList.contains('btn-batch-move-left') || lbBtn.classList.contains('btn-batch-move-right')) {
+        const gIdx = Number(lbBtn.dataset.gidx);
+        const iIdx = Number(lbBtn.dataset.iidx);
+        const dir = lbBtn.classList.contains('btn-batch-move-left') ? -1 : 1;
+        const targetIIdx = iIdx + dir;
+        const group = batchGroups[gIdx];
+        if (group && targetIIdx >= 0 && targetIIdx < group.length) {
+          const temp = group[iIdx];
+          group[iIdx] = group[targetIIdx];
+          group[targetIIdx] = temp;
+          renderBatchGroupsUI();
+          
+          activeLightboxCtx.iidx = targetIIdx;
+          openLightbox(group[targetIIdx].previewUrl, activeLightboxCtx);
+        }
+        return;
+      }
+
+      // [一括登録グループ] 画像を未所属プールへ
+      if (lbBtn.classList.contains('btn-batch-remove-img')) {
+        const gIdx = Number(lbBtn.dataset.gidx);
+        const iIdx = Number(lbBtn.dataset.iidx);
+        if (batchGroups[gIdx]) {
+          const detached = batchGroups[gIdx].splice(iIdx, 1)[0];
+          if (detached) {
+            ungroupedImages.push(detached);
+          }
+          if (batchGroups[gIdx].length === 0) {
+            batchGroups.splice(gIdx, 1);
+          }
+          renderBatchGroupsUI();
+          closeLightbox();
+        }
+        return;
+      }
+
+      // [プール] 画像の完全削除
+      if (lbBtn.classList.contains('btn-pool-delete-img')) {
+        const idx = Number(lbBtn.dataset.idx);
+        ungroupedImages.splice(idx, 1);
+        renderBatchGroupsUI();
+        closeLightbox();
+        return;
+      }
     }
 
     if (e.target.id === 'btn-toggle-pool-collapse') {
@@ -1174,9 +1116,11 @@ function initApp() {
       return;
     }
 
+    // 各ファイル選択用のタップエミュレート
     if (e.target.closest('#batch-upload-zone') || e.target.closest('#btn-add-more-batch')) {
       e.preventDefault();
-      triggerBatchFileInput();
+      const batchInput = document.getElementById('batch-file-input');
+      if (batchInput) batchInput.click();
       return;
     }
 
@@ -1206,7 +1150,7 @@ function initApp() {
           const name = cardName !== '' ? cardName : (group.name || `お酒グループ #${gIdx + 1}`);
           const brewery = cardBrewery !== '' ? cardBrewery : (group.brewery || '');
 
-          // スマホバグ治療: Blob化が不完全または欠落している場合に備えてクレンジング
+          // スマホバグ治療: 順序変更やアップロードタイミングで Blob が欠落していた場合を検知して復元
           const orderedBlobs = group.map(img => {
             if (!img.blob && img.base64) {
               img.blob = base64ToBlob(img.base64, img.mimeType || 'image/jpeg');
@@ -1505,22 +1449,21 @@ function initApp() {
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;
-      activeLightboxCtx = null;
+      let ctxData = null;
 
-      // 拡大した画像のコンテキスト情報を退避する
       if (contextType === 'editor-preview') {
-        activeLightboxCtx = { type: 'editor-preview', idx: Number(enlargeTarget.dataset.idx) };
+        ctxData = { type: 'editor-preview', idx: Number(enlargeTarget.dataset.idx) };
       } else if (contextType === 'batch-group') {
-        activeLightboxCtx = { type: 'batch-group', gidx: Number(enlargeTarget.dataset.gidx), iidx: Number(enlargeTarget.dataset.iidx) };
+        ctxData = { type: 'batch-group', gidx: Number(enlargeTarget.dataset.gidx), iidx: Number(enlargeTarget.dataset.iidx) };
       } else if (contextType === 'pool') {
-        activeLightboxCtx = { type: 'pool', poolIdx: Number(enlargeTarget.dataset.poolIdx) };
+        ctxData = { type: 'pool', poolIdx: Number(enlargeTarget.dataset.poolIdx) };
       }
 
-      openLightbox(enlargeTarget.src);
+      openLightbox(enlargeTarget.src, ctxData);
       return;
     }
 
-    // --- ライトボックス（拡大画像）をタップまたは✕ボタンで閉じる ---
+    // --- ライトボックスをタップまたは✕ボタンで閉じる ---
     if (e.target.id === 'lightbox-modal' || e.target.classList.contains('lightbox-close') || e.target.closest('.lightbox-close')) {
       closeLightbox();
       return;
@@ -1542,8 +1485,8 @@ function initApp() {
 
     if (e.target.closest('#upload-zone') || e.target.closest('#btn-trigger-upload')) {
       e.preventDefault();
-      const fileInput = ensureFileInput();
-      fileInput.click();
+      const fileInput = document.getElementById('file-input');
+      if (fileInput) fileInput.click();
       return;
     }
 
