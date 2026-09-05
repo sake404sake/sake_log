@@ -104,6 +104,7 @@ function ensureSpinnerStyles() {
 
     /* ライトボックス本体のスタイル */
     .lightbox-overlay {
+      touch-action: none !important; /* 🌟ブラウザのスワイプ妨害を完全にシャットアウト */
       position: fixed;
       top: 0;
       left: 0;
@@ -120,6 +121,7 @@ function ensureSpinnerStyles() {
       display: flex !important;
     }
     .lightbox-content {
+      touch-action: none !important; /* 🌟ブラウザのスワイプ妨害を完全にシャットアウト */
       position: relative;
       max-width: 95%;
       max-height: 95%;
@@ -129,6 +131,7 @@ function ensureSpinnerStyles() {
       justify-content: center;
     }
     .lightbox-content img {
+      touch-action: none !important; /* 🌟画像引きずりジェスチャーを最優先 */
       max-width: 100%;
       max-height: 65vh;
       border-radius: 12px;
@@ -840,7 +843,7 @@ function renderImagePreviewList() {
   }
 
   const itemsHTML = uploadedImages.map((img, idx) => `
-    <div class="preview-item ${idx === 0 ? 'is-thumb' : ''}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
+    <div class="preview-item ${idx === 0 ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
       <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
       <div class="preview-actions">
         <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
@@ -1708,7 +1711,7 @@ function initApp() {
 
 
     // ==========================================================================
-  // 📱💻 スマホ・PC共通：【究極の操作感】PointerEvents「オートギャップ隙間空け並び替え」＆「スライド閲覧めくり」
+  // 📱💻 スマホ・PC共通：【極上の操作感】PointerEvents「オートギャップ隙間空け並び替え」＆「スライド閲覧めくり」
   // ==========================================================================
   let pointerStartX = 0;
   let pointerStartY = 0;
@@ -1724,12 +1727,20 @@ function initApp() {
     const lightbox = document.getElementById('lightbox-modal');
     if (lightbox && lightbox.classList.contains('active')) {
       const img = lightbox.querySelector('#lightbox-img');
-      if (img && e.target === img) {
-        pointerStartX = e.clientX;
-        pointerStartY = e.clientY;
-        pointerStartTime = Date.now();
-        isDragging = true;
-        isMoveTriggered = false;
+      const closeBtn = lightbox.querySelector('.lightbox-close');
+      const ctrlBtn = e.target.closest('.lightbox-ctrl-btn, .lightbox-arrow-btn');
+      
+      // 閉じるボタンや操作ボタンの上ではドラッグを起動しない
+      if (closeBtn && (e.target === closeBtn || closeBtn.contains(e.target))) return;
+      if (ctrlBtn) return;
+
+      pointerStartX = e.clientX;
+      pointerStartY = e.clientY;
+      pointerStartTime = Date.now();
+      isDragging = true;
+      isMoveTriggered = false;
+      
+      if (img) {
         img.style.transition = 'none';
         img.setPointerCapture(e.pointerId);
       }
@@ -1760,13 +1771,15 @@ function initApp() {
       const img = lightbox.querySelector('#lightbox-img');
       if (img && img.hasPointerCapture(e.pointerId)) {
         e.preventDefault();
+        // わずかなブレ（8px）を排除して本格ドラッグ開始
         if (Math.abs(diffX) > 8) {
           isMoveTriggered = true;
+          // 画像を指に吸いつかせて滑らかにスライド
           img.style.transform = `translateX(${diffX}px) scale(0.98)`;
         }
       }
     } else if (activeSwipeThumb && activeSwipeThumb.hasPointerCapture(e.pointerId)) {
-      // 横揺れのブレを考慮し、10px以上の移動でドラッグ判定
+      // 10px以上の移動でドラッグ開始
       if (Math.abs(diffX) > 10) {
         e.preventDefault();
         isMoveTriggered = true;
@@ -1775,7 +1788,7 @@ function initApp() {
         activeSwipeThumb.style.transform = `translateX(${diffX}px) scale(1.08) rotate(${diffX * 0.05}deg)`;
         activeSwipeThumb.style.boxShadow = '0 10px 25px rgba(0,0,0,0.35)';
 
-        // 🌟 オートギャップ（隙間空け）アニメーションの実装 🌟
+        // 🌟【大本命】オートギャップ（隙間空け）アニメーションの実装 🌟
         const isEditor = activeSwipeThumb.classList.contains('preview-item');
         const isBatch = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'group';
         
@@ -1790,23 +1803,38 @@ function initApp() {
           curIdx = Number(activeSwipeThumb.dataset.iidx);
         }
 
-        const itemWidth = activeSwipeThumb.offsetWidth || 90;
-        const threshold = itemWidth * 0.4; // アイテム幅の40%を越えたら隙間を空ける
-
-        siblings.forEach((sib, sIdx) => {
-          if (sib === activeSwipeThumb) return;
-          sib.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        if (curIdx !== -1 && !isNaN(curIdx)) {
+          const itemWidth = activeSwipeThumb.offsetWidth || 90;
+          const step = itemWidth + 10; // アイテム幅 + マージン（10px）
           
-          if (diffX > threshold && sIdx > curIdx && sIdx <= curIdx + Math.floor(diffX / itemWidth)) {
-            // 右にドラッグ中：右隣を左にスライドさせて隙間を作る
-            sib.style.transform = `translateX(${-itemWidth - 10}px)`;
-          } else if (diffX < -threshold && sIdx < curIdx && sIdx >= curIdx + Math.ceil(diffX / itemWidth)) {
-            // 左にドラッグ中：左隣を右にスライドさせて隙間を作る
-            sib.style.transform = `translateX(${itemWidth + 10}px)`;
-          } else {
-            sib.style.transform = 'none';
-          }
-        });
+          // 掴んでいる要素が現在どのインデックスの位置まで侵入しているかを計算
+          const offsetIndices = Math.round(diffX / step);
+          let targetIdx = curIdx + offsetIndices;
+          targetIdx = Math.max(0, Math.min(siblings.length - 1, targetIdx));
+
+          siblings.forEach((sib, sIdx) => {
+            if (sib === activeSwipeThumb) return;
+            sib.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            
+            if (curIdx < targetIdx) {
+              // 右方向にドラッグ中：curIdx より後ろで targetIdx 以下の要素は左にズレる
+              if (sIdx > curIdx && sIdx <= targetIdx) {
+                sib.style.transform = `translateX(${-step}px)`;
+              } else {
+                sib.style.transform = 'none';
+              }
+            } else if (curIdx > targetIdx) {
+              // 左方向にドラッグ中：targetIdx 以上で curIdx より前の要素は右にズレる
+              if (sIdx >= targetIdx && sIdx < curIdx) {
+                sib.style.transform = `translateX(${step}px)`;
+              } else {
+                sib.style.transform = 'none';
+              }
+            } else {
+              sib.style.transform = 'none';
+            }
+          });
+        }
       }
     }
   }, { passive: false });
@@ -1842,7 +1870,7 @@ function initApp() {
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(120%) scale(0.9)';
-                updatedImg.offsetHeight;
+                updatedImg.offsetHeight; // リフロー
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
@@ -1855,7 +1883,7 @@ function initApp() {
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(-120%) scale(0.9)';
-                updatedImg.offsetHeight;
+                updatedImg.offsetHeight; // リフロー
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
@@ -1890,13 +1918,12 @@ function initApp() {
 
       thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
 
-      // タップ時間および移動量から「タップ操作（拡大起動）」を完全に検出し、100%確実にライトボックスを開く
+      // 🌟 タップ操作（拡大起動）のインテリジェント検出
       if (!isMoveTriggered && Math.abs(diffX) < 10 && Math.abs(diffY) < 10 && duration < 250) {
         thumb.style.transform = 'none';
         thumb.style.zIndex = '';
         thumb.style.boxShadow = 'none';
         
-        // ターゲット画像をクリックエミュレート、または直接展開
         const imgEl = thumb.querySelector('img');
         if (imgEl) {
           const contextType = imgEl.dataset.contextType;
@@ -1913,28 +1940,33 @@ function initApp() {
         return;
       }
 
-      // 40px以上動かした場合は、配列を並び替えて再描画
-      if (Math.abs(diffX) > 40) {
-        const direction = diffX > 0 ? 1 : -1;
+      // 🌟【大進化】オートギャップに基づいた、多段階一括並び替え処理！
+      const itemWidth = thumb.offsetWidth || 90;
+      const step = itemWidth + 10;
+      const offsetIndices = Math.round(diffX / step);
 
+      if (Math.abs(offsetIndices) >= 1) {
         if (isEditor) {
           const imgEl = thumb.querySelector('img');
           if (imgEl && imgEl.dataset.idx !== undefined) {
             const idx = Number(imgEl.dataset.idx);
             if (!isNaN(idx)) {
-              const targetIdx = idx + direction;
-              if (targetIdx >= 0 && targetIdx < uploadedImages.length) {
-                const temp = uploadedImages[idx];
-                uploadedImages[idx] = uploadedImages[targetIdx];
-                uploadedImages[targetIdx] = temp;
+              let targetIdx = idx + offsetIndices;
+              targetIdx = Math.max(0, Math.min(uploadedImages.length - 1, targetIdx));
+              
+              if (targetIdx !== idx) {
+                // 配列の安全な移動（挿入型入れ替え）
+                const [movedItem] = uploadedImages.splice(idx, 1);
+                uploadedImages.splice(targetIdx, 0, movedItem);
                 
-                // 0番目がメイン写真になるため、activeThumbnailIndexも常に0にリセット
+                // 0番目がメイン写真になる
                 activeThumbnailIndex = 0;
                 
-                thumb.style.transform = `translateX(${-direction * 60}px) scale(0.9)`;
+                // 元のドラッグ要素をスライドバックするアニメーションを設定
+                thumb.style.transform = `translateX(${-offsetIndices * step}px) scale(0.9)`;
                 setTimeout(() => {
                   renderImagePreviewList();
-                }, 100);
+                }, 120);
                 return;
               }
             }
@@ -1944,23 +1976,24 @@ function initApp() {
           const iIdx = Number(thumb.dataset.iidx);
           if (!isNaN(gIdx) && !isNaN(iIdx) && batchGroups[gIdx]) {
             const group = batchGroups[gIdx];
-            const targetIIdx = iIdx + direction;
-            if (targetIIdx >= 0 && targetIIdx < group.length) {
-              const temp = group[iIdx];
-              group[iIdx] = group[targetIIdx];
-              group[targetIIdx] = temp;
+            let targetIIdx = iIdx + offsetIndices;
+            targetIIdx = Math.max(0, Math.min(group.length - 1, targetIIdx));
+            
+            if (targetIIdx !== iIdx) {
+              const [movedItem] = group.splice(iIdx, 1);
+              group.splice(targetIIdx, 0, movedItem);
               
-              thumb.style.transform = `translateX(${-direction * 60}px) scale(0.9)`;
+              thumb.style.transform = `translateX(${-offsetIndices * step}px) scale(0.9)`;
               setTimeout(() => {
                 renderBatchGroupsUI();
-              }, 100);
+              }, 120);
               return;
             }
           }
         }
       }
-
-      // 元に戻す
+      
+      // 移動が発生しなかった場合は元の位置に戻す
       thumb.style.transform = 'none';
       thumb.style.zIndex = '';
       thumb.style.boxShadow = 'none';
