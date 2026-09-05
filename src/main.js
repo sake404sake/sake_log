@@ -7,7 +7,7 @@ import { renderLogEditorModal } from './views/logEditor.js';
 import { renderLogDetailModal } from './views/logDetail.js';
 import { renderLogListView } from './views/logList.js';
 import { saveLog, deleteLog, getLogById } from './store/db.js';
-import { extractPhotoDate, compressImage } from './utils/image.js';
+import { extractPhotoDate, compressImage, groupImagesByTime } from './utils/image.js';
 import { renderBatchImportView } from './views/batchImport.js';
 
 // テーマ適用と保存
@@ -81,6 +81,62 @@ let uploadedImages = [];
 let activeThumbnailIndex = 0;
 let backupFormData = {};
 let currentEditingLogId = null;
+
+// --- 一括インポート用の状態 ---
+let batchGroups = []; // [ [ {file, date, compressed, previewUrl}, ... ], ... ]
+
+// グループ描画関数
+function renderBatchGroupsUI() {
+  const container = document.getElementById('batch-groups-container');
+  const countTitle = document.getElementById('batch-group-count-title');
+  const previewSection = document.getElementById('batch-preview-section');
+  if (!container) return;
+
+  if (batchGroups.length === 0) {
+    if (previewSection) previewSection.style.display = 'none';
+    return;
+  }
+
+  if (previewSection) previewSection.style.display = 'block';
+  if (countTitle) countTitle.textContent = `✨ 検出されたお酒グループ (${batchGroups.length} 本)`;
+
+  container.innerHTML = batchGroups.map((group, gIdx) => {
+    const mainImg = group[0];
+    const dateStr = mainImg && mainImg.date ? mainImg.date.toLocaleString() : '日時不明';
+
+    const thumbsHTML = group.map((item, iIdx) => `
+      <div class="batch-thumb-item" style="position:relative; width:70px; height:70px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
+        <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
+        <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
+        style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:10px; cursor:pointer;">✕</button>
+      </div>
+    `).join('');
+
+    return `
+      <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;" data-gidx="${gIdx}">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <div>
+            <span style="font-weight: bold; color: var(--accent-color);">🍶 お酒グループ #${gIdx + 1}</span>
+            <span style="font-size: 0.8rem; color: var(--text-sub); margin-left: 8px;">撮影目安: ${dateStr} (${group.length}枚)</span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn-secondary btn-batch-analyze" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;">🤖 このグループをAI解析</button>
+            <button type="button" class="btn-secondary btn-batch-split" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;" title="中央でグループを分割">✂️ 分割</button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+          ${thumbsHTML}
+        </div>
+
+        <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <input type="text" class="input-dark batch-name-input" data-gidx="${gIdx}" placeholder="銘柄名 (例: 寫樂)" style="font-size: 0.85rem;" />
+          <input type="text" class="input-dark batch-brewery-input" data-gidx="${gIdx}" placeholder="酒蔵・メーカー" style="font-size: 0.85rem;" />
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 const TRACKED_FIELDS = [
   'sake-category',
@@ -157,7 +213,6 @@ async function openEditorModal(logId = null) {
   const modalHTML = await renderLogEditorModal();
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 
-  // モーダルオープン時にモデルリストを確実にロード
   const modalModelSelect = document.getElementById('modal-model-select');
   if (modalModelSelect) {
     await populateModelDropdown(modalModelSelect);
@@ -388,6 +443,41 @@ async function runAIAnalysis(targetImg) {
 }
 
 function initApp() {
+  // --- ドラッグ＆ドロップのイベント処理（clickリスナーの外に配置） ---
+  document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+  });
+
+  document.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    
+    const uploadZone = e.target.closest('#batch-upload-zone');
+    if (!uploadZone) return;
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const items = [];
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue;
+      const compressed = await compressImage(file);
+      const date = file.lastModified ? new Date(file.lastModified) : null;
+      items.push({
+        file,
+        date,
+        blob: compressed.blob,
+        base64: compressed.base64,
+        mimeType: compressed.mimeType,
+        previewUrl: URL.createObjectURL(compressed.blob)
+      });
+    }
+
+    if (items.length > 0) {
+      batchGroups = groupImagesByTime(items, 3 * 60 * 1000, 5);
+      renderBatchGroupsUI();
+    }
+  });
+
   document.addEventListener('click', async (e) => {
     // APIキー保存
     if (e.target && e.target.id === 'btn-save-api-key') {
@@ -431,42 +521,6 @@ function initApp() {
       }, 1500);
       return;
     }
-
-    // --- ドラッグ＆ドロップのイベント処理を追加 ---
-    document.addEventListener('dragover', (e) => {
-    e.preventDefault(); // ブラウザがファイルを勝手に開くのを防ぐ
-    });
-
-    document.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    
-    // バッチインポート画面のアップロードゾーンにドロップされたか確認
-    const uploadZone = e.target.closest('#batch-upload-zone');
-    if (!uploadZone) return;
-
-    const files = e.dataTransfer.files;
-    if (!files || files.length === 0) return;
-
-    const items = [];
-    for (const file of files) {
-        if (!file.type.startsWith('image/')) continue;
-        const compressed = await compressImage(file);
-        const date = file.lastModified ? new Date(file.lastModified) : null;
-        items.push({
-        file,
-        date,
-        blob: compressed.blob,
-        base64: compressed.base64,
-        mimeType: compressed.mimeType,
-        previewUrl: URL.createObjectURL(compressed.blob)
-        });
-    }
-
-    if (items.length > 0) {
-        batchGroups = groupImagesByTime(items, 3 * 60 * 1000, 5);
-        renderBatchGroupsUI();
-    }
-    });
 
     // 行タップで閲覧専用詳細カードを開く
     const rowItem = e.target.closest('[data-action="open-detail"]');
@@ -668,7 +722,6 @@ function initApp() {
     }
     if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
       setSavedModel(e.target.value);
-      // セレクトボックス間での値を相互同期
       const globalSelect = document.getElementById('select-gemini-model');
       const modalSelect = document.getElementById('modal-model-select');
       if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
@@ -686,63 +739,6 @@ function initApp() {
   overlay?.addEventListener('click', closeSidebar);
 
   navigateTo('logList');
-
-    // --- 一括インポート用の状態 ---
-    let batchGroups = []; // [ [ {file, date, compressed, previewUrl}, ... ], ... ]
-
-    // グループ描画関数
-    function renderBatchGroupsUI() {
-    const container = document.getElementById('batch-groups-container');
-    const countTitle = document.getElementById('batch-group-count-title');
-    const previewSection = document.getElementById('batch-preview-section');
-    if (!container) return;
-
-    if (batchGroups.length === 0) {
-        if (previewSection) previewSection.style.display = 'none';
-        return;
-    }
-
-    if (previewSection) previewSection.style.display = 'block';
-    if (countTitle) countTitle.textContent = `✨ 検出されたお酒グループ (${batchGroups.length} 本)` ;
-
-    container.innerHTML = batchGroups.map((group, gIdx) => {
-        const mainImg = group[0];
-        const dateStr = mainImg && mainImg.date ? mainImg.date.toLocaleString() : '日時不明';
-
-        const thumbsHTML = group.map((item, iIdx) => `
-        <div class="batch-thumb-item" style="position:relative; width:70px; height:70px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
-            <img src="${item.previewUrl}" style="width:100%; height:100%; object-fit:cover;" />
-            <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-            style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:10px; cursor:pointer;">✕</button>
-        </div>
-        `).join('');
-
-        return `
-        <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;" data-gidx="${gIdx}">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
-            <div>
-                <span style="font-weight: bold; color: var(--accent-color);">🍶 お酒グループ #${gIdx + 1}</span>
-                <span style="font-size: 0.8rem; color: var(--text-sub); margin-left: 8px;">撮影目安: ${dateStr} (${group.length}枚)</span>
-            </div>
-            <div style="display: flex; gap: 6px;">
-                <button type="button" class="btn-secondary btn-batch-analyze" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;">🤖 このグループをAI解析</button>
-                <button type="button" class="btn-secondary btn-batch-split" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;" title="中央でグループを分割">✂️ 分割</button>
-            </div>
-            </div>
-
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
-            ${thumbsHTML}
-            </div>
-
-            <!-- 簡易入力フォーム（グループごとにAI解析結果や手動入力を反映） -->
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <input type="text" class="input-dark batch-name-input" data-gidx="${gIdx}" placeholder="銘柄名 (例: 寫樂)" style="font-size: 0.85rem;" />
-            <input type="text" class="input-dark batch-brewery-input" data-gidx="${gIdx}" placeholder="酒蔵・メーカー" style="font-size: 0.85rem;" />
-            </div>
-        </div>
-        `;
-    }).join('');
-    }
 }
 
 if (document.readyState === 'loading') {
