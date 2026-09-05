@@ -1254,8 +1254,10 @@ function initApp() {
       return;
     }
 
-    if (e.target.dataset.action === 'enlarge-image') {
-      openLightbox(e.target.src);
+    // 💡 修正: プレビュー画像のライトボックス拡大判定を closest() に変更
+    const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
+    if (enlargeTarget) {
+      openLightbox(enlargeTarget.src);
       return;
     }
 
