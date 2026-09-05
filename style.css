@@ -1125,8 +1125,29 @@ a:hover {
   color: #000;
 }
 
-/* スマホ表示でのモーダルフッター崩れ防止対応（確実に縦並びにして画面内に収める） */
+/* スマホ表示での崩れ防止対応（追加・修正箇所） */
 @media (max-width: 600px) {
+  /* フォームの行を強制的に1列に変更し、画面からはみ出さないようにする */
+  .form-row {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* モーダルカードが画面端からはみ出さないようにする */
+  .modal-card {
+    max-width: 95vw !important;
+    margin: 0 auto;
+  }
+
+  .modal-body {
+    padding: 10px !important;
+  }
+
+  /* 入力欄やセレクトボックスがはみ出さないように設定 */
+  .input-dark, .model-select, select, input {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
   .modal-footer,
   .editor-actions {
     flex-direction: column !important;
@@ -1134,6 +1155,7 @@ a:hover {
     gap: 8px !important;
     padding: 10px 12px !important;
   }
+  
   .footer-left, 
   .footer-right {
     width: 100% !important;
@@ -1142,17 +1164,19 @@ a:hover {
     justify-content: space-between !important;
     gap: 8px !important;
   }
+  
   .footer-left > *, 
   .footer-right > * {
     flex: 1 !important;
     text-align: center !important;
     box-sizing: border-box !important;
   }
+  
   .model-select {
     width: 100% !important;
     flex: 1 !important;
   }
-  /* 決定ボタン・キャンセルボタンがはみ出さないように強制調整 */
+
   .modal-footer button,
   .editor-actions button {
     max-width: 100% !important;
