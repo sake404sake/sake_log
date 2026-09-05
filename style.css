@@ -358,11 +358,13 @@ a:hover {
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 20px;
+  overflow: hidden; /* スマホでのはみ出し防止 */
 }
 
 .card-title {
   display: flex;
   align-items: center;
+  flex-wrap: wrap; /* スマホでタイトルが長い場合折り返す */
   gap: 8px;
   margin-bottom: 6px;
 }
@@ -370,6 +372,8 @@ a:hover {
 .card-title h3 {
   font-size: 1.05rem;
   color: var(--text-main);
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 .card-desc {
@@ -377,7 +381,7 @@ a:hover {
   color: var(--text-sub);
   margin-bottom: 16px;
   line-height: 1.5;
-  word-break: keep-all;
+  word-break: break-all; /* スマホで長文がはみ出さないように変更 */
   overflow-wrap: break-word;
 }
 
@@ -498,6 +502,7 @@ a:hover {
   border-radius: 6px;
   margin-top: 6px;
   white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .log-card-subtitle {
@@ -548,6 +553,7 @@ a:hover {
   color: var(--text-main);
   line-height: 1.4;
   white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .card-category-badge {
@@ -575,7 +581,7 @@ a:hover {
   z-index: 1000;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding: 12px; /* スマホで端が切れないよう調整 */
   animation: fadeIn 0.2s ease;
 }
 
@@ -585,7 +591,7 @@ a:hover {
   border-radius: 16px;
   width: 100%;
   max-width: 680px;
-  max-height: 90vh;
+  max-height: 90dvh; /* スマホのビューポートに確実に出るように */
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
@@ -622,6 +628,7 @@ a:hover {
   cursor: pointer;
   transition: all 0.2s ease;
   padding: 0;
+  flex-shrink: 0;
 }
 
 .modal-close-btn:hover,
@@ -631,12 +638,13 @@ a:hover {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 16px 20px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
   flex: 1;
+  -webkit-overflow-scrolling: touch; /* スムーススクロール */
 }
 
 /* 修正: JSで生成する画像専用のクラスにのみ高さ固定を適用し、他フォームの崩れを防止 */
@@ -719,7 +727,7 @@ a:hover {
   min-height: 42px;
   display: flex;
   align-items: center;
-  word-break: break-word;
+  word-break: break-all;
 }
 
 .read-only-field.text-box {
@@ -738,8 +746,8 @@ a:hover {
 /* アップロードエリア */
 .image-upload-zone {
   width: 100%;
-  height: 220px;
-  min-height: 220px;
+  height: 180px; /* スマホで大きすぎないように調整 */
+  min-height: 180px;
   flex-shrink: 0;
   background-color: var(--card-bg);
   border: 2px dashed var(--border-color);
@@ -1024,7 +1032,7 @@ a:hover {
 /* モーダルフッター（左右グループ配置 & AIモデル選択） */
 .modal-footer,
 .editor-actions {
-  padding: 12px 20px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -1072,9 +1080,9 @@ a:hover {
 
 .model-select {
   width: auto;
-  min-width: 130px;
+  min-width: 120px;
   height: 36px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   font-size: 0.82rem;
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
@@ -1124,17 +1132,26 @@ a:hover {
   color: #000;
 }
 
-/* 修正: スマホなど狭い画面でモーダルフッターが綺麗に収まるようにメディアクエリを追加 */
+/* スマホ表示でのモーダルフッター崩れ防止対応 */
 @media (max-width: 600px) {
-  .modal-footer {
+  .modal-footer,
+  .editor-actions {
     flex-direction: column;
     align-items: stretch;
   }
-  .footer-left, .footer-right {
+  .footer-left, 
+  .footer-right {
     width: 100%;
     justify-content: space-between;
+    gap: 8px;
+  }
+  .footer-left > *, 
+  .footer-right > * {
+    flex: 1;
+    text-align: center;
   }
   .model-select {
+    width: 100%;
     flex: 1;
   }
 }
