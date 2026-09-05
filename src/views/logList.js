@@ -2,15 +2,13 @@ import { getAllLogs } from '../store/db.js';
 
 export async function renderLogListView() {
   const logs = await getAllLogs();
-  console.log('取得したログ一覧（デバッグ）:', logs); // ブラウザのコンソールでデータ構造を確認できます
+  console.log('取得したログ一覧（デバッグ）:', logs);
 
   if (!logs || logs.length === 0) {
-    return `
-      <div class="empty-state">
-        <p>登録されたお酒の記録がありません。</p>
-        <button class="btn-primary" data-action="open-editor" style="margin-top: 12px;">最初の酒ログを登録する</button>
-      </div>
-    `;
+    return `<div class="empty-state">
+      <p>登録されたお酒の記録がありません。</p>
+      <button class="btn-primary" data-action="open-editor" style="margin-top: 12px;">最初の酒ログを登録する</button>
+    </div>`;
   }
 
   // 1. カテゴリ別にグループ化
@@ -18,11 +16,11 @@ export async function renderLogListView() {
   logs.forEach(log => {
     const cat = log.category || 'その他';
     if (!categoryGroups[cat]) categoryGroups[cat] = {};
-    
+
     // 2. 銘柄名でグループ化
     const brand = log.name || '名称未設定';
     if (!categoryGroups[cat][brand]) categoryGroups[cat][brand] = [];
-    
+
     categoryGroups[cat][brand].push(log);
   });
 
@@ -38,11 +36,9 @@ export async function renderLogListView() {
 
       const rowsHTML = brandLogs.map(log => {
         let thumbUrl = null;
-        // db_3.js の getAllLogs() が返す imageUrls に最初に対応させる
         if (Array.isArray(log.imageUrls) && log.imageUrls.length > 0) {
           thumbUrl = log.imageUrls[0];
         } else {
-          // 従来のフォールバック（他の形式に対応）
           let imgData = null;
           const possibleImages = log.images || log.image || log.photos || log.photo;
           
@@ -112,14 +108,12 @@ export async function renderLogListView() {
     `;
   }).join('');
 
-  return `
-    <div class="dashboard-container">
-      <div class="dashboard-header">
-        <h2>酒ログ一覧</h2>
-      </div>
-      <div class="category-accordion-list">
-        ${categoriesHTML}
-      </div>
+  return `<div class="dashboard-container">
+    <div class="dashboard-header">
+      <h2>酒ログ一覧</h2>
     </div>
-  `;
+    <div class="category-accordion-list">
+      ${categoriesHTML}
+    </div>
+  </div>`;
 }
