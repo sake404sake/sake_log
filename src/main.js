@@ -40,6 +40,7 @@ function ensureSpinnerStyles() {
       background: var(--card-hover-bg, rgba(255,255,255,0.03));
     }
     
+    
     /* 登録時の画像プレビュー枠をスマホでも押しやすいように調整 */
     .preview-item, .add-more-item {
       width: 90px !important;
@@ -50,39 +51,49 @@ function ensureSpinnerStyles() {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
-      cursor: pointer !important;
+      cursor: grab !important;
+    }
+    .preview-item img:active {
+      cursor: grabbing !important;
     }
 
-    /* スマホ（画面幅600px以下）用の超強力なオーバーライド：ホバーメニューの完全封印とタップの直接透過 */
+    /* スマホ・PC共通：ホバーでのアローボタンを廃止し、単に削除ボタンのみを右上に浮かせるシンプルなUIへ */
+    .preview-actions {
+      position: absolute !important;
+      top: 2px !important;
+      right: 2px !important;
+      display: flex !important;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .preview-item:hover .preview-actions {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+    .btn-img-del {
+      background: rgba(0,0,0,0.7) !important;
+      color: #fff !important;
+      border: none !important;
+      border-radius: 50% !important;
+      width: 22px !important;
+      height: 22px !important;
+      font-size: 11px !important;
+      cursor: pointer !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
     @media (max-width: 600px) {
-      .preview-item .preview-actions,
-      .preview-item:hover .preview-actions,
-      #image-preview-list .preview-item .preview-actions,
-      #image-preview-list .preview-item:hover .preview-actions {
-        display: none !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-      }
-      
       .preview-item, .add-more-item {
         width: 100px !important;
         height: 100px !important;
         min-height: 100px !important;
       }
-    }
-
-    /* PC用のホバーアクションメニュー */
-    @media (min-width: 601px) {
-      .preview-item:hover .preview-actions {
-        display: flex !important;
-        position: absolute !important;
-        inset: 0 !important;
-        background: rgba(0,0,0,0.6) !important;
-        flex-wrap: wrap !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 2px !important;
+      /* スマホでは常に右上の削除ボタンを表示しておく */
+      .preview-actions {
         opacity: 1 !important;
         pointer-events: auto !important;
       }
@@ -826,13 +837,10 @@ function renderImagePreviewList() {
   }
 
   const itemsHTML = uploadedImages.map((img, idx) => `
-    <div class="preview-item ${idx === activeThumbnailIndex ? 'is-thumb' : ''}">
-      <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" />
+    <div class="preview-item ${idx === 0 ? 'is-thumb' : ''}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
+      <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
       <div class="preview-actions">
-        <button type="button" class="btn-thumb-set" data-idx="${idx}">${idx === activeThumbnailIndex ? '★メイン' : '☆選択'}</button>
-        <button type="button" class="btn-img-move" data-idx="${idx}" data-dir="-1" ${idx === 0 ? 'disabled' : ''}>◄</button>
-        <button type="button" class="btn-img-move" data-idx="${idx}" data-dir="1" ${idx === uploadedImages.length - 1 ? 'disabled' : ''}>►</button>
-        <button type="button" class="btn-img-del" data-idx="${idx}">✕</button>
+        <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
       </div>
     </div>
   `).join('');
@@ -1699,138 +1707,132 @@ function initApp() {
   });
 
 
+    // ==========================================================================
+  // 📱💻 スマホ・PC共通：【究極の操作感】ポインターイベント（PointerEvents）による「画像引きずり並び替え」＆「スライド閲覧めくり」
   // ==========================================================================
-  // 📱 スマホ専用：【極上の操作感】スワイプジェスチャー「指吸い付き並び替え」＆「スライド画像切り替え」
-  // ==========================================================================
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchStartTime = 0;
-  let isSwiping = false;
+  let pointerStartX = 0;
+  let pointerStartY = 0;
+  let pointerStartTime = 0;
+  let isDragging = false;
   let activeSwipeThumb = null;
 
-  document.addEventListener('touchstart', (e) => {
-    const touch = e.touches[0];
-    touchStartX = touch.clientX;
-    touchStartY = touch.clientY;
-    touchStartTime = Date.now();
-    isSwiping = false;
+  document.addEventListener('pointerdown', (e) => {
+    // 左クリックまたはタッチ開始のみを対象とする
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
 
-    // ライトボックスがアクティブな場合、またはサムネイルが存在する場合
     const lightbox = document.getElementById('lightbox-modal');
     if (lightbox && lightbox.classList.contains('active')) {
       const img = lightbox.querySelector('#lightbox-img');
-      if (img) {
+      if (img && e.target === img) {
+        pointerStartX = e.clientX;
+        pointerStartY = e.clientY;
+        pointerStartTime = Date.now();
+        isDragging = true;
         img.style.transition = 'none';
+        img.setPointerCapture(e.pointerId);
       }
-      isSwiping = true;
     } else {
       const thumb = e.target.closest('.preview-item, .draggable-thumb');
-      if (thumb) {
+      if (thumb && !e.target.closest('button')) {
         activeSwipeThumb = thumb;
+        pointerStartX = e.clientX;
+        pointerStartY = e.clientY;
+        pointerStartTime = Date.now();
+        isDragging = true;
         activeSwipeThumb.style.transition = 'none';
         activeSwipeThumb.style.zIndex = '9999';
-        isSwiping = true;
+        activeSwipeThumb.setPointerCapture(e.pointerId);
       }
     }
   }, { passive: false });
 
-  document.addEventListener('touchmove', (e) => {
-    if (!isSwiping || e.touches.length === 0) return;
-    const touch = e.touches[0];
-    const diffX = touch.clientX - touchStartX;
-    const diffY = touch.clientY - touchStartY;
-
-    // 横方向の動きが縦方向よりも強い場合にスワイプとみなす (スクロール妨害防止)
-    if (Math.abs(diffX) > Math.abs(diffY)) {
-      e.preventDefault(); // 横スワイプ中は画面スクロールを止めてサクサク動かす
-
-      const lightbox = document.getElementById('lightbox-modal');
-      if (lightbox && lightbox.classList.contains('active')) {
-        // ライトボックス：画像を指に吸いつかせて滑らかに動かす
-        const img = lightbox.querySelector('#lightbox-img');
-        if (img) {
-          img.style.transform = `translateX(${diffX}px) scale(0.98)`;
-        }
-      } else if (activeSwipeThumb) {
-        // サムネイル：指に追従して傾きながら動く (引きずり感を演出)
-        activeSwipeThumb.style.transform = `translateX(${diffX}px) scale(1.06) rotate(${diffX * 0.08}deg)`;
-        activeSwipeThumb.style.boxShadow = '0 8px 20px rgba(0,0,0,0.3)';
-      }
-    }
-  }, { passive: false });
-
-  document.addEventListener('touchend', (e) => {
-    if (!isSwiping) return;
-    isSwiping = false;
-
-    if (e.changedTouches.length === 0) {
-      if (activeSwipeThumb) {
-        activeSwipeThumb.style.transform = 'none';
-        activeSwipeThumb.style.zIndex = '';
-        activeSwipeThumb = null;
-      }
-      return;
-    }
-
-    const touch = e.changedTouches[0];
-    const diffX = touch.clientX - touchStartX;
-    const diffY = touch.clientY - touchStartY;
-    const duration = Date.now() - touchStartTime;
+  document.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const diffX = e.clientX - pointerStartX;
+    const diffY = e.clientY - pointerStartY;
 
     const lightbox = document.getElementById('lightbox-modal');
     if (lightbox && lightbox.classList.contains('active')) {
       const img = lightbox.querySelector('#lightbox-img');
-      if (img) {
+      if (img && img.hasPointerCapture(e.pointerId)) {
+        e.preventDefault();
+        // ライトボックス：指やマウスに完全に吸いついて横スライド
+        img.style.transform = `translateX(${diffX}px) scale(0.98)`;
+      }
+    } else if (activeSwipeThumb && activeSwipeThumb.hasPointerCapture(e.pointerId)) {
+      // 横スクロールや縦スクロールとの干渉を和らげるため、一定以上の横の動きのみ検知
+      if (Math.abs(diffX) > 8) {
+        e.preventDefault();
+        // サムネイル：指やマウスにくっついて立体的に傾きながらスライド
+        activeSwipeThumb.style.transform = `translateX(${diffX}px) scale(1.08) rotate(${diffX * 0.08}deg)`;
+        activeSwipeThumb.style.boxShadow = '0 10px 25px rgba(0,0,0,0.35)';
+      }
+    }
+  }, { passive: false });
+
+  document.addEventListener('pointerup', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+
+    const diffX = e.clientX - pointerStartX;
+    const duration = Date.now() - pointerStartTime;
+
+    const lightbox = document.getElementById('lightbox-modal');
+    if (lightbox && lightbox.classList.contains('active')) {
+      const img = lightbox.querySelector('#lightbox-img');
+      if (img && img.hasPointerCapture(e.pointerId)) {
+        img.releasePointerCapture(e.pointerId);
         img.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        
+
         // 50px以上動かした、またはすばやいフリックの場合
         if (Math.abs(diffX) > 55 || (duration < 300 && Math.abs(diffX) > 30)) {
           if (diffX < 0) {
-            // 左スワイプ ➔ 次の写真へスライドアウト
+            // 左スワイプ・ドラッグ ➔ 次の写真へスライドアウト
             img.style.transform = 'translateX(-120%) scale(0.9)';
             setTimeout(() => {
               triggerLightboxNext();
-              // 新しい画像を反対側からスライドイン
               const updatedImg = document.getElementById('lightbox-img');
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(120%) scale(0.9)';
-                updatedImg.offsetHeight; // リフローを起こして transition をバインド
+                updatedImg.offsetHeight; // リフロー
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
             }, 180);
           } else {
-            // 右スワイプ ➔ 前の写真へスライドアウト
+            // 右スワイプ・ドラッグ ➔ 前の写真へスライドアウト
             img.style.transform = 'translateX(120%) scale(0.9)';
             setTimeout(() => {
               triggerLightboxPrev();
-              // 新しい画像を反対側からスライドイン
               const updatedImg = document.getElementById('lightbox-img');
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(-120%) scale(0.9)';
-                updatedImg.offsetHeight;
+                updatedImg.offsetHeight; // リフロー
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
             }, 180);
           }
         } else {
-          // 閾値未満なら元の位置にヌルッと戻す
+          // 戻す
           img.style.transform = 'translateX(0) scale(1)';
         }
       }
     } else if (activeSwipeThumb) {
       const thumb = activeSwipeThumb;
       activeSwipeThumb = null;
-      
+      if (thumb.hasPointerCapture(e.pointerId)) {
+        thumb.releasePointerCapture(e.pointerId);
+      }
+
       thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
-      
+
       // 40px以上動かした場合に並び替えを実行
       if (Math.abs(diffX) > 40) {
         const direction = diffX > 0 ? 1 : -1;
-        
+
         // 2-a. 単体登録画面（エディタ）のサムネイルの場合
         if (thumb.classList.contains('preview-item')) {
           const imgEl = thumb.querySelector('img');
@@ -1844,11 +1846,7 @@ function initApp() {
                 uploadedImages[idx] = uploadedImages[targetIdx];
                 uploadedImages[targetIdx] = temp;
                 
-                // メイン画像の選択位置も連動
-                if (activeThumbnailIndex === idx) activeThumbnailIndex = targetIdx;
-                else if (activeThumbnailIndex === targetIdx) activeThumbnailIndex = idx;
-                
-                // 入れ替わりアニメーションを表現するために一瞬 translateX を逆方向に当ててから再描画する
+                // 入れ替わり演出をしてから再描画
                 thumb.style.transform = `translateX(${-direction * 60}px) scale(0.9)`;
                 setTimeout(() => {
                   renderImagePreviewList();
@@ -1879,17 +1877,27 @@ function initApp() {
           }
         }
       }
-      
-      // 入れ替えが起きなかった、または戻る場合は元の位置にヌルッと戻す
+
+      // 動かなかったか元に戻す場合はリセット
       thumb.style.transform = 'none';
       thumb.style.zIndex = '';
       thumb.style.boxShadow = 'none';
     }
+  }, { passive: false });
+
+  document.addEventListener('pointercancel', (e) => {
+    isDragging = false;
+    if (activeSwipeThumb) {
+      activeSwipeThumb.style.transform = 'none';
+      activeSwipeThumb.style.zIndex = '';
+      activeSwipeThumb.style.boxShadow = 'none';
+      if (activeSwipeThumb.hasPointerCapture(e.pointerId)) {
+        activeSwipeThumb.releasePointerCapture(e.pointerId);
+      }
+      activeSwipeThumb = null;
+    }
   });
 
-  
-  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
-  overlay?.addEventListener('click', closeSidebar);
 
   navigateTo('logList');
 }
