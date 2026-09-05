@@ -46,6 +46,7 @@ function ensureSpinnerStyles() {
       width: 90px !important;
       height: 90px !important;
       min-height: 90px !important;
+      position: relative !important;
     }
     .preview-item img {
       width: 100% !important;
@@ -57,23 +58,12 @@ function ensureSpinnerStyles() {
       cursor: grabbing !important;
     }
 
-    /* スマホ・PC共通：ホバーでのアローボタンを廃止し、単に削除ボタンのみを右上に浮かせるシンプルなUIへ */
-    .preview-actions {
-      position: absolute !important;
-      top: 2px !important;
-      right: 2px !important;
-      display: flex !important;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-      pointer-events: none;
-      z-index: 10;
-    }
-    .preview-item:hover .preview-actions {
-      opacity: 1 !important;
-      pointer-events: auto !important;
-    }
+    /* プレビュー内の削除ボタンを右上に絶対配置 */
     .btn-img-del {
-      background: rgba(0,0,0,0.7) !important;
+      position: absolute !important;
+      top: 4px !important;
+      right: 4px !important;
+      background: rgba(0, 0, 0, 0.7) !important;
       color: #fff !important;
       border: none !important;
       border-radius: 50% !important;
@@ -84,6 +74,20 @@ function ensureSpinnerStyles() {
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      z-index: 15 !important;
+      pointer-events: auto !important;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3) !important;
+    }
+
+    /* ホバー時のみ削除ボタンを出す (PC) */
+    @media (min-width: 601px) {
+      .btn-img-del {
+        opacity: 0 !important;
+        transition: opacity 0.2s ease !important;
+      }
+      .preview-item:hover .btn-img-del {
+        opacity: 1 !important;
+      }
     }
 
     @media (max-width: 600px) {
@@ -92,10 +96,9 @@ function ensureSpinnerStyles() {
         height: 100px !important;
         min-height: 100px !important;
       }
-      /* スマホでは常に右上の削除ボタンを表示しておく */
-      .preview-actions {
+      /* スマホでは誤爆を避けるため削除ボタンは常に表示しておく */
+      .btn-img-del {
         opacity: 1 !important;
-        pointer-events: auto !important;
       }
     }
 
@@ -1632,10 +1635,7 @@ function initApp() {
         return img.blob;
       }).filter(blob => blob instanceof Blob); // 🌟確実にBlobオブジェクトであるもののみにクレンジング！
 
-      if (activeThumbnailIndex > 0 && activeThumbnailIndex < orderedBlobs.length) {
-        const mainBlob = orderedBlobs.splice(activeThumbnailIndex, 1)[0];
-        orderedBlobs.unshift(mainBlob);
-      }
+// 並び順は PointerEvents スワイプで並び替えられた orderedBlobs を100%そのまま保存する
 
       const logData = {
         category: document.getElementById('sake-category')?.value || 'その他',
@@ -1708,13 +1708,14 @@ function initApp() {
 
 
     // ==========================================================================
-  // 📱💻 スマホ・PC共通：【究極の操作感】ポインターイベント（PointerEvents）による「画像引きずり並び替え」＆「スライド閲覧めくり」
+  // 📱💻 スマホ・PC共通：【究極の操作感】PointerEvents「オートギャップ隙間空け並び替え」＆「スライド閲覧めくり」
   // ==========================================================================
   let pointerStartX = 0;
   let pointerStartY = 0;
   let pointerStartTime = 0;
   let isDragging = false;
   let activeSwipeThumb = null;
+  let isMoveTriggered = false;
 
   document.addEventListener('pointerdown', (e) => {
     // 左クリックまたはタッチ開始のみを対象とする
@@ -1728,17 +1729,20 @@ function initApp() {
         pointerStartY = e.clientY;
         pointerStartTime = Date.now();
         isDragging = true;
+        isMoveTriggered = false;
         img.style.transition = 'none';
         img.setPointerCapture(e.pointerId);
       }
     } else {
       const thumb = e.target.closest('.preview-item, .draggable-thumb');
+      // ✕ボタン(btn-img-del, btn-batch-remove-img)の上ではドラッグを起動しない
       if (thumb && !e.target.closest('button')) {
         activeSwipeThumb = thumb;
         pointerStartX = e.clientX;
         pointerStartY = e.clientY;
         pointerStartTime = Date.now();
         isDragging = true;
+        isMoveTriggered = false;
         activeSwipeThumb.style.transition = 'none';
         activeSwipeThumb.style.zIndex = '9999';
         activeSwipeThumb.setPointerCapture(e.pointerId);
@@ -1756,16 +1760,53 @@ function initApp() {
       const img = lightbox.querySelector('#lightbox-img');
       if (img && img.hasPointerCapture(e.pointerId)) {
         e.preventDefault();
-        // ライトボックス：指やマウスに完全に吸いついて横スライド
-        img.style.transform = `translateX(${diffX}px) scale(0.98)`;
+        if (Math.abs(diffX) > 8) {
+          isMoveTriggered = true;
+          img.style.transform = `translateX(${diffX}px) scale(0.98)`;
+        }
       }
     } else if (activeSwipeThumb && activeSwipeThumb.hasPointerCapture(e.pointerId)) {
-      // 横スクロールや縦スクロールとの干渉を和らげるため、一定以上の横の動きのみ検知
-      if (Math.abs(diffX) > 8) {
+      // 横揺れのブレを考慮し、10px以上の移動でドラッグ判定
+      if (Math.abs(diffX) > 10) {
         e.preventDefault();
-        // サムネイル：指やマウスにくっついて立体的に傾きながらスライド
-        activeSwipeThumb.style.transform = `translateX(${diffX}px) scale(1.08) rotate(${diffX * 0.08}deg)`;
+        isMoveTriggered = true;
+
+        // ドラッグ対象を指に吸いつかせる
+        activeSwipeThumb.style.transform = `translateX(${diffX}px) scale(1.08) rotate(${diffX * 0.05}deg)`;
         activeSwipeThumb.style.boxShadow = '0 10px 25px rgba(0,0,0,0.35)';
+
+        // 🌟 オートギャップ（隙間空け）アニメーションの実装 🌟
+        const isEditor = activeSwipeThumb.classList.contains('preview-item');
+        const isBatch = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'group';
+        
+        let siblings = [];
+        let curIdx = -1;
+        if (isEditor) {
+          siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
+          curIdx = Number(activeSwipeThumb.dataset.idx);
+        } else if (isBatch) {
+          const gIdx = Number(activeSwipeThumb.dataset.gidx);
+          siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
+          curIdx = Number(activeSwipeThumb.dataset.iidx);
+        }
+
+        const itemWidth = activeSwipeThumb.offsetWidth || 90;
+        const threshold = itemWidth * 0.4; // アイテム幅の40%を越えたら隙間を空ける
+
+        siblings.forEach((sib, sIdx) => {
+          if (sib === activeSwipeThumb) return;
+          sib.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+          
+          if (diffX > threshold && sIdx > curIdx && sIdx <= curIdx + Math.floor(diffX / itemWidth)) {
+            // 右にドラッグ中：右隣を左にスライドさせて隙間を作る
+            sib.style.transform = `translateX(${-itemWidth - 10}px)`;
+          } else if (diffX < -threshold && sIdx < curIdx && sIdx >= curIdx + Math.ceil(diffX / itemWidth)) {
+            // 左にドラッグ中：左隣を右にスライドさせて隙間を作る
+            sib.style.transform = `translateX(${itemWidth + 10}px)`;
+          } else {
+            sib.style.transform = 'none';
+          }
+        });
       }
     }
   }, { passive: false });
@@ -1775,6 +1816,7 @@ function initApp() {
     isDragging = false;
 
     const diffX = e.clientX - pointerStartX;
+    const diffY = e.clientY - pointerStartY;
     const duration = Date.now() - pointerStartTime;
 
     const lightbox = document.getElementById('lightbox-modal');
@@ -1784,10 +1826,15 @@ function initApp() {
         img.releasePointerCapture(e.pointerId);
         img.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
 
-        // 50px以上動かした、またはすばやいフリックの場合
+        // ほとんど動いていない(10px未満)、かつタップしただけなら何もしない
+        if (!isMoveTriggered) {
+          img.style.transform = 'translateX(0) scale(1)';
+          return;
+        }
+
+        // 50px以上動かした、またはすばやいフリックの場合に画像をめくる
         if (Math.abs(diffX) > 55 || (duration < 300 && Math.abs(diffX) > 30)) {
           if (diffX < 0) {
-            // 左スワイプ・ドラッグ ➔ 次の写真へスライドアウト
             img.style.transform = 'translateX(-120%) scale(0.9)';
             setTimeout(() => {
               triggerLightboxNext();
@@ -1795,13 +1842,12 @@ function initApp() {
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(120%) scale(0.9)';
-                updatedImg.offsetHeight; // リフロー
+                updatedImg.offsetHeight;
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
             }, 180);
           } else {
-            // 右スワイプ・ドラッグ ➔ 前の写真へスライドアウト
             img.style.transform = 'translateX(120%) scale(0.9)';
             setTimeout(() => {
               triggerLightboxPrev();
@@ -1809,14 +1855,13 @@ function initApp() {
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(-120%) scale(0.9)';
-                updatedImg.offsetHeight; // リフロー
+                updatedImg.offsetHeight;
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
             }, 180);
           }
         } else {
-          // 戻す
           img.style.transform = 'translateX(0) scale(1)';
         }
       }
@@ -1827,26 +1872,65 @@ function initApp() {
         thumb.releasePointerCapture(e.pointerId);
       }
 
+      // スライドされた周りの要素（siblings）のスタイルを綺麗にリセットする
+      const isEditor = thumb.classList.contains('preview-item');
+      const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
+      
+      let siblings = [];
+      if (isEditor) {
+        siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
+      } else if (isBatch) {
+        const gIdx = Number(thumb.dataset.gidx);
+        siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
+      }
+      siblings.forEach(sib => {
+        sib.style.transition = 'none';
+        sib.style.transform = 'none';
+      });
+
       thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
 
-      // 40px以上動かした場合に並び替えを実行
+      // タップ時間および移動量から「タップ操作（拡大起動）」を完全に検出し、100%確実にライトボックスを開く
+      if (!isMoveTriggered && Math.abs(diffX) < 10 && Math.abs(diffY) < 10 && duration < 250) {
+        thumb.style.transform = 'none';
+        thumb.style.zIndex = '';
+        thumb.style.boxShadow = 'none';
+        
+        // ターゲット画像をクリックエミュレート、または直接展開
+        const imgEl = thumb.querySelector('img');
+        if (imgEl) {
+          const contextType = imgEl.dataset.contextType;
+          let ctxData = null;
+          if (contextType === 'editor-preview') {
+            ctxData = { type: 'editor-preview', idx: Number(imgEl.dataset.idx) };
+          } else if (contextType === 'batch-group') {
+            ctxData = { type: 'batch-group', gidx: Number(imgEl.dataset.gidx), iidx: Number(imgEl.dataset.iidx) };
+          } else if (contextType === 'pool') {
+            ctxData = { type: 'pool', poolIdx: Number(imgEl.dataset.poolIdx) };
+          }
+          openLightbox(imgEl.src, ctxData);
+        }
+        return;
+      }
+
+      // 40px以上動かした場合は、配列を並び替えて再描画
       if (Math.abs(diffX) > 40) {
         const direction = diffX > 0 ? 1 : -1;
 
-        // 2-a. 単体登録画面（エディタ）のサムネイルの場合
-        if (thumb.classList.contains('preview-item')) {
+        if (isEditor) {
           const imgEl = thumb.querySelector('img');
           if (imgEl && imgEl.dataset.idx !== undefined) {
             const idx = Number(imgEl.dataset.idx);
             if (!isNaN(idx)) {
               const targetIdx = idx + direction;
               if (targetIdx >= 0 && targetIdx < uploadedImages.length) {
-                // 配列の入れ替え
                 const temp = uploadedImages[idx];
                 uploadedImages[idx] = uploadedImages[targetIdx];
                 uploadedImages[targetIdx] = temp;
                 
-                // 入れ替わり演出をしてから再描画
+                // 0番目がメイン写真になるため、activeThumbnailIndexも常に0にリセット
+                activeThumbnailIndex = 0;
+                
                 thumb.style.transform = `translateX(${-direction * 60}px) scale(0.9)`;
                 setTimeout(() => {
                   renderImagePreviewList();
@@ -1855,9 +1939,7 @@ function initApp() {
               }
             }
           }
-        }
-        // 2-b. 一括インポートグループのサムネイルの場合
-        else if (thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group') {
+        } else if (isBatch) {
           const gIdx = Number(thumb.dataset.gidx);
           const iIdx = Number(thumb.dataset.iidx);
           if (!isNaN(gIdx) && !isNaN(iIdx) && batchGroups[gIdx]) {
@@ -1878,26 +1960,15 @@ function initApp() {
         }
       }
 
-      // 動かなかったか元に戻す場合はリセット
+      // 元に戻す
       thumb.style.transform = 'none';
       thumb.style.zIndex = '';
       thumb.style.boxShadow = 'none';
     }
-  }, { passive: false });
-
-  document.addEventListener('pointercancel', (e) => {
-    isDragging = false;
-    if (activeSwipeThumb) {
-      activeSwipeThumb.style.transform = 'none';
-      activeSwipeThumb.style.zIndex = '';
-      activeSwipeThumb.style.boxShadow = 'none';
-      if (activeSwipeThumb.hasPointerCapture(e.pointerId)) {
-        activeSwipeThumb.releasePointerCapture(e.pointerId);
-      }
-      activeSwipeThumb = null;
-    }
   });
 
+  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
+  overlay?.addEventListener('click', closeSidebar);
 
   navigateTo('logList');
 }
