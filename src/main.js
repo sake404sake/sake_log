@@ -1071,12 +1071,26 @@ async function processFilesForBatch(files, append = true) {
     `;
   }
 
-  try {
-    const items = [];
-    for (const file of files) {
-      if (!file.type.startsWith('image/')) continue;
+  const items = [];
+  const failedFiles = [];
+
+  for (const file of files) {
+    // 拡張子やタイプから画像であることを判定 (HEIC等のタイプが空になるケースにも対応)
+    const isImage = file.type.startsWith('image/') || /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name);
+    if (!isImage) continue;
+
+    try {
       const compressed = await compressImage(file);
-      const date = file.lastModified ? new Date(file.lastModified) : null;
+      
+      // 日付の安全な検証・取得 (Invalid Dateを完全に排除)
+      let date = null;
+      if (file.lastModified) {
+        const d = new Date(file.lastModified);
+        if (!isNaN(d.getTime())) {
+          date = d;
+        }
+      }
+
       items.push({
         file,
         date,
@@ -1085,21 +1099,44 @@ async function processFilesForBatch(files, append = true) {
         mimeType: compressed.mimeType,
         previewUrl: URL.createObjectURL(compressed.blob)
       });
+    } catch (e) {
+      console.error(`ファイル ${file.name} の処理に失敗しました:`, e);
+      failedFiles.push(file.name);
     }
+  }
 
+  try {
     if (items.length > 0) {
-      const newGroups = groupImagesByTime(items, 3 * 60 * 1000, 5);
+      // 送信する items 内の日付データが確実に安全（Date または null）であることを保証
+      const cleansedItems = items.map(item => ({
+        ...item,
+        date: (item.date && !isNaN(item.date.getTime())) ? item.date : null
+      }));
+
+      const newGroups = groupImagesByTime(cleansedItems, 3 * 60 * 1000, 5);
       if (append) {
         batchGroups = batchGroups.concat(newGroups);
       } else {
         batchGroups = newGroups;
       }
+
+      if (failedFiles.length > 0) {
+        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。HEIC形式や破損している可能性があります：
+・` + failedFiles.join('
+・'));
+      }
     } else {
-      alert('有効な画像ファイルが見つかりませんでした。');
+      if (failedFiles.length > 0) {
+        alert(`画像の読み込みに失敗しました。対応していない形式（HEIC等）の可能性があります：
+・` + failedFiles.join('
+・'));
+      } else {
+        alert('有効な画像ファイルが見つかりませんでした。');
+      }
     }
   } catch (err) {
-    console.error('Batch Processing Error:', err);
-    alert('画像の処理中にエラーが発生しました。');
+    console.error('Batch Grouping Error:', err);
+    alert('画像の自動グルーピング処理中に予期せぬエラーが発生しました。');
   } finally {
     renderBatchGroupsUI();
   }
