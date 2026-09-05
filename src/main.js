@@ -197,7 +197,7 @@ let draggedItemInfo = null;
 let isPoolCollapsed = false; 
 
 // ライトボックス関連の状態管理
-let currentLightboxImageContext = null; // どの画像・コンテキストを開いていたか保持する
+let currentLightboxImageContext = null;
 
 function base64ToBlob(base64, mimeType = 'image/jpeg') {
   const byteCharacters = atob(base64);
@@ -209,71 +209,65 @@ function base64ToBlob(base64, mimeType = 'image/jpeg') {
   return new Blob([byteArray], { type: mimeType });
 }
 
+// ファイル入力を常駐・再利用するように修正
 function ensureFileInput() {
   let fileInput = document.getElementById('file-input');
-  if (fileInput) {
-    fileInput.remove(); 
+  if (!fileInput) {
+    fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.id = 'file-input';
+    fileInput.multiple = true; 
+    fileInput.accept = 'image/*';
+    fileInput.style.position = 'fixed';
+    fileInput.style.top = '0';
+    fileInput.style.left = '0';
+    fileInput.style.opacity = '0';
+    fileInput.style.pointerEvents = 'none';
+    fileInput.style.zIndex = '-1';
+    
+    fileInput.addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        await handleImageFiles(files);
+      }
+      fileInput.value = ''; 
+    });
+    document.body.appendChild(fileInput);
   }
-  
-  fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.id = 'file-input';
-  fileInput.multiple = true; 
-  fileInput.accept = 'image/*';
-  fileInput.style.position = 'fixed';
-  fileInput.style.top = '0';
-  fileInput.style.left = '0';
-  fileInput.style.opacity = '0';
-  fileInput.style.pointerEvents = 'none';
-  fileInput.style.zIndex = '-1';
-  document.body.appendChild(fileInput);
-
-  fileInput.addEventListener('change', async (e) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      await handleImageFiles(files);
-    }
-    fileInput.value = ''; 
-  });
-
   return fileInput;
 }
 
+// バッチファイル入力を常駐・再利用するように修正
 function ensureBatchFileInput() {
   let batchInput = document.getElementById('batch-file-input');
-  if (batchInput) {
-    batchInput.remove(); 
+  if (!batchInput) {
+    batchInput = document.createElement('input');
+    batchInput.type = 'file';
+    batchInput.id = 'batch-file-input';
+    batchInput.multiple = true; 
+    batchInput.accept = 'image/*';
+    batchInput.style.position = 'fixed';
+    batchInput.style.top = '0';
+    batchInput.style.left = '0';
+    batchInput.style.opacity = '0';
+    batchInput.style.pointerEvents = 'none';
+    batchInput.style.zIndex = '-1';
+    
+    batchInput.addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        await processFilesForBatch(files, true);
+      }
+      batchInput.value = ''; 
+    });
+    document.body.appendChild(batchInput);
   }
-  
-  batchInput = document.createElement('input');
-  batchInput.type = 'file';
-  batchInput.id = 'batch-file-input';
-  batchInput.multiple = true; 
-  batchInput.accept = 'image/*';
-  batchInput.style.position = 'fixed';
-  batchInput.style.top = '0';
-  batchInput.style.left = '0';
-  batchInput.style.opacity = '0';
-  batchInput.style.pointerEvents = 'none';
-  batchInput.style.zIndex = '-1';
-  
-  batchInput.addEventListener('change', async (e) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      await processFilesForBatch(files, true);
-    }
-    batchInput.value = ''; 
-  });
-  document.body.appendChild(batchInput);
-  
   return batchInput;
 }
 
 function triggerBatchFileInput() {
   const batchInput = ensureBatchFileInput();
-  batchInput.style.pointerEvents = 'auto';
   batchInput.click();
-  batchInput.style.pointerEvents = 'none';
 }
 
 function renderBatchGroupsUI() {
@@ -439,7 +433,6 @@ function closeLightbox() {
     lightbox.classList.remove('active');
   }
   
-  // ライトボックスが閉じられたあとに、保持していたコンテキストがあればメニューを表示する
   const ctx = currentLightboxImageContext;
   currentLightboxImageContext = null;
   if (ctx) {
@@ -447,9 +440,7 @@ function closeLightbox() {
   }
 }
 
-// ライトボックスを閉じた後にポップアップ表示するアクションメニュー
 function showLightboxActionMenu(ctx) {
-  // すでにメニューがあれば削除
   const existingMenu = document.getElementById('lightbox-action-menu-modal');
   if (existingMenu) existingMenu.remove();
 
@@ -480,7 +471,7 @@ function showLightboxActionMenu(ctx) {
       <button type="button" class="lightbox-action-btn danger" data-action="menu-pool-remove-img" data-idx="${idx}">🗑️ 未所属画像を削除する</button>
     `;
   } else {
-    return; // コンテキストがない場合は何もしない
+    return;
   }
 
   menuOverlay.innerHTML = `
@@ -990,7 +981,6 @@ function initApp() {
   });
 
   document.addEventListener('click', async (e) => {
-    // ライトボックス閉じたあとのアクションメニュー内ボタンの処理
     const menuCancelBtn = e.target.closest('[data-action="menu-cancel"]');
     if (menuCancelBtn || e.target.id === 'lightbox-action-menu-modal') {
       const menuModal = document.getElementById('lightbox-action-menu-modal');
@@ -1429,7 +1419,6 @@ function initApp() {
       return;
     }
 
-    // 画像タップ時：ライトボックス拡大＋コンテキスト（どの画像か）の保持
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;
@@ -1466,13 +1455,11 @@ function initApp() {
       return;
     }
 
-    // スマホのファイル選択ダイアログを確実に呼び出す処理
+    // スマホのファイル選択ダイアログを確実に呼び出す処理（常駐インプットのclickを呼ぶ）
     if (e.target.closest('#upload-zone') || e.target.closest('#btn-trigger-upload')) {
       e.preventDefault();
       const fileInput = ensureFileInput();
-      fileInput.style.pointerEvents = 'auto';
       fileInput.click();
-      fileInput.style.pointerEvents = 'none';
       return;
     }
 
