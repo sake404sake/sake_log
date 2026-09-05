@@ -145,7 +145,6 @@ function renderBatchGroupsUI() {
   const previewSection = document.getElementById('batch-preview-section');
   if (!previewSection) return;
 
-  // ぐるぐる（ローディング表示）を確実に解除するためにアップロードゾーンを初期状態に戻す
   const uploadZone = document.getElementById('batch-upload-zone');
   if (uploadZone) {
     uploadZone.innerHTML = `
@@ -180,9 +179,9 @@ function renderBatchGroupsUI() {
       </div>
     `;
 
-    // ▼ position: fixed にして親の overflow の影響を受けず確実に画面下部に固定
+    // ▼ 【修正1】右下のFABボタンと被らないように right を 80px に変更し max-width を調整
     ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 16px; max-width: 800px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
+      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 80px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px;">${isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
@@ -602,9 +601,7 @@ async function handleImageFiles(files) {
   if (analyzingStatus) analyzingStatus.style.display = 'none';
   renderImagePreviewList();
 
-  if (hasApiKey() && uploadedImages.length === files.length) {
-    runAIAnalysis(uploadedImages[activeThumbnailIndex]);
-  }
+  // ▼ 【修正2】画像選択後の勝手な自動AI解析ブロックを削除しました（これによりぐるぐるしたままフリーズする不具合が解消されます）
 }
 
 async function processFilesForBatch(files, append = true) {
@@ -651,7 +648,6 @@ async function processFilesForBatch(files, append = true) {
     console.error('Batch Processing Error:', err);
     alert('画像の処理中にエラーが発生しました。');
   } finally {
-    // 処理完了後に必ず renderBatchGroupsUI を呼び出してローディング（ぐるぐる）を解除する
     renderBatchGroupsUI();
   }
 }
