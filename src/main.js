@@ -57,6 +57,11 @@ function ensureSpinnerStyles() {
       padding: 4px 8px !important;
       font-size: 11px !important;
     }
+    /* 長押し時の視覚的フィードバック用クラス */
+    .draggable-thumb.long-pressed, .preview-item.long-pressed {
+      border-color: var(--accent-color) !important;
+      box-shadow: 0 0 10px var(--accent-color);
+    }
   `;
   document.head.appendChild(style);
 }
@@ -773,6 +778,40 @@ async function runAIAnalysis(targetImg) {
   }
 }
 
+// --- スマホでの誤操作を防ぐ「長押し vs タップ」の排他制御 ---
+let globalPressTimer = null;
+let globalIsLongPress = false;
+
+document.addEventListener('touchstart', (e) => {
+  const target = e.target.closest('[data-action="enlarge-image"]');
+  if (!target) return;
+  globalIsLongPress = false;
+  globalPressTimer = setTimeout(() => {
+    globalIsLongPress = true;
+    if (navigator.vibrate) navigator.vibrate(40);
+    
+    // 長押し成功時のアクション（必要に応じて追加可能）
+    const itemEl = target.closest('.draggable-thumb, .preview-item');
+    if (itemEl) {
+      itemEl.classList.toggle('long-pressed');
+    }
+  }, 500); // 0.5秒の長押しで発火
+}, { passive: true });
+
+document.addEventListener('touchmove', () => {
+  clearTimeout(globalPressTimer);
+}, { passive: true });
+
+document.addEventListener('touchend', (e) => {
+  clearTimeout(globalPressTimer);
+  const target = e.target.closest('[data-action="enlarge-image"]');
+  if (target && !globalIsLongPress) {
+    // 長押しではなく通常のタップの場合のみ、ライトボックスを開く
+    e.preventDefault();
+    openLightbox(target.src);
+  }
+});
+
 function initApp() {
   ensureFileInput();
   ensureBatchFileInput();
@@ -1254,7 +1293,7 @@ function initApp() {
       return;
     }
 
-    // 💡 修正: プレビュー画像のライトボックス拡大判定を closest() に変更
+    // プレビュー画像のライトボックス拡大判定（PCクリック用）
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
     if (enlargeTarget) {
       openLightbox(enlargeTarget.src);
