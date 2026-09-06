@@ -33,6 +33,9 @@ function ensureSpinnerStyles() {
       transition: transform 0.15s, opacity 0.15s;
       touch-action: none;
       box-sizing: border-box;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
     }
     .draggable-thumb:active {
       cursor: grabbing;
@@ -137,14 +140,21 @@ function ensureSpinnerStyles() {
       position: relative !important;
       touch-action: none !important;
       box-sizing: border-box !important;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
     }
-    .preview-item img {
+    .preview-item img, .draggable-thumb img {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
       cursor: grab !important;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
+      -webkit-user-drag: none !important;
     }
-    .preview-item img:active {
+    .preview-item img:active, .draggable-thumb img:active {
       cursor: grabbing !important;
     }
 
@@ -224,6 +234,9 @@ function ensureSpinnerStyles() {
       border-radius: 12px;
       object-fit: contain;
       box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
     }
     .lightbox-close {
       position: absolute;
@@ -1177,6 +1190,13 @@ async function runAIAnalysis(targetImg) {
 }
 
 function initApp() {
+  // 📱 スマホでの長押しによる画像保存ポップアップなどの標準機能を防止
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('.draggable-thumb, .preview-item, [data-action="enlarge-image"]')) {
+      e.preventDefault();
+    }
+  });
+
   document.addEventListener('change', async (e) => {
     if (e.target && e.target.id === 'file-input') {
       const files = e.target.files;
