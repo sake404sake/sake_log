@@ -154,7 +154,6 @@ export async function renderLogListView() {
       padding-bottom: 40px;
     }
 
-    /* タイトル下のスペース（余白）を確保 */
     .dashboard-header {
       margin-bottom: 20px;
     }
@@ -168,6 +167,15 @@ export async function renderLogListView() {
       width: 100%;
       box-sizing: border-box;
       overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .brand-logs-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px; /* ログ同士の間隔を確保 */
+      box-sizing: border-box;
+      width: 100%;
     }
 
     .log-item-row {
@@ -177,6 +185,9 @@ export async function renderLogListView() {
       width: 100%;
       box-sizing: border-box;
       gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
     }
 
     /* サムネイル画像のスタイル */
@@ -221,7 +232,7 @@ export async function renderLogListView() {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-top: 2px;
+      margin-top: 4px;
       width: 100%;
       box-sizing: border-box;
       white-space: nowrap;
@@ -245,6 +256,7 @@ export async function renderLogListView() {
     .row-arrow {
       flex-shrink: 0;
       color: #666;
+      padding-left: 4px;
     }
 
     .brand-header {
@@ -253,6 +265,7 @@ export async function renderLogListView() {
       align-items: center;
       gap: 8px;
       overflow: hidden;
+      margin-bottom: 8px;
     }
 
     .brand-title {
