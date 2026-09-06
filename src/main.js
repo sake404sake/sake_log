@@ -134,11 +134,10 @@ function ensureSpinnerStyles() {
       }
       .batch-group-card .thumbs-scroll-container {
         display: flex !important;
-        flex-wrap: nowrap !important;
-        overflow-x: auto !important;
+        flex-wrap: wrap !important;
+        overflow-x: visible !important;
         -webkit-overflow-scrolling: touch !important;
         gap: 8px !important;
-        scrollbar-width: none !important;
         padding-bottom: 4px !important;
         max-width: 100% !important;
         box-sizing: border-box !important;
