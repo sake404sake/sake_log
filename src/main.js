@@ -32,6 +32,7 @@ function ensureSpinnerStyles() {
       cursor: grab;
       transition: transform 0.15s, opacity 0.15s;
       touch-action: none;
+      box-sizing: border-box;
     }
     .draggable-thumb:active {
       cursor: grabbing;
@@ -68,11 +69,12 @@ function ensureSpinnerStyles() {
         bottom: 8px !important;
         width: calc(100% - 16px) !important;
         max-width: 100% !important;
+        box-sizing: border-box !important;
         border-radius: 12px !important;
-        padding: 10px 12px !important;
+        padding: 12px 14px !important;
         box-shadow: 0 -8px 24px rgba(0,0,0,0.6) !important;
         position: fixed !important;
-        z-index: 9999 !important; /* ライトボックスのすぐ下に配置 */
+        z-index: 9999 !important;
       }
       #ungrouped-pool-container .thumbs-scroll-container {
         display: flex !important;
@@ -94,10 +96,10 @@ function ensureSpinnerStyles() {
         flex-shrink: 0 !important;
       }
       
-      /* 一括インポートのカードレイアウト調整（スマホで見切れ対策） */
       .batch-group-card {
         padding: 12px !important;
         margin-bottom: 10px !important;
+        box-sizing: border-box !important;
       }
       .batch-group-card-header {
         flex-direction: column !important;
@@ -128,13 +130,13 @@ function ensureSpinnerStyles() {
       }
     }
     
-    /* 登録時の画像プレビュー枠をスマホでも押しやすいように調整 */
     .preview-item, .add-more-item {
       width: 90px !important;
       height: 90px !important;
       min-height: 90px !important;
       position: relative !important;
       touch-action: none !important;
+      box-sizing: border-box !important;
     }
     .preview-item img {
       width: 100% !important;
@@ -146,28 +148,27 @@ function ensureSpinnerStyles() {
       cursor: grabbing !important;
     }
 
-    /* プレビュー内の削除ボタンを右上に絶対配置 */
-    .btn-img-del {
+    /* 削除ボタンのタッチ保証と視認性 */
+    .btn-img-del, .btn-batch-remove-img, .btn-ungrouped-remove {
       position: absolute !important;
       top: 4px !important;
       right: 4px !important;
-      background: rgba(0, 0, 0, 0.7) !important;
+      background: rgba(0, 0, 0, 0.75) !important;
       color: #fff !important;
       border: none !important;
       border-radius: 50% !important;
-      width: 22px !important;
-      height: 22px !important;
-      font-size: 11px !important;
+      width: 24px !important;
+      height: 24px !important;
+      font-size: 12px !important;
       cursor: pointer !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      z-index: 15 !important;
+      z-index: 30 !important;
       pointer-events: auto !important;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.3) !important;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important;
     }
 
-    /* ホバー時のみ削除ボタンを出す (PC) */
     @media (min-width: 601px) {
       .btn-img-del {
         opacity: 0 !important;
@@ -180,16 +181,15 @@ function ensureSpinnerStyles() {
 
     @media (max-width: 600px) {
       .preview-item, .add-more-item {
-        width: 100px !important;
-        height: 100px !important;
-        min-height: 100px !important;
+        width: 85px !important;
+        height: 85px !important;
+        min-height: 85px !important;
       }
-      .btn-img-del {
+      .btn-img-del, .btn-batch-remove-img, .btn-ungrouped-remove {
         opacity: 1 !important;
       }
     }
 
-    /* ライトボックス本体のスタイル */
     .lightbox-overlay {
       touch-action: none !important;
       position: fixed;
@@ -462,9 +462,9 @@ function renderBatchGroupsUI() {
   const uploadZone = document.getElementById('batch-upload-zone');
   if (uploadZone) {
     uploadZone.innerHTML = `
-      <div style="padding: 30px; text-align: center; border: 2px dashed var(--border-color); border-radius: 12px; cursor: pointer; background: var(--card-bg);">
-        <div style="font-size: 1.8rem; margin-bottom: 6px;">📁</div>
-        <div style="font-weight: bold; color: var(--text-main);">さらに写真を追加する</div>
+      <div style="padding: 24px; text-align: center; border: 2px dashed var(--border-color); border-radius: 12px; cursor: pointer; background: var(--card-bg);">
+        <div style="font-size: 1.6rem; margin-bottom: 4px;">📁</div>
+        <div style="font-weight: bold; color: var(--text-main); font-size: 0.95rem;">さらに写真を追加する</div>
       </div>
     `;
   }
@@ -479,26 +479,25 @@ function renderBatchGroupsUI() {
   let ungroupedHTML = '';
   if (ungroupedImages.length > 0) {
     const thumbs = isPoolCollapsed ? '' : `
-      <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; min-height: 40px; margin-top: 8px;" class="thumbs-scroll-container">
         ${ungroupedImages.map((item, idx) => `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
-               style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); touch-action:none;">
+               style="position:relative; width:85px; height:85px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); touch-action:none;">
             <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer; pointer-events:none;" />
-            <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10; pointer-events:auto;">✕</button>
+            <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除">✕</button>
           </div>
         `).join('')}
       </div>
     `;
 
     ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 16px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px; cursor:pointer;">${isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
-            <span style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">📂 未所属の画像プール (${ungroupedImages.length}枚)</span>
+      <div id="ungrouped-pool-container" style="position: fixed; bottom: 12px; left: 12px; right: 12px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px); box-sizing: border-box;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 3px 6px; cursor:pointer; flex-shrink: 0;">${isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
+            <span style="font-weight: bold; color: var(--text-main); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📂 未分類プール (${ungroupedImages.length}枚)</span>
           </div>
-          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">✨ これらからグループを作成</button>
+          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.72rem; padding: 4px 8px; flex-shrink: 0;">✨ グループ作成</button>
         </div>
         ${thumbs}
       </div>
@@ -513,31 +512,30 @@ function renderBatchGroupsUI() {
 
     const thumbsHTML = group.map((item, iIdx) => `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
-           style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); touch-action:none;">
+           style="position:relative; width:85px; height:85px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); touch-action:none;">
         <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer; pointer-events:none;" />
-        ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5; pointer-events:none;">★メイン</span>' : ''}
-        <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10; pointer-events:auto;">✕</button>
+        ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.9); color:#fff; font-size:8px; padding:1px 3px; border-radius:3px; font-weight:bold; z-index:5; pointer-events:none;">★メイン</span>' : ''}
+        <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="グループから外す">✕</button>
       </div>
     `).join('');
 
     return `
-      <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; transition: border-color 0.2s; margin-bottom: 12px;" data-gidx="${gIdx}">
-        <div class="batch-group-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
-          <div>
-            <span style="font-weight: bold; color: var(--accent-color);">🍶 未保存お酒グループ #${gIdx + 1}</span>
-            <span style="font-size: 0.8rem; color: var(--text-sub); margin-left: 8px;">目安: ${dateStr} (${group.length}枚)</span>
+      <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box;" data-gidx="${gIdx}">
+        <div class="batch-group-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); gap: 8px;">
+          <div style="min-width: 0; flex: 1;">
+            <span style="font-weight: bold; color: var(--accent-color); font-size: 0.9rem; display: inline-block;">🍶 未保存お酒グループ #${gIdx + 1}</span>
+            <span style="font-size: 0.75rem; color: var(--text-sub); margin-left: 6px;">(${group.length}枚)</span>
           </div>
           <div class="batch-group-btn-container">
-            <button type="button" class="btn-secondary btn-batch-open-editor" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;">✏️ 詳細編集</button>
-            <button type="button" class="btn-secondary btn-batch-analyze" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;">🤖 AI解析</button>
-            <button type="button" class="btn-secondary btn-batch-split" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px;" title="分割">✂️ 分割</button>
-            <button type="button" class="btn-secondary btn-batch-delete-group" data-gidx="${gIdx}" style="font-size: 0.75rem; padding: 4px 8px; color: #ef4444; border-color: #ef4444;" title="グループごと削除">🗑️ 削除</button>
+            <button type="button" class="btn-secondary btn-batch-open-editor" data-gidx="${gIdx}" style="font-size: 0.72rem; padding: 3px 7px;">✏️ 編集</button>
+            <button type="button" class="btn-secondary btn-batch-analyze" data-gidx="${gIdx}" style="font-size: 0.72rem; padding: 3px 7px;">🤖 解析</button>
+            <button type="button" class="btn-secondary btn-batch-split" data-gidx="${gIdx}" style="font-size: 0.72rem; padding: 3px 7px;" title="分割">✂️ 分割</button>
+            <button type="button" class="btn-secondary btn-batch-delete-group" data-gidx="${gIdx}" style="font-size: 0.72rem; padding: 3px 7px; color: #ef4444; border-color: #ef4444;" title="削除">🗑️ 削除</button>
           </div>
         </div>
 
-        <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真をタップすると拡大操作メニューが開きます。スワイプやドラッグ＆ドロップでグループ間移動も可能です。</div>
-        <div class="thumbs-scroll-container" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; min-height: 50px;">
+        <div style="font-size: 0.72rem; color: var(--text-sub); margin-bottom: 6px; line-height: 1.3;">💡 タップで拡大、スワイプやドラッグでグループ間を移動できます。</div>
+        <div class="thumbs-scroll-container" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; min-height: 45px;">
           ${thumbsHTML}
         </div>
 
@@ -550,14 +548,14 @@ function renderBatchGroupsUI() {
   }).join('');
 
   previewSection.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 id="batch-group-count-title" style="margin: 0; font-size: 1.1rem; color: var(--text-main);">✨ 未保存の酒ログアイテム (${batchGroups.length} 件)</h3>
-      <div style="display: flex; gap: 8px;">
-        <button type="button" id="btn-add-more-batch" class="btn-secondary" style="font-size: 0.85rem; padding: 6px 12px;">➕ 写真を追加する</button>
-        ${batchGroups.length > 0 ? `<button type="button" id="btn-save-all-batches" class="btn-primary" style="background: #10b981; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">🚀 すべてまとめて登録する</button>` : ''}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;">
+      <h3 id="batch-group-count-title" style="margin: 0; font-size: 1rem; color: var(--text-main);">✨ 未保存の酒ログアイテム (${batchGroups.length} 件)</h3>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        <button type="button" id="btn-add-more-batch" class="btn-secondary" style="font-size: 0.8rem; padding: 5px 10px;">➕ 追加</button>
+        ${batchGroups.length > 0 ? `<button type="button" id="btn-save-all-batches" class="btn-primary" style="background: #10b981; color: #fff; border: none; padding: 6px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.8rem;">🚀 すべて登録</button>` : ''}
       </div>
     </div>
-    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 16px; padding-bottom: ${ungroupedImages.length > 0 ? '140px' : '20px'};">
+    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 12px; padding-bottom: ${ungroupedImages.length > 0 ? '130px' : '20px'};">
       ${groupsHTML}
     </div>
     ${ungroupedHTML}
@@ -960,7 +958,7 @@ function renderImagePreviewList() {
     <div class="preview-item ${idx === 0 ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
       <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none; pointer-events: none;" />
       <div class="preview-actions" style="pointer-events: none;">
-        <button type="button" class="btn-img-del" data-idx="${idx}" title="削除" style="pointer-events: auto;">✕</button>
+        <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
       </div>
     </div>
   `).join('');
@@ -1061,10 +1059,10 @@ async function processFilesForBatch(files, append = true) {
   const batchUploadZone = document.getElementById('batch-upload-zone');
   if (batchUploadZone) {
     batchUploadZone.innerHTML = `
-      <div style="padding: 40px; text-align: center; color: var(--text-main);">
-        <div class="sella-spinner" style="width: 32px; height: 32px; border-width: 4px; margin-bottom: 12px; border-top-color: var(--accent-color);"></div>
-        <div style="font-weight: bold; font-size: 1.1rem;">写真を解析・グルーピング中...</div>
-        <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 4px;">(${files.length}枚の画像を処理しています)</div>
+      <div style="padding: 30px; text-align: center; color: var(--text-main);">
+        <div class="sella-spinner" style="width: 28px; height: 28px; border-width: 3px; margin-bottom: 10px; border-top-color: var(--accent-color);"></div>
+        <div style="font-weight: bold; font-size: 1rem;">写真を解析・グルーピング中...</div>
+        <div style="font-size: 0.8rem; color: var(--text-sub); margin-top: 4px;">(${files.length}枚の画像を処理しています)</div>
       </div>
     `;
   }
@@ -1116,18 +1114,18 @@ async function processFilesForBatch(files, append = true) {
       }
 
       if (failedFiles.length > 0) {
-        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。HEIC形式や破損している可能性があります：\n・` + failedFiles.join('\n・'));
+        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました：\n・` + failedFiles.join('\n・'));
       }
     } else {
       if (failedFiles.length > 0) {
-        alert(`画像の読み込みに失敗しました。対応していない形式（HEIC等）の可能性があります：\n・` + failedFiles.join('\n・'));
+        alert(`画像の読み込みに失敗しました：\n・` + failedFiles.join('\n・'));
       } else {
         alert('有効な画像ファイルが見つかりませんでした。');
       }
     }
   } catch (err) {
     console.error('Batch Grouping Error:', err);
-    alert('画像の自動グルーピング処理中に予期せぬエラーが発生しました。');
+    alert('自動グルーピング処理中にエラーが発生しました。');
   } finally {
     renderBatchGroupsUI();
   }
@@ -1172,7 +1170,7 @@ async function runAIAnalysis(targetImg) {
     }
   } catch (err) {
     console.error('AI Analysis Error:', err);
-    alert('AI解析中にエラーが発生しました。APIキーやモデル設定をご確認ください。');
+    alert('AI解析中にエラーが発生しました。');
   } finally {
     if (analyzingStatus) analyzingStatus.style.display = 'none';
   }
@@ -1302,7 +1300,6 @@ function initApp() {
   });
 
   document.addEventListener('click', async (e) => {
-    // 🌟 未分類プールの開閉ボタン対応
     if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
       e.stopPropagation();
       isPoolCollapsed = !isPoolCollapsed;
@@ -1436,10 +1433,7 @@ function initApp() {
         for (let gIdx = 0; gIdx < batchGroups.length; gIdx++) {
           const group = batchGroups[gIdx];
           
-          if (!group || group.length === 0) {
-            console.warn(`警告: 空のお酒グループ #${gIdx + 1} をスキップしました。`);
-            continue;
-          }
+          if (!group || group.length === 0) continue;
           const card = document.querySelector(`.batch-group-card[data-gidx="${gIdx}"]`);
           const nameInput = card?.querySelector('.batch-name-input');
           const breweryInput = card?.querySelector('.batch-brewery-input');
@@ -1553,7 +1547,7 @@ function initApp() {
           renderBatchGroupsUI();
         }
       } else if (!hasApiKey()) {
-        alert('APIキーが設定されていません。設定画面から登録してください。');
+        alert('APIキーが設定されていません。');
       }
       return;
     }
@@ -1580,7 +1574,7 @@ function initApp() {
       e.stopPropagation();
       const gIdx = Number(batchDeleteGroupBtn.dataset.gidx);
       
-      const choice = confirm(`お酒グループ #${gIdx + 1} を削除しますか？\n\n[OK]: グループ内の写真も含めて完全に削除する\n[キャンセル]: 写真を「未所属の画像プール」に戻す`);
+      const choice = confirm(`お酒グループ #${gIdx + 1} を削除しますか？\n\n[OK]: 写真も含めて完全に削除\n[キャンセル]: 写真を「未分類プール」に戻す`);
       
       const removed = batchGroups.splice(gIdx, 1)[0];
       if (!choice && removed && removed.length > 0) {
@@ -1667,7 +1661,7 @@ function initApp() {
 
     if (e.target.id === 'btn-delete-from-detail') {
       const id = e.target.dataset.id;
-      if (confirm('この酒ログを削除してもよろしいですか？')) {
+      if (confirm('この酒ログを削除しますか？')) {
         await deleteLog(id);
         closeDetailModal();
         navigateTo('logList');
@@ -1717,29 +1711,6 @@ function initApp() {
       return;
     }
 
-    const thumbBtn = e.target.closest('.btn-thumb-set');
-    if (thumbBtn) {
-      activeThumbnailIndex = Number(thumbBtn.dataset.idx);
-      renderImagePreviewList();
-      return;
-    }
-
-    const moveBtn = e.target.closest('.btn-img-move');
-    if (moveBtn) {
-      const idx = Number(moveBtn.dataset.idx);
-      const dir = Number(moveBtn.dataset.dir);
-      const targetIdx = idx + dir;
-      if (targetIdx >= 0 && targetIdx < uploadedImages.length) {
-        const temp = uploadedImages[idx];
-        uploadedImages[idx] = uploadedImages[targetIdx];
-        uploadedImages[targetIdx] = temp;
-        if (activeThumbnailIndex === idx) activeThumbnailIndex = targetIdx;
-        else if (activeThumbnailIndex === targetIdx) activeThumbnailIndex = idx;
-        renderImagePreviewList();
-      }
-      return;
-    }
-
     const delImgBtn = e.target.closest('.btn-img-del');
     if (delImgBtn) {
       const idx = Number(delImgBtn.dataset.idx);
@@ -1770,20 +1741,6 @@ function initApp() {
 
     if (e.target.id === 'lightbox-modal' || e.target.classList.contains('lightbox-close') || e.target.closest('.lightbox-close')) {
       closeLightbox();
-      return;
-    }
-
-    const tagBtn = e.target.closest('.tag-chip-btn');
-    if (tagBtn) {
-      const tagText = tagBtn.dataset.tag;
-      const tagsInput = document.getElementById('sake-tags');
-      if (tagsInput) {
-        const currentTags = tagsInput.value.split(/\s+/).filter(Boolean);
-        if (!currentTags.includes(tagText)) {
-          currentTags.push(tagText);
-          tagsInput.value = currentTags.join(' ');
-        }
-      }
       return;
     }
 
@@ -1872,10 +1829,6 @@ function initApp() {
     }
     if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
       setSavedModel(e.target.value);
-      const globalSelect = document.getElementById('select-gemini-model');
-      const modalSelect = document.getElementById('modal-model-select');
-      if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
-      if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
     }
     if (TRACKED_FIELDS.includes(e.target.id)) {
       updateFieldRevertUI();
@@ -1883,7 +1836,7 @@ function initApp() {
   });
 
   // ==========================================================================
-  // 📱💻 スマホ・PC共通：PointerEvents「オートギャップ隙間空け並び替え」＆「コンテナ間スワイプ移動」
+  // 📱💻 ポインターイベント：指追従・ドラッグ＆ドロップ対応（完全なスムーズ追従）
   // ==========================================================================
   let pointerStartX = 0;
   let pointerStartY = 0;
@@ -1891,10 +1844,13 @@ function initApp() {
   let isDragging = false;
   let activeSwipeThumb = null;
   let isMoveTriggered = false;
-  let originalThumbRect = null; // 🌟 枠外フローティング時の復元用
+  let originalThumbRect = null; 
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    // 削除ボタンや特定のインタラクティブ要素が押された場合はドラッグを開始しない
+    if (e.target.closest('button, input, select, textarea')) return;
 
     const lightbox = document.getElementById('lightbox-modal');
     if (lightbox && lightbox.classList.contains('active')) {
@@ -1917,7 +1873,7 @@ function initApp() {
       }
     } else {
       const thumb = e.target.closest('.preview-item, .draggable-thumb');
-      if (thumb && !e.target.closest('button')) {
+      if (thumb) {
         activeSwipeThumb = thumb;
         pointerStartX = e.clientX;
         pointerStartY = e.clientY;
@@ -1925,7 +1881,11 @@ function initApp() {
         isDragging = true;
         isMoveTriggered = false;
         activeSwipeThumb.style.transition = 'none';
-        activeSwipeThumb.setPointerCapture(e.pointerId);
+        try {
+          activeSwipeThumb.setPointerCapture(e.pointerId);
+        } catch (err) {
+          // ignore capture errors if any
+        }
       }
     }
   }, { passive: false });
@@ -1945,11 +1905,10 @@ function initApp() {
           img.style.transform = `translateX(${diffX}px) scale(0.98)`;
         }
       }
-    } else if (activeSwipeThumb && activeSwipeThumb.hasPointerCapture(e.pointerId)) {
-      if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+    } else if (activeSwipeThumb) {
+      if (Math.abs(diffX) > 6 || Math.abs(diffY) > 6) {
         if (!isMoveTriggered) {
           isMoveTriggered = true;
-          // 🌟 【修正】移動開始時に position: fixed 化して画面全体の最前面にフロートさせ、枠外でも完全に表示させる
           const rect = activeSwipeThumb.getBoundingClientRect();
           originalThumbRect = rect;
           activeSwipeThumb.style.position = 'fixed';
@@ -1963,10 +1922,10 @@ function initApp() {
 
         e.preventDefault();
 
-        // 追従移動
-        activeSwipeThumb.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.1) rotate(3deg)`;
+        // 🌟 指に完全に追従させるため、現在位置の差分（diffX, diffY）をそのままtranslateに反映
+        activeSwipeThumb.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.1) rotate(2deg)`;
 
-        // 🌟 ドラッグ中のホバー先カードハイライト処理
+        // ドラッグ中のホバー先カードハイライト処理
         activeSwipeThumb.style.pointerEvents = 'none';
         const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
         activeSwipeThumb.style.pointerEvents = 'auto';
@@ -1982,57 +1941,6 @@ function initApp() {
           targetCard.classList.add('drag-over');
         } else if (targetPool) {
           poolContainer?.classList.add('drag-over');
-        }
-
-        const isEditor = activeSwipeThumb.classList.contains('preview-item');
-        const isBatch = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'group';
-        const isPool = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'pool';
-        
-        let siblings = [];
-        let curIdx = -1;
-        if (isEditor) {
-          siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
-          curIdx = Number(activeSwipeThumb.dataset.idx);
-        } else if (isBatch) {
-          const gIdx = Number(activeSwipeThumb.dataset.gidx);
-          siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
-          curIdx = Number(activeSwipeThumb.dataset.iidx);
-        } else if (isPool) {
-          siblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
-          curIdx = Number(activeSwipeThumb.dataset.idx);
-        }
-
-        if (targetCard || targetPool || Math.abs(diffY) > 70) {
-          siblings.forEach(sib => {
-            if (sib !== activeSwipeThumb) sib.style.transform = 'none';
-          });
-        } else if (curIdx !== -1 && !isNaN(curIdx)) {
-          const itemWidth = originalThumbRect ? originalThumbRect.width : 90;
-          const step = itemWidth + 10;
-          const offsetIndices = Math.round(diffX / step);
-          let targetIdx = curIdx + offsetIndices;
-          targetIdx = Math.max(0, Math.min(siblings.length - 1, targetIdx));
-
-          siblings.forEach((sib, sIdx) => {
-            if (sib === activeSwipeThumb) return;
-            sib.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-            
-            if (curIdx < targetIdx) {
-              if (sIdx > curIdx && sIdx <= targetIdx) {
-                sib.style.transform = `translateX(${-step}px)`;
-              } else {
-                sib.style.transform = 'none';
-              }
-            } else if (curIdx > targetIdx) {
-              if (sIdx >= targetIdx && sIdx < curIdx) {
-                sib.style.transform = `translateX(${step}px)`;
-              } else {
-                sib.style.transform = 'none';
-              }
-            } else {
-              sib.style.transform = 'none';
-            }
-          });
         }
       }
     }
@@ -2093,9 +2001,9 @@ function initApp() {
     } else if (activeSwipeThumb) {
       const thumb = activeSwipeThumb;
       activeSwipeThumb = null;
-      if (thumb.hasPointerCapture(e.pointerId)) {
+      try {
         thumb.releasePointerCapture(e.pointerId);
-      }
+      } catch (err) {}
 
       document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
       const poolContainer = document.getElementById('ungrouped-pool-container');
@@ -2105,7 +2013,7 @@ function initApp() {
       const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
       const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
 
-      // 🌟 タップ判定（移動していない場合）
+      // タップ判定
       if (!isMoveTriggered && Math.abs(diffX) < 10 && Math.abs(diffY) < 10 && duration < 250) {
         thumb.style.position = '';
         thumb.style.left = '';
@@ -2132,7 +2040,7 @@ function initApp() {
         return;
       }
 
-      // 🌟 コンテナ間移動判定
+      // コンテナ間移動判定
       let isContainerMoved = false;
       if (!isEditor && isMoveTriggered) {
         thumb.style.pointerEvents = 'none';
@@ -2184,7 +2092,7 @@ function initApp() {
         return;
       }
 
-      // 🌟 同一コンテナ内並び替え判定
+      // 同一コンテナ内並び替え
       let siblings = [];
       if (isEditor) {
         siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
@@ -2199,8 +2107,8 @@ function initApp() {
         sib.style.transform = 'none';
       });
 
-      const itemWidth = originalThumbRect ? originalThumbRect.width : 90;
-      const step = itemWidth + 10;
+      const itemWidth = originalThumbRect ? originalThumbRect.width : 85;
+      const step = itemWidth + 8;
       const offsetIndices = Math.round(diffX / step);
 
       if (Math.abs(offsetIndices) >= 1) {
@@ -2252,7 +2160,6 @@ function initApp() {
         }
       }
       
-      // 移動なしまたは位置変わらずの場合のスタイル復元
       thumb.style.position = '';
       thumb.style.left = '';
       thumb.style.top = '';
