@@ -165,6 +165,7 @@ export async function renderLogListView() {
 
     .brand-group-card {
       width: 100%;
+      max-width: 100%;
       box-sizing: border-box;
       overflow: hidden;
       margin-bottom: 16px;
@@ -173,9 +174,10 @@ export async function renderLogListView() {
     .brand-logs-list {
       display: flex;
       flex-direction: column;
-      gap: 10px; /* ログ同士の間隔を確保 */
+      gap: 12px; /* ログ同士の間隔を少し空ける */
       box-sizing: border-box;
       width: 100%;
+      max-width: 100%;
     }
 
     .log-item-row {
@@ -183,11 +185,13 @@ export async function renderLogListView() {
       align-items: center;
       justify-content: space-between;
       width: 100%;
+      max-width: 100%;
       box-sizing: border-box;
       gap: 10px;
       padding: 10px 12px;
       background: rgba(255, 255, 255, 0.03);
       border-radius: 8px;
+      overflow: hidden;
     }
 
     /* サムネイル画像のスタイル */
@@ -214,10 +218,13 @@ export async function renderLogListView() {
       object-fit: cover;
     }
 
+    /* 情報コンテナ：幅を自動調整しつつ、必ず親の内側に収める */
     .row-info-container {
       flex: 1;
-      min-width: 0; /* はみ出し防止 */
+      min-width: 0;
+      max-width: calc(100% - 78px); /* サムネイルと矢印分の幅を差し引く */
       overflow: hidden;
+      box-sizing: border-box;
     }
 
     .row-date-line {
@@ -234,6 +241,7 @@ export async function renderLogListView() {
       gap: 6px;
       margin-top: 4px;
       width: 100%;
+      max-width: 100%;
       box-sizing: border-box;
       white-space: nowrap;
       overflow: hidden;
@@ -244,6 +252,8 @@ export async function renderLogListView() {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      flex-shrink: 1;
+      min-width: 0;
     }
 
     .row-brewery {
@@ -251,6 +261,7 @@ export async function renderLogListView() {
       text-overflow: ellipsis;
       white-space: nowrap;
       color: #888;
+      flex-shrink: 0;
     }
 
     .row-arrow {
