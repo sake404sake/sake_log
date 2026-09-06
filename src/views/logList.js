@@ -222,7 +222,7 @@ export async function renderLogListView() {
     .row-info-container {
       flex: 1;
       min-width: 0;
-      max-width: calc(100% - 78px); /* サムネイルと矢印分の幅を差し引く */
+      max-width: calc(100% - 78px);
       overflow: hidden;
       box-sizing: border-box;
     }
@@ -237,31 +237,22 @@ export async function renderLogListView() {
 
     .row-sub-info {
       display: flex;
-      align-items: center;
-      gap: 6px;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 2px 6px;
       margin-top: 4px;
       width: 100%;
       max-width: 100%;
       box-sizing: border-box;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     .row-product {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex-shrink: 1;
-      min-width: 0;
+      word-break: break-all;
     }
 
     .row-brewery {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      word-break: break-all;
       color: #888;
-      flex-shrink: 0;
     }
 
     .row-arrow {
