@@ -5,9 +5,9 @@ export async function renderLogListView() {
   console.log('取得したログ一覧（デバッグ）:', logs);
 
   if (!logs || logs.length === 0) {
-    return `<div class=\"empty-state\">
+    return `<div class="empty-state">
       <p>登録されたお酒の記録がありません。</p>
-      <button class=\"btn-primary\" data-action=\"open-editor\" style=\"margin-top: 12px;\">最初の酒ログを登録する</button>
+      <button class="btn-primary" data-action="open-editor" style="margin-top: 12px;">最初の酒ログを登録する</button>
     </div>`;
   }
 
@@ -35,30 +35,38 @@ export async function renderLogListView() {
       brandLogs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
       const rowsHTML = brandLogs.map(log => {
+        // 画像がある場合は最初の1枚をサムネイルとして表示
+        const thumbUrl = (log.images && log.images.length > 0) ? log.images[0] : null;
+
         return `
-          <div class=\"log-item-row\" data-action=\"open-detail\" data-id=\"${log.id}\">
-            <div class=\"row-info-container\">
-              <div class=\"row-date-line\">
-                <span class=\"row-date\">📅 ${log.date || '日付未登録'}</span>
-                <span class=\"row-rating\">★ ${log.rating || '4.0'}</span>
+          <div class="log-item-row" data-action="open-detail" data-id="${log.id}">
+            ${thumbUrl ? `
+              <div class="row-thumb-container">
+                <img src="${thumbUrl}" alt="サムネイル" class="row-thumb">
               </div>
-              <div class=\"row-sub-info\">
-                ${log.productName ? `<span class=\"row-product\">${log.productName}</span>` : ''}
-                ${log.brewery ? `<span class=\"row-brewery\">(${log.brewery})</span>` : ''}
+            ` : ''}
+            <div class="row-info-container">
+              <div class="row-date-line">
+                <span class="row-date">📅 ${log.date || '日付未登録'}</span>
+                <span class="row-rating">★ ${log.rating || '4.0'}</span>
+              </div>
+              <div class="row-sub-info">
+                ${log.productName ? `<span class="row-product">${log.productName}</span>` : ''}
+                ${log.brewery ? `<span class="row-brewery">(${log.brewery})</span>` : ''}
               </div>
             </div>
-            <div class=\"row-arrow\">❯</div>
+            <div class="row-arrow">❯</div>
           </div>
         `;
       }).join('');
 
       return `
-        <div class=\"brand-group-card\">
-          <div class=\"brand-header\">
-            <span class=\"brand-title\">🍶 ${brandName}</span>
-            <span class=\"brand-badge\">${brandLogs.length}回の記録</span>
+        <div class="brand-group-card">
+          <div class="brand-header">
+            <span class="brand-title">🍶 ${brandName}</span>
+            <span class="brand-badge">${brandLogs.length}回の記録</span>
           </div>
-          <div class=\"brand-logs-list\">
+          <div class="brand-logs-list">
             ${rowsHTML}
           </div>
         </div>
@@ -66,31 +74,30 @@ export async function renderLogListView() {
     }).join('');
 
     return `
-      <details class=\"category-accordion\" open>
-        <summary class=\"category-summary\">
-          <span class=\"category-title\">${catName}</span>
-          <span class=\"category-count\">${Object.keys(brandMap).length} 銘柄 (${totalCount} 件)</span>
+      <details class="category-accordion" open>
+        <summary class="category-summary">
+          <span class="category-title">${catName}</span>
+          <span class="category-count">${Object.keys(brandMap).length} 銘柄 (${totalCount} 件)</span>
         </summary>
-        <div class=\"category-content\">
+        <div class="category-content">
           ${brandsHTML}
         </div>
       </details>
     `;
   }).join('');
 
-  return `<div class=\"dashboard-container\">
-    <div class=\"dashboard-header\">
+  return `<div class="dashboard-container">
+    <div class="dashboard-header">
       <h2>酒ログ一覧</h2>
-      <button class=\"btn-primary\" data-action=\"open-editor\">＋ 新規登録</button>
+      <button class="btn-primary" data-action="open-editor">＋ 新規登録</button>
     </div>
 
-    <div class=\"categories-wrapper\">
+    <div class="categories-wrapper">
       ${categoriesHTML}
     </div>
   </div>
 
   <style>
-    /* スマホ・狭い画面でのはみ出し・見切対策（他の機能に影響を与えない限定スタイル） */
     .dashboard-container {
       width: 100%;
       max-width: 100%;
@@ -114,9 +121,28 @@ export async function renderLogListView() {
       gap: 8px;
     }
 
+    /* サムネイル画像のスタイル修正 */
+    .row-thumb-container {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .row-thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
     .row-info-container {
       flex: 1;
-      min-width: 0; /* Flexbox内でのテキスト省略を正常に機能させるための必須設定 */
+      min-width: 0; /* はみ出し防止のキモ */
       overflow: hidden;
     }
 
@@ -125,7 +151,7 @@ export async function renderLogListView() {
       align-items: center;
       gap: 12px;
       font-size: 0.85rem;
-      color: #666;
+      color: #aaa;
     }
 
     .row-sub-info {
@@ -150,11 +176,12 @@ export async function renderLogListView() {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: #777;
+      color: #888;
     }
 
     .row-arrow {
-      flex-shrink: 0; /* 矢印アイコンが潰れないように固定 */
+      flex-shrink: 0;
+      color: #666;
     }
 
     .brand-header {
