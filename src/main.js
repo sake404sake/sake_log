@@ -94,10 +94,19 @@ function ensureSpinnerStyles() {
         flex-shrink: 0 !important;
       }
       
-      /* 一括インポートのカードレイアウト調整 */
+      /* 一括インポートのカードレイアウト調整（スマホで見切れ対策） */
       .batch-group-card {
         padding: 12px !important;
         margin-bottom: 10px !important;
+      }
+      .batch-group-card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+      }
+      .batch-group-btn-container {
+        width: 100% !important;
+        justify-content: flex-start !important;
       }
       .batch-group-card .thumbs-scroll-container {
         display: flex !important;
@@ -482,12 +491,11 @@ function renderBatchGroupsUI() {
       </div>
     `;
 
-    // 📱【修正】左右のマージン・幅をレスポンシブかつ安全に修正（見切れ防止）
     ungroupedHTML = `
       <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 16px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px;">${isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
+            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px; cursor:pointer;">${isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
             <span style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">📂 未所属の画像プール (${ungroupedImages.length}枚)</span>
           </div>
           <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">✨ これらからグループを作成</button>
@@ -515,7 +523,7 @@ function renderBatchGroupsUI() {
 
     return `
       <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; transition: border-color 0.2s; margin-bottom: 12px;" data-gidx="${gIdx}">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+        <div class="batch-group-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
           <div>
             <span style="font-weight: bold; color: var(--accent-color);">🍶 未保存お酒グループ #${gIdx + 1}</span>
             <span style="font-size: 0.8rem; color: var(--text-sub); margin-left: 8px;">目安: ${dateStr} (${group.length}枚)</span>
@@ -1294,6 +1302,14 @@ function initApp() {
   });
 
   document.addEventListener('click', async (e) => {
+    // 🌟 未分類プールの開閉ボタン対応
+    if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
+      e.stopPropagation();
+      isPoolCollapsed = !isPoolCollapsed;
+      renderBatchGroupsUI();
+      return;
+    }
+
     const lbBtn = e.target.closest('.lightbox-ctrl-btn');
     if (lbBtn) {
       e.stopPropagation();
@@ -1875,6 +1891,7 @@ function initApp() {
   let isDragging = false;
   let activeSwipeThumb = null;
   let isMoveTriggered = false;
+  let originalThumbRect = null; // 🌟 枠外フローティング時の復元用
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -1908,7 +1925,6 @@ function initApp() {
         isDragging = true;
         isMoveTriggered = false;
         activeSwipeThumb.style.transition = 'none';
-        activeSwipeThumb.style.zIndex = '9999';
         activeSwipeThumb.setPointerCapture(e.pointerId);
       }
     }
@@ -1931,11 +1947,24 @@ function initApp() {
       }
     } else if (activeSwipeThumb && activeSwipeThumb.hasPointerCapture(e.pointerId)) {
       if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
-        e.preventDefault();
-        isMoveTriggered = true;
+        if (!isMoveTriggered) {
+          isMoveTriggered = true;
+          // 🌟 【修正】移動開始時に position: fixed 化して画面全体の最前面にフロートさせ、枠外でも完全に表示させる
+          const rect = activeSwipeThumb.getBoundingClientRect();
+          originalThumbRect = rect;
+          activeSwipeThumb.style.position = 'fixed';
+          activeSwipeThumb.style.left = `${rect.left}px`;
+          activeSwipeThumb.style.top = `${rect.top}px`;
+          activeSwipeThumb.style.width = `${rect.width}px`;
+          activeSwipeThumb.style.height = `${rect.height}px`;
+          activeSwipeThumb.style.zIndex = '999999';
+          activeSwipeThumb.style.boxShadow = '0 20px 40px rgba(0,0,0,0.6)';
+        }
 
-        activeSwipeThumb.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.08) rotate(${diffX * 0.03}deg)`;
-        activeSwipeThumb.style.boxShadow = '0 15px 30px rgba(0,0,0,0.4)';
+        e.preventDefault();
+
+        // 追従移動
+        activeSwipeThumb.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.1) rotate(3deg)`;
 
         // 🌟 ドラッグ中のホバー先カードハイライト処理
         activeSwipeThumb.style.pointerEvents = 'none';
@@ -1973,13 +2002,12 @@ function initApp() {
           curIdx = Number(activeSwipeThumb.dataset.idx);
         }
 
-        // 外部コンテナにいる場合は兄弟要素の隙間空けを一旦オフに
         if (targetCard || targetPool || Math.abs(diffY) > 70) {
           siblings.forEach(sib => {
             if (sib !== activeSwipeThumb) sib.style.transform = 'none';
           });
         } else if (curIdx !== -1 && !isNaN(curIdx)) {
-          const itemWidth = activeSwipeThumb.offsetWidth || 90;
+          const itemWidth = originalThumbRect ? originalThumbRect.width : 90;
           const step = itemWidth + 10;
           const offsetIndices = Math.round(diffX / step);
           let targetIdx = curIdx + offsetIndices;
@@ -2076,22 +2104,35 @@ function initApp() {
       const isEditor = thumb.classList.contains('preview-item');
       const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
       const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
-      
-      let siblings = [];
-      if (isEditor) {
-        siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
-      } else if (isBatch) {
-        const gIdx = Number(thumb.dataset.gidx);
-        siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
-      } else if (isPool) {
-        siblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
-      }
-      siblings.forEach(sib => {
-        sib.style.transition = 'none';
-        sib.style.transform = 'none';
-      });
 
-      // 🌟 【修正】スワイプアップ/ドロップ時のコンテナ間移動判定の堅牢化
+      // 🌟 タップ判定（移動していない場合）
+      if (!isMoveTriggered && Math.abs(diffX) < 10 && Math.abs(diffY) < 10 && duration < 250) {
+        thumb.style.position = '';
+        thumb.style.left = '';
+        thumb.style.top = '';
+        thumb.style.width = '';
+        thumb.style.height = '';
+        thumb.style.transform = 'none';
+        thumb.style.zIndex = '';
+        thumb.style.boxShadow = 'none';
+        
+        const imgEl = thumb.querySelector('img');
+        if (imgEl) {
+          const contextType = imgEl.dataset.contextType;
+          let ctxData = null;
+          if (contextType === 'editor-preview') {
+            ctxData = { type: 'editor-preview', idx: Number(imgEl.dataset.idx) };
+          } else if (contextType === 'batch-group') {
+            ctxData = { type: 'batch-group', gidx: Number(imgEl.dataset.gidx), iidx: Number(imgEl.dataset.iidx) };
+          } else if (contextType === 'pool') {
+            ctxData = { type: 'pool', poolIdx: Number(imgEl.dataset.poolIdx) };
+          }
+          openLightbox(imgEl.src, ctxData);
+        }
+        return;
+      }
+
+      // 🌟 コンテナ間移動判定
       let isContainerMoved = false;
       if (!isEditor && isMoveTriggered) {
         thumb.style.pointerEvents = 'none';
@@ -2143,30 +2184,22 @@ function initApp() {
         return;
       }
 
-      thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
-
-      if (!isMoveTriggered && Math.abs(diffX) < 10 && Math.abs(diffY) < 10 && duration < 250) {
-        thumb.style.transform = 'none';
-        thumb.style.zIndex = '';
-        thumb.style.boxShadow = 'none';
-        
-        const imgEl = thumb.querySelector('img');
-        if (imgEl) {
-          const contextType = imgEl.dataset.contextType;
-          let ctxData = null;
-          if (contextType === 'editor-preview') {
-            ctxData = { type: 'editor-preview', idx: Number(imgEl.dataset.idx) };
-          } else if (contextType === 'batch-group') {
-            ctxData = { type: 'batch-group', gidx: Number(imgEl.dataset.gidx), iidx: Number(imgEl.dataset.iidx) };
-          } else if (contextType === 'pool') {
-            ctxData = { type: 'pool', poolIdx: Number(imgEl.dataset.poolIdx) };
-          }
-          openLightbox(imgEl.src, ctxData);
-        }
-        return;
+      // 🌟 同一コンテナ内並び替え判定
+      let siblings = [];
+      if (isEditor) {
+        siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
+      } else if (isBatch) {
+        const gIdx = Number(thumb.dataset.gidx);
+        siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
+      } else if (isPool) {
+        siblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
       }
+      siblings.forEach(sib => {
+        sib.style.transition = 'none';
+        sib.style.transform = 'none';
+      });
 
-      const itemWidth = thumb.offsetWidth || 90;
+      const itemWidth = originalThumbRect ? originalThumbRect.width : 90;
       const step = itemWidth + 10;
       const offsetIndices = Math.round(diffX / step);
 
@@ -2183,11 +2216,7 @@ function initApp() {
                 const [movedItem] = uploadedImages.splice(idx, 1);
                 uploadedImages.splice(targetIdx, 0, movedItem);
                 activeThumbnailIndex = 0;
-                
-                thumb.style.transform = `translateX(${-offsetIndices * step}px) scale(0.9)`;
-                setTimeout(() => {
-                  renderImagePreviewList();
-                }, 120);
+                renderImagePreviewList();
                 return;
               }
             }
@@ -2203,11 +2232,7 @@ function initApp() {
             if (targetIIdx !== iIdx) {
               const [movedItem] = group.splice(iIdx, 1);
               group.splice(targetIIdx, 0, movedItem);
-              
-              thumb.style.transform = `translateX(${-offsetIndices * step}px) scale(0.9)`;
-              setTimeout(() => {
-                renderBatchGroupsUI();
-              }, 120);
+              renderBatchGroupsUI();
               return;
             }
           }
@@ -2220,17 +2245,19 @@ function initApp() {
             if (targetIdx !== idx) {
               const [movedItem] = ungroupedImages.splice(idx, 1);
               ungroupedImages.splice(targetIdx, 0, movedItem);
-              
-              thumb.style.transform = `translateX(${-offsetIndices * step}px) scale(0.9)`;
-              setTimeout(() => {
-                renderBatchGroupsUI();
-              }, 120);
+              renderBatchGroupsUI();
               return;
             }
           }
         }
       }
       
+      // 移動なしまたは位置変わらずの場合のスタイル復元
+      thumb.style.position = '';
+      thumb.style.left = '';
+      thumb.style.top = '';
+      thumb.style.width = '';
+      thumb.style.height = '';
       thumb.style.transform = 'none';
       thumb.style.zIndex = '';
       thumb.style.boxShadow = 'none';
