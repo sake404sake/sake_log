@@ -67,7 +67,14 @@ function ensureSpinnerStyles() {
 
     @media (max-width: 600px) {
       /* 画面全体や親コンテナのはみ出し防止 */
-      body, #app, #batch-preview-section, #batch-groups-container {
+      body, #app, #batch-groups-container {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+      }
+
+      #batch-preview-section {
+        padding: 0 8px !important;
         max-width: 100% !important;
         box-sizing: border-box !important;
         overflow-x: hidden !important;
