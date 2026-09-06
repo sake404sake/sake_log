@@ -35,7 +35,7 @@ function ensureSpinnerStyles() {
     .draggable-thumb:active {
       cursor: grabbing;
     }
-.batch-group-card.drag-over {
+    .batch-group-card.drag-over {
       border-color: var(--accent-color) !important;
       background: var(--card-hover-bg, rgba(255,255,255,0.03));
     }
@@ -118,7 +118,6 @@ function ensureSpinnerStyles() {
       }
     }
     
-    
     /* 登録時の画像プレビュー枠をスマホでも押しやすいように調整 */
     .preview-item, .add-more-item {
       width: 90px !important;
@@ -174,7 +173,6 @@ function ensureSpinnerStyles() {
         height: 100px !important;
         min-height: 100px !important;
       }
-      /* スマホでは誤爆を避けるため削除ボタンは常に表示しておく */
       .btn-img-del {
         opacity: 1 !important;
       }
@@ -182,7 +180,7 @@ function ensureSpinnerStyles() {
 
     /* ライトボックス本体のスタイル */
     .lightbox-overlay {
-      touch-action: none !important; /* 🌟ブラウザのスワイプ妨害を完全にシャットアウト */
+      touch-action: none !important;
       position: fixed;
       top: 0;
       left: 0;
@@ -199,7 +197,7 @@ function ensureSpinnerStyles() {
       display: flex !important;
     }
     .lightbox-content {
-      touch-action: none !important; /* 🌟ブラウザのスワイプ妨害を完全にシャットアウト */
+      touch-action: none !important;
       position: relative;
       max-width: 95%;
       max-height: 95%;
@@ -209,7 +207,7 @@ function ensureSpinnerStyles() {
       justify-content: center;
     }
     .lightbox-content img {
-      touch-action: none !important; /* 🌟画像引きずりジェスチャーを最優先 */
+      touch-action: none !important;
       max-width: 100%;
       max-height: 65vh;
       border-radius: 12px;
@@ -228,7 +226,6 @@ function ensureSpinnerStyles() {
       line-height: 1;
       padding: 4px 8px;
     }
-    /* 左右のめくり用アローボタン */
     .lightbox-arrow-btn {
       position: absolute;
       top: 50%;
@@ -263,7 +260,6 @@ function ensureSpinnerStyles() {
     .lightbox-arrow-btn.next {
       right: 16px;
     }
-    /* カルーセル用の分数インジケーター */
     .lightbox-indicator {
       background: rgba(0, 0, 0, 0.6);
       color: rgba(255, 255, 255, 0.9);
@@ -284,7 +280,6 @@ function ensureSpinnerStyles() {
       content: '📖';
       font-size: 0.9rem;
     }
-    /* 丸みのあるカプセル型のアクションコントロールボタン */
     .lightbox-ctrl-btn {
       border-radius: 24px !important;
       padding: 10px 20px !important;
@@ -326,7 +321,6 @@ function ensureSpinnerStyles() {
       border-color: #ef4444 !important;
       color: #fff !important;
     }
-    /* スマホ表示ではさらにスッキリ */
     @media (max-width: 600px) {
       .lightbox-arrow-btn {
         width: 38px;
@@ -346,25 +340,15 @@ function ensureSpinnerStyles() {
 }
 ensureSpinnerStyles();
 
-// 🛡️ 【鉄壁のテーマ適用と自己復旧機能】
 export function setTheme(themeName) {
-  // アプリに定義されている5種類の有効なテーマ名
   const validThemes = ['dark', 'light', 'sakura', 'gaming', 'japan-modern'];
-  
-  // もし空、または無効なテーマ名（undefinedなど）が渡された場合は、デフォルトの 'dark' に自動復旧
   let targetTheme = themeName;
   if (!targetTheme || !validThemes.includes(targetTheme)) {
-    console.warn(`無効なテーマ名 "${themeName}" が検出されたため、デフォルトの "dark" テーマに自己復旧しました。`);
     targetTheme = 'dark';
   }
-
-  // <html> 要素にテーマ属性を設定（これがCSSと連動して瞬時に配色を切り替える）
   document.documentElement.setAttribute('data-theme', targetTheme);
-  
-  // ローカルストレージをクレンジング保存
   localStorage.setItem('sella_theme', targetTheme);
 
-  // 設定画面のセレクトボックスが存在すれば同期
   const themeSelect = document.getElementById('theme-select');
   if (themeSelect && themeSelect.value !== targetTheme) {
     themeSelect.value = targetTheme;
@@ -372,11 +356,9 @@ export function setTheme(themeName) {
 }
 
 function initTheme() {
-  // 起動時にローカルストレージから読み出し、厳格にバリデーションをかけて適用
   const savedTheme = localStorage.getItem('sella_theme');
   setTheme(savedTheme);
 }
-// ⚡ チラつきを防ぐため、ロードされた瞬間にトップレベルで即座に実行！
 initTheme();
 
 export async function updateModelDropdown(forceRefresh = false) {
@@ -432,9 +414,6 @@ export async function navigateTo(viewName) {
   closeSidebar();
 }
 
-// --------------------------------------------------
-// グローバル管理状態
-// --------------------------------------------------
 let uploadedImages = [];
 let activeThumbnailIndex = 0;
 let backupFormData = {};
@@ -447,7 +426,6 @@ let currentBatchGroupIndex = null;
 let draggedItemInfo = null;
 let isPoolCollapsed = false;
 
-// ライトボックス用のコンテキスト
 let activeLightboxCtx = null; 
 
 function base64ToBlob(base64, mimeType = 'image/jpeg') {
@@ -547,7 +525,7 @@ function renderBatchGroupsUI() {
           </div>
         </div>
 
-        <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真をタップすると拡大操作メニューが開きます。ドラッグ＆ドロップでも並び替えできます。</div>
+        <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真をタップすると拡大操作メニューが開きます。スワイプやドラッグ＆ドロップでグループ間移動も可能です。</div>
         <div class="thumbs-scroll-container" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; min-height: 50px;">
           ${thumbsHTML}
         </div>
@@ -599,7 +577,6 @@ function blobToBase64(blob) {
   });
 }
 
-// 📸 【超強化】スマホでも圧倒的に使いやすい、操作コントロール内蔵型ライトボックス
 function openLightbox(imageSrc, ctx) {
   let lightbox = document.getElementById('lightbox-modal');
   if (!lightbox) {
@@ -625,7 +602,6 @@ function openLightbox(imageSrc, ctx) {
 
       indicatorHTML = `<div class="lightbox-indicator">${idx + 1} / ${total}</div>`;
 
-      // 左右の画像めくりアロー
       if (total > 1) {
         arrowPrevHTML = `<button type="button" class="lightbox-arrow-btn prev" ${idx > 0 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="前の写真へ">‹</button>`;
         arrowNextHTML = `<button type="button" class="lightbox-arrow-btn next" ${idx < total - 1 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="次の写真へ">›</button>`;
@@ -649,7 +625,6 @@ function openLightbox(imageSrc, ctx) {
 
       indicatorHTML = `<div class="lightbox-indicator">${iIdx + 1} / ${total}</div>`;
 
-      // 左右の画像めくりアロー
       if (total > 1) {
         arrowPrevHTML = `<button type="button" class="lightbox-arrow-btn prev" ${iIdx > 0 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="前の写真へ">‹</button>`;
         arrowNextHTML = `<button type="button" class="lightbox-arrow-btn next" ${iIdx < total - 1 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="次の写真へ">›</button>`;
@@ -664,18 +639,16 @@ function openLightbox(imageSrc, ctx) {
           <button type="button" class="lightbox-ctrl-btn btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}">📤 プールへ外す</button>
         </div>
       `;
-} else if (ctx.type === 'pool') {
+    } else if (ctx.type === 'pool') {
       const idx = ctx.poolIdx;
       total = ungroupedImages.length;
       indicatorHTML = `<div class="lightbox-indicator">${idx + 1} / ${total}</div>`;
 
-      // プール内の画像めくりアロー
       if (total > 1) {
         arrowPrevHTML = `<button type="button" class="lightbox-arrow-btn prev" ${idx > 0 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="前の写真へ">‹</button>`;
         arrowNextHTML = `<button type="button" class="lightbox-arrow-btn next" ${idx < total - 1 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="次の写真へ">›</button>`;
       }
 
-      // 既存の未保存グループ一覧を選択できるセレクトドロップダウン
       let groupOptionsHTML = '';
       if (batchGroups.length > 0) {
         groupOptionsHTML = `
@@ -720,7 +693,6 @@ function closeLightbox() {
   activeLightboxCtx = null;
 }
 
-// 📸 ライトボックス内のスワイプ切替用ヘルパー関数
 function triggerLightboxNext() {
   if (!activeLightboxCtx) return;
   const ctx = activeLightboxCtx;
@@ -778,7 +750,6 @@ function triggerLightboxPrev() {
     }
   }
 }
-
 
 async function openDetailModal(logId) {
   closeDetailModal();
@@ -1091,14 +1062,12 @@ async function processFilesForBatch(files, append = true) {
   const failedFiles = [];
 
   for (const file of files) {
-    // 拡張子やタイプから画像であることを判定 (HEIC等のタイプが空になるケースにも対応)
     const isImage = file.type.startsWith('image/') || /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name);
     if (!isImage) continue;
 
     try {
       const compressed = await compressImage(file);
       
-      // 日付の安全な検証・取得 (Invalid Dateを完全に排除)
       let date = null;
       if (file.lastModified) {
         const d = new Date(file.lastModified);
@@ -1123,7 +1092,6 @@ async function processFilesForBatch(files, append = true) {
 
   try {
     if (items.length > 0) {
-      // 送信する items 内の日付データが確実に安全（Date または null）であることを保証
       const cleansedItems = items.map(item => ({
         ...item,
         date: (item.date && !isNaN(item.date.getTime())) ? item.date : null
@@ -1137,13 +1105,11 @@ async function processFilesForBatch(files, append = true) {
       }
 
       if (failedFiles.length > 0) {
-        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。HEIC形式や破損している可能性があります：
-・` + failedFiles.join('\\n・'));
+        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。HEIC形式や破損している可能性があります：\n・` + failedFiles.join('\n・'));
       }
     } else {
       if (failedFiles.length > 0) {
-        alert(`画像の読み込みに失敗しました。対応していない形式（HEIC等）の可能性があります：
-・` + failedFiles.join('\\n・'));
+        alert(`画像の読み込みに失敗しました。対応していない形式（HEIC等）の可能性があります：\n・` + failedFiles.join('\n・'));
       } else {
         alert('有効な画像ファイルが見つかりませんでした。');
       }
@@ -1202,8 +1168,6 @@ async function runAIAnalysis(targetImg) {
 }
 
 function initApp() {
-  // 🌟【重要リファクタリング】グローバルなファイルチェンジイベント委譲
-  // これにより、DOM置換によるイベントリスナーの消失や複数選択（multiple）のバグを完璧に解消する
   document.addEventListener('change', async (e) => {
     if (e.target && e.target.id === 'file-input') {
       const files = e.target.files;
@@ -1327,13 +1291,11 @@ function initApp() {
   });
 
   document.addEventListener('click', async (e) => {
-    // --- 📸 操作型ライトボックス内ボタンの統合イベント処理 ---
     const lbBtn = e.target.closest('.lightbox-ctrl-btn');
     if (lbBtn) {
       e.stopPropagation();
       e.preventDefault();
 
-      // [単体登録エディタ] メイン画像設定（未設定状態から設定）
       if (lbBtn.classList.contains('btn-main-unset')) {
         activeThumbnailIndex = Number(lbBtn.dataset.idx);
         renderImagePreviewList();
@@ -1343,7 +1305,6 @@ function initApp() {
         return;
       }
 
-      // [単体登録エディタ] 画像の削除
       if (lbBtn.classList.contains('btn-delete-img')) {
         const idx = Number(lbBtn.dataset.idx);
         uploadedImages.splice(idx, 1);
@@ -1355,7 +1316,6 @@ function initApp() {
         return;
       }
 
-      // [一括登録グループ] メイン画像設定（未設定状態から設定）
       if (lbBtn.classList.contains('btn-batch-main-unset')) {
         const gIdx = Number(lbBtn.dataset.gidx);
         const iIdx = Number(lbBtn.dataset.iidx);
@@ -1369,7 +1329,6 @@ function initApp() {
         return;
       }
 
-      // [一括登録グループ] 画像を未所属プールへ
       if (lbBtn.classList.contains('btn-batch-remove-img')) {
         const gIdx = Number(lbBtn.dataset.gidx);
         const iIdx = Number(lbBtn.dataset.iidx);
@@ -1387,7 +1346,6 @@ function initApp() {
         return;
       }
 
-// [プール] 画像の完全削除
       if (lbBtn.classList.contains('btn-pool-delete-img')) {
         const idx = Number(lbBtn.dataset.idx);
         ungroupedImages.splice(idx, 1);
@@ -1396,7 +1354,6 @@ function initApp() {
         return;
       }
 
-      // [プール] 新しいお酒グループとして独立登録
       if (lbBtn.classList.contains('btn-pool-create-group')) {
         const idx = Number(lbBtn.dataset.idx);
         const item = ungroupedImages.splice(idx, 1)[0];
@@ -1408,7 +1365,6 @@ function initApp() {
         return;
       }
 
-      // [プール] 既存の特定お酒グループに追加
       if (lbBtn.classList.contains('btn-pool-add-to-group')) {
         const idx = Number(lbBtn.dataset.idx);
         const selector = document.querySelector('.lightbox-group-selector');
@@ -1425,7 +1381,6 @@ function initApp() {
       }
     }
 
-    // 左右アローボタンによる画像閲覧・切り替えハンドラー
     const arrowBtn = e.target.closest('.lightbox-arrow-btn');
     if (arrowBtn) {
       e.stopPropagation();
@@ -1438,13 +1393,14 @@ function initApp() {
       return;
     }
 
-    // 各ファイル選択用のタップエミュレート
     if (e.target.closest('#batch-upload-zone') || e.target.closest('#btn-add-more-batch')) {
       e.preventDefault();
       const batchInput = document.getElementById('batch-file-input');
       if (batchInput) batchInput.click();
       return;
-    }    const saveAllBtn = e.target.closest('#btn-save-all-batches');
+    }
+
+    const saveAllBtn = e.target.closest('#btn-save-all-batches');
     if (saveAllBtn) {
       if (batchGroups.length === 0) {
         alert('登録するグループがありません。');
@@ -1461,7 +1417,6 @@ function initApp() {
         for (let gIdx = 0; gIdx < batchGroups.length; gIdx++) {
           const group = batchGroups[gIdx];
           
-          // 🛡️ 【重大安全ガード1】写真が1枚もない空のグループは処理をスキップする
           if (!group || group.length === 0) {
             console.warn(`警告: 空のお酒グループ #${gIdx + 1} をスキップしました。`);
             continue;
@@ -1476,15 +1431,13 @@ function initApp() {
           const name = cardName !== '' ? cardName : (group.name || `お酒グループ #${gIdx + 1}`);
           const brewery = cardBrewery !== '' ? cardBrewery : (group.brewery || '');
 
-          // スマホバグ治療: 順序変更やアップロードタイミングで Blob が欠落していた場合を検知して復元
           const orderedBlobs = group.map(img => {
             if (!img.blob && img.base64) {
               img.blob = base64ToBlob(img.base64, img.mimeType || 'image/jpeg');
             }
             return img.blob;
-          }).filter(blob => blob instanceof Blob); // 🌟確実にBlobオブジェクトであるもののみに絞り込む！
+          }).filter(blob => blob instanceof Blob);
 
-          // 🛡️ 【重大安全ガード2】無効な日付（Invalid Date）による toISOString() の停止バグを完全に回避する
           let mainDate = '';
           const rawDate = group[0]?.date;
           if (rawDate) {
@@ -1779,7 +1732,6 @@ function initApp() {
       return;
     }
 
-    // --- プレビューサムネイル画像をタップして拡大するロジック ---
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]');
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;
@@ -1797,7 +1749,6 @@ function initApp() {
       return;
     }
 
-    // --- ライトボックスをタップまたは✕ボタンで閉じる ---
     if (e.target.id === 'lightbox-modal' || e.target.classList.contains('lightbox-close') || e.target.closest('.lightbox-close')) {
       closeLightbox();
       return;
@@ -1824,7 +1775,6 @@ function initApp() {
       return;
     }
 
-    // --- 単体酒ログの保存ロジック ---
     if (e.target && e.target.id === 'btn-save-log') {
       const name = document.getElementById('sake-name')?.value.trim();
       if (!name) {
@@ -1837,15 +1787,12 @@ function initApp() {
       const rawTags = document.getElementById('sake-tags')?.value.trim() || '';
       const tags = rawTags ? rawTags.split(/\s+/).filter(Boolean) : [];
 
-      // スマホバグ治療: 順序変更やアップロードタイミングで Blob が欠落していた場合を検知して復元
       let orderedBlobs = uploadedImages.map(img => {
         if (!img.blob && img.base64) {
           img.blob = base64ToBlob(img.base64, img.mimeType || 'image/jpeg');
         }
         return img.blob;
-      }).filter(blob => blob instanceof Blob); // 🌟確実にBlobオブジェクトであるもののみにクレンジング！
-
-// 並び順は PointerEvents スワイプで並び替えられた orderedBlobs を100%そのまま保存する
+      }).filter(blob => blob instanceof Blob);
 
       const logData = {
         category: document.getElementById('sake-category')?.value || 'その他',
@@ -1916,9 +1863,8 @@ function initApp() {
     }
   });
 
-
-    // ==========================================================================
-  // 📱💻 スマホ・PC共通：【極上の操作感】PointerEvents「オートギャップ隙間空け並び替え」＆「スライド閲覧めくり」
+  // ==========================================================================
+  // 📱💻 スマホ・PC共通：PointerEvents「オートギャップ隙間空け並び替え」＆「コンテナ間スワイプ移動」
   // ==========================================================================
   let pointerStartX = 0;
   let pointerStartY = 0;
@@ -1928,7 +1874,6 @@ function initApp() {
   let isMoveTriggered = false;
 
   document.addEventListener('pointerdown', (e) => {
-    // 左クリックまたはタッチ開始のみを対象とする
     if (e.button !== 0 && e.pointerType === 'mouse') return;
 
     const lightbox = document.getElementById('lightbox-modal');
@@ -1937,7 +1882,6 @@ function initApp() {
       const closeBtn = lightbox.querySelector('.lightbox-close');
       const ctrlBtn = e.target.closest('.lightbox-ctrl-btn, .lightbox-arrow-btn');
       
-      // 閉じるボタンや操作ボタンの上ではドラッグを起動しない
       if (closeBtn && (e.target === closeBtn || closeBtn.contains(e.target))) return;
       if (ctrlBtn) return;
 
@@ -1953,7 +1897,6 @@ function initApp() {
       }
     } else {
       const thumb = e.target.closest('.preview-item, .draggable-thumb');
-      // ✕ボタン(btn-img-del, btn-batch-remove-img)の上ではドラッグを起動しない
       if (thumb && !e.target.closest('button')) {
         activeSwipeThumb = thumb;
         pointerStartX = e.clientX;
@@ -1978,24 +1921,37 @@ function initApp() {
       const img = lightbox.querySelector('#lightbox-img');
       if (img && img.hasPointerCapture(e.pointerId)) {
         e.preventDefault();
-        // わずかなブレ（8px）を排除して本格ドラッグ開始
         if (Math.abs(diffX) > 8) {
           isMoveTriggered = true;
-          // 画像を指に吸いつかせて滑らかにスライド
           img.style.transform = `translateX(${diffX}px) scale(0.98)`;
         }
       }
     } else if (activeSwipeThumb && activeSwipeThumb.hasPointerCapture(e.pointerId)) {
-      // 10px以上の移動でドラッグ開始
-      if (Math.abs(diffX) > 10) {
+      if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
         e.preventDefault();
         isMoveTriggered = true;
 
-        // ドラッグ対象を指に吸いつかせる
-        activeSwipeThumb.style.transform = `translateX(${diffX}px) scale(1.08) rotate(${diffX * 0.05}deg)`;
-        activeSwipeThumb.style.boxShadow = '0 10px 25px rgba(0,0,0,0.35)';
+        activeSwipeThumb.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.08) rotate(${diffX * 0.03}deg)`;
+        activeSwipeThumb.style.boxShadow = '0 15px 30px rgba(0,0,0,0.4)';
 
-        // 🌟【大本命】オートギャップ（隙間空け）アニメーションの実装 🌟
+        // 🌟 ドラッグ中のホバー先カードハイライト処理
+        activeSwipeThumb.style.pointerEvents = 'none';
+        const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+        activeSwipeThumb.style.pointerEvents = 'auto';
+
+        document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
+        const poolContainer = document.getElementById('ungrouped-pool-container');
+        if (poolContainer) poolContainer.classList.remove('drag-over');
+
+        const targetCard = hoveredEl ? hoveredEl.closest('.batch-group-card') : null;
+        const targetPool = hoveredEl ? hoveredEl.closest('#ungrouped-pool-container') : null;
+
+        if (targetCard) {
+          targetCard.classList.add('drag-over');
+        } else if (targetPool) {
+          poolContainer?.classList.add('drag-over');
+        }
+
         const isEditor = activeSwipeThumb.classList.contains('preview-item');
         const isBatch = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'group';
         const isPool = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'pool';
@@ -2014,49 +1970,14 @@ function initApp() {
           curIdx = Number(activeSwipeThumb.dataset.idx);
         }
 
-        // 🌟【新機能】コンテナ間（別グループ、またはプールとグループの間）のドラッグ検出🌟
-        let isCrossContainerDrag = false;
-        if (!isEditor) {
-          // ドラッグ中のタッチ座標(またはマウス座標)でホバー先のコンテナを特定
-          activeSwipeThumb.style.pointerEvents = 'none';
-          const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
-          activeSwipeThumb.style.pointerEvents = 'auto';
-
-          const targetCard = hoveredEl ? hoveredEl.closest('.batch-group-card') : null;
-          const targetPool = hoveredEl ? hoveredEl.closest('#ungrouped-pool-container') : null;
-
-          // 全ての .drag-over スタイルをクリア
-          document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-          const poolContainer = document.getElementById('ungrouped-pool-container');
-          if (poolContainer) poolContainer.classList.remove('drag-over');
-
-          if (targetCard) {
-            const targetGIdx = Number(targetCard.dataset.gidx);
-            const isSelf = isBatch && Number(activeSwipeThumb.dataset.gidx) === targetGIdx;
-            if (!isSelf) {
-              targetCard.classList.add('drag-over');
-              isCrossContainerDrag = true;
-            }
-          } else if (targetPool) {
-            const isSelf = isPool;
-            if (!isSelf) {
-              targetPool.classList.add('drag-over');
-              isCrossContainerDrag = true;
-            }
-          }
-        }
-
-        // ホバー中の別コンテナがある、またはドラッグ要素がコンテナから大きく離れた(Y軸ブレ80px以上)場合は
-        // 兄弟要素(siblings)の隙間空けを一旦キャンセルしてリセットする
-        if (isCrossContainerDrag || Math.abs(diffY) > 80) {
+        // 外部コンテナにいる場合は兄弟要素の隙間空けを一旦オフに
+        if (targetCard || targetPool || Math.abs(diffY) > 70) {
           siblings.forEach(sib => {
             if (sib !== activeSwipeThumb) sib.style.transform = 'none';
           });
         } else if (curIdx !== -1 && !isNaN(curIdx)) {
           const itemWidth = activeSwipeThumb.offsetWidth || 90;
-          const step = itemWidth + 10; // アイテム幅 + マージン（10px）
-          
-          // 掴んでいる要素が現在どのインデックスの位置まで侵入しているかを計算
+          const step = itemWidth + 10;
           const offsetIndices = Math.round(diffX / step);
           let targetIdx = curIdx + offsetIndices;
           targetIdx = Math.max(0, Math.min(siblings.length - 1, targetIdx));
@@ -2066,14 +1987,12 @@ function initApp() {
             sib.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
             
             if (curIdx < targetIdx) {
-              // 右方向にドラッグ中：curIdx より後ろで targetIdx 以下の要素は左にズレる
               if (sIdx > curIdx && sIdx <= targetIdx) {
                 sib.style.transform = `translateX(${-step}px)`;
               } else {
                 sib.style.transform = 'none';
               }
             } else if (curIdx > targetIdx) {
-              // 左方向にドラッグ中：targetIdx 以上で curIdx より前の要素は右にズレる
               if (sIdx >= targetIdx && sIdx < curIdx) {
                 sib.style.transform = `translateX(${step}px)`;
               } else {
@@ -2103,13 +2022,11 @@ function initApp() {
         img.releasePointerCapture(e.pointerId);
         img.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
 
-        // ほとんど動いていない(10px未満)、かつタップしただけなら何もしない
         if (!isMoveTriggered) {
           img.style.transform = 'translateX(0) scale(1)';
           return;
         }
 
-        // 50px以上動かした、またはすばやいフリックの場合に画像をめくる
         if (Math.abs(diffX) > 55 || (duration < 300 && Math.abs(diffX) > 30)) {
           if (diffX < 0) {
             img.style.transform = 'translateX(-120%) scale(0.9)';
@@ -2119,7 +2036,7 @@ function initApp() {
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(120%) scale(0.9)';
-                updatedImg.offsetHeight; // リフロー
+                updatedImg.offsetHeight;
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
@@ -2132,7 +2049,7 @@ function initApp() {
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(-120%) scale(0.9)';
-                updatedImg.offsetHeight; // リフロー
+                updatedImg.offsetHeight;
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
@@ -2149,7 +2066,10 @@ function initApp() {
         thumb.releasePointerCapture(e.pointerId);
       }
 
-// スライドされた周りの要素（siblings）のスタイルを綺麗にリセットする
+      document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
+      const poolContainer = document.getElementById('ungrouped-pool-container');
+      if (poolContainer) poolContainer.classList.remove('drag-over');
+
       const isEditor = thumb.classList.contains('preview-item');
       const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
       const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
@@ -2168,7 +2088,7 @@ function initApp() {
         sib.style.transform = 'none';
       });
 
-      // 🌟【新機能】コンテナ間移動（別グループ、またはプールとグループの間）のポインタードロップ判定🌟
+      // 🌟 【ここが重要】スワイプアップ/ドロップ時のコンテナ間移動判定
       let isContainerMoved = false;
       if (!isEditor && isMoveTriggered) {
         thumb.style.pointerEvents = 'none';
@@ -2178,16 +2098,10 @@ function initApp() {
         const targetCard = droppedEl ? droppedEl.closest('.batch-group-card') : null;
         const targetPool = droppedEl ? droppedEl.closest('#ungrouped-pool-container') : null;
 
-        // 全ての .drag-over スタイルをクリア
-        document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-        const poolContainer = document.getElementById('ungrouped-pool-container');
-        if (poolContainer) poolContainer.classList.remove('drag-over');
-
         if (targetCard) {
           const targetGIdx = Number(targetCard.dataset.gidx);
           if (!isNaN(targetGIdx) && batchGroups[targetGIdx]) {
             if (isPool) {
-              // プールからグループへ直接スワイプ移動！
               const idx = Number(thumb.dataset.idx);
               if (!isNaN(idx) && ungroupedImages[idx]) {
                 const [movedItem] = ungroupedImages.splice(idx, 1);
@@ -2195,7 +2109,6 @@ function initApp() {
                 isContainerMoved = true;
               }
             } else if (isBatch) {
-              // グループ間での直接スワイプ移動！
               const srcGIdx = Number(thumb.dataset.gidx);
               const srcIIdx = Number(thumb.dataset.iidx);
               if (srcGIdx !== targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && batchGroups[srcGIdx] && batchGroups[srcGIdx][srcIIdx]) {
@@ -2209,7 +2122,6 @@ function initApp() {
             }
           }
         } else if (targetPool && isBatch) {
-          // グループからプールへ直接スワイプ戻し！
           const srcGIdx = Number(thumb.dataset.gidx);
           const srcIIdx = Number(thumb.dataset.iidx);
           if (!isNaN(srcGIdx) && !isNaN(srcIIdx) && batchGroups[srcGIdx] && batchGroups[srcGIdx][srcIIdx]) {
@@ -2224,14 +2136,12 @@ function initApp() {
       }
 
       if (isContainerMoved) {
-        // コンテナ間移動が完了した場合は、再描画して処理を終了！
         renderBatchGroupsUI();
         return;
       }
 
       thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
 
-      // 🌟 タップ操作（拡大起動）のインテリジェント検出
       if (!isMoveTriggered && Math.abs(diffX) < 10 && Math.abs(diffY) < 10 && duration < 250) {
         thumb.style.transform = 'none';
         thumb.style.zIndex = '';
@@ -2253,7 +2163,6 @@ function initApp() {
         return;
       }
 
-      // 🌟【大進化】オートギャップに基づいた、多段階一括並び替え処理！
       const itemWidth = thumb.offsetWidth || 90;
       const step = itemWidth + 10;
       const offsetIndices = Math.round(diffX / step);
@@ -2268,14 +2177,10 @@ function initApp() {
               targetIdx = Math.max(0, Math.min(uploadedImages.length - 1, targetIdx));
               
               if (targetIdx !== idx) {
-                // 配列の安全な移動（挿入型入れ替え）
                 const [movedItem] = uploadedImages.splice(idx, 1);
                 uploadedImages.splice(targetIdx, 0, movedItem);
-                
-                // 0番目がメイン写真になる
                 activeThumbnailIndex = 0;
                 
-                // 元のドラッグ要素をスライドバックするアニメーションを設定
                 thumb.style.transform = `translateX(${-offsetIndices * step}px) scale(0.9)`;
                 setTimeout(() => {
                   renderImagePreviewList();
@@ -2284,7 +2189,7 @@ function initApp() {
               }
             }
           }
-} else if (isBatch) {
+        } else if (isBatch) {
           const gIdx = Number(thumb.dataset.gidx);
           const iIdx = Number(thumb.dataset.iidx);
           if (!isNaN(gIdx) && !isNaN(iIdx) && batchGroups[gIdx]) {
@@ -2323,7 +2228,6 @@ function initApp() {
         }
       }
       
-      // 移動が発生しなかった場合は元の位置に戻す
       thumb.style.transform = 'none';
       thumb.style.zIndex = '';
       thumb.style.boxShadow = 'none';
