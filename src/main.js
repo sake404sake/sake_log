@@ -66,12 +66,19 @@ function ensureSpinnerStyles() {
     }
 
     @media (max-width: 600px) {
+      /* 画面全体や親コンテナのはみ出し防止 */
+      body, #app, #batch-preview-section, #batch-groups-container {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+      }
+
       #ungrouped-pool-container {
         left: 8px !important;
         right: 8px !important;
         bottom: 8px !important;
         width: calc(100% - 16px) !important;
-        max-width: 100% !important;
+        max-width: calc(100% - 16px) !important;
         box-sizing: border-box !important;
         border-radius: 12px !important;
         padding: 12px 14px !important;
@@ -100,14 +107,19 @@ function ensureSpinnerStyles() {
       }
       
       .batch-group-card {
+        width: 100% !important;
+        max-width: 100% !important;
         padding: 12px !important;
         margin-bottom: 10px !important;
         box-sizing: border-box !important;
+        overflow: hidden !important;
       }
       .batch-group-card-header {
         flex-direction: column !important;
         align-items: flex-start !important;
         gap: 8px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
       }
       .batch-group-btn-container {
         width: 100% !important;
@@ -121,6 +133,8 @@ function ensureSpinnerStyles() {
         gap: 8px !important;
         scrollbar-width: none !important;
         padding-bottom: 4px !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
       }
       .batch-group-card .thumbs-scroll-container::-webkit-scrollbar {
         display: none !important;
@@ -130,6 +144,20 @@ function ensureSpinnerStyles() {
         height: 80px !important;
         min-height: 80px !important;
         flex-shrink: 0 !important;
+      }
+
+      /* フォーム行のはみ出し防止対策 */
+      .batch-group-card .form-row {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .batch-group-card .form-row input {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
       }
     }
     
