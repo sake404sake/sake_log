@@ -35,26 +35,53 @@ export async function renderLogListView() {
       brandLogs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
       const rowsHTML = brandLogs.map(log => {
-        // 画像データを動的に自動探索（プロパティ名によらず data:image や http, blob を探す）
-        let thumbUrl = null;
-        if (Array.isArray(log.images) && log.images.length > 0) {
-          thumbUrl = log.images[0];
-        } else if (log.image) {
-          thumbUrl = log.image;
-        } else {
-          // すべてのプロパティを走査して画像データらしい文字列を探す
-          for (const key in log) {
-            const val = log[key];
-            if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('http') || val.startsWith('blob:'))) {
-              thumbUrl = val;
-              break;
-            }
-            if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string' && (val[0].startsWith('data:image') || val[0].startsWith('http') || val[0].startsWith('blob:'))) {
-              thumbUrl = val[0];
-              break;
+        // 画像データを安全に抽出・探索するヘルパー関数
+        const extractThumbUrl = (obj) => {
+          if (!obj) return null;
+          
+          // よく使われるプロパティ名を優先順位順にチェック
+          const candidateKeys = ['images', 'image', 'photos', 'photo', 'imageUrl', 'image_url', 'img', 'picture', 'file', 'files'];
+          for (const key of candidateKeys) {
+            const val = obj[key];
+            if (val) {
+              if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('http') || val.startsWith('blob:'))) {
+                return val;
+              }
+              if (Array.isArray(val) && val.length > 0) {
+                const first = val[0];
+                if (typeof first === 'string' && (first.startsWith('data:image') || first.startsWith('http') || first.startsWith('blob:'))) {
+                  return first;
+                }
+                if (first && typeof first === 'object' && (first.url || first.src)) {
+                  return first.url || first.src;
+                }
+              }
+              if (typeof val === 'object' && (val.url || val.src)) {
+                return val.url || val.src;
+              }
             }
           }
-        }
+
+          // その他のプロパティを総当たりで走査
+          for (const key in obj) {
+            const val = obj[key];
+            if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('http') || val.startsWith('blob:'))) {
+              return val;
+            }
+            if (Array.isArray(val) && val.length > 0) {
+              const first = val[0];
+              if (typeof first === 'string' && (first.startsWith('data:image') || first.startsWith('http') || first.startsWith('blob:'))) {
+                return first;
+              }
+            }
+            if (val && typeof val === 'object' && (val.url || val.src)) {
+              return val.url || val.src;
+            }
+          }
+          return null;
+        };
+
+        const thumbUrl = extractThumbUrl(log);
 
         return `
           <div class="log-item-row" data-action="open-detail" data-id="${log.id}">
