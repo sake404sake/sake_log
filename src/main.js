@@ -31,13 +31,14 @@ function ensureSpinnerStyles() {
     .draggable-thumb {
       cursor: grab;
       transition: transform 0.15s, opacity 0.15s;
+      touch-action: none;
     }
     .draggable-thumb:active {
       cursor: grabbing;
     }
-    .batch-group-card.drag-over {
+    .batch-group-card.drag-over, #ungrouped-pool-container.drag-over {
       border-color: var(--accent-color) !important;
-      background: var(--card-hover-bg, rgba(255,255,255,0.03));
+      background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important;
     }
     
     /* 📱 スマホ用一括インポート（batchImport）レイアウト崩れ防止と超絶最適化 */
@@ -124,6 +125,7 @@ function ensureSpinnerStyles() {
       height: 90px !important;
       min-height: 90px !important;
       position: relative !important;
+      touch-action: none !important;
     }
     .preview-item img {
       width: 100% !important;
@@ -471,17 +473,18 @@ function renderBatchGroupsUI() {
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
         ${ungroupedImages.map((item, idx) => `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
-               style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
-            <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+               style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); touch-action:none;">
+            <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer; pointer-events:none;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10; pointer-events:auto;">✕</button>
           </div>
         `).join('')}
       </div>
     `;
 
+    // 📱【修正】左右のマージン・幅をレスポンシブかつ安全に修正（見切れ防止）
     ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 80px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
+      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 16px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px;">${isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
@@ -502,11 +505,11 @@ function renderBatchGroupsUI() {
 
     const thumbsHTML = group.map((item, iIdx) => `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
-           style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color);">
-        <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
-        ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
+           style="position:relative; width:90px; height:90px; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); touch-action:none;">
+        <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer; pointer-events:none;" />
+        ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5; pointer-events:none;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10; pointer-events:auto;">✕</button>
       </div>
     `).join('');
 
@@ -546,7 +549,7 @@ function renderBatchGroupsUI() {
         ${batchGroups.length > 0 ? `<button type="button" id="btn-save-all-batches" class="btn-primary" style="background: #10b981; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">🚀 すべてまとめて登録する</button>` : ''}
       </div>
     </div>
-    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 16px; padding-bottom: ${ungroupedImages.length > 0 ? '120px' : '20px'};">
+    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 16px; padding-bottom: ${ungroupedImages.length > 0 ? '140px' : '20px'};">
       ${groupsHTML}
     </div>
     ${ungroupedHTML}
@@ -947,9 +950,9 @@ function renderImagePreviewList() {
 
   const itemsHTML = uploadedImages.map((img, idx) => `
     <div class="preview-item ${idx === 0 ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
-      <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
-      <div class="preview-actions">
-        <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
+      <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none; pointer-events: none;" />
+      <div class="preview-actions" style="pointer-events: none;">
+        <button type="button" class="btn-img-del" data-idx="${idx}" title="削除" style="pointer-events: auto;">✕</button>
       </div>
     </div>
   `).join('');
@@ -2088,7 +2091,7 @@ function initApp() {
         sib.style.transform = 'none';
       });
 
-      // 🌟 【ここが重要】スワイプアップ/ドロップ時のコンテナ間移動判定
+      // 🌟 【修正】スワイプアップ/ドロップ時のコンテナ間移動判定の堅牢化
       let isContainerMoved = false;
       if (!isEditor && isMoveTriggered) {
         thumb.style.pointerEvents = 'none';
