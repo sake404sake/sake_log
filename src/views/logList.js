@@ -35,8 +35,13 @@ export async function renderLogListView() {
       brandLogs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
       const rowsHTML = brandLogs.map(log => {
-        // 画像がある場合は最初の1枚をサムネイルとして表示
-        const thumbUrl = (log.images && log.images.length > 0) ? log.images[0] : null;
+        // 画像の格納プロパティ名の違い（images配列、単体のimageやphoto等）に幅広く対応
+        const thumbUrl = 
+          (Array.isArray(log.images) && log.images.length > 0 ? log.images[0] : null) ||
+          log.image || 
+          log.photo || 
+          log.photoUrl || 
+          null;
 
         return `
           <div class="log-item-row" data-action="open-detail" data-id="${log.id}">
@@ -89,7 +94,6 @@ export async function renderLogListView() {
   return `<div class="dashboard-container">
     <div class="dashboard-header">
       <h2>酒ログ一覧</h2>
-      <button class="btn-primary" data-action="open-editor">＋ 新規登録</button>
     </div>
 
     <div class="categories-wrapper">
@@ -106,6 +110,16 @@ export async function renderLogListView() {
       padding-bottom: 40px;
     }
 
+    /* タイトル下のスペース（余白）を確保 */
+    .dashboard-header {
+      margin-bottom: 20px;
+    }
+
+    .dashboard-header h2 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
     .brand-group-card {
       width: 100%;
       box-sizing: border-box;
@@ -118,10 +132,10 @@ export async function renderLogListView() {
       justify-content: space-between;
       width: 100%;
       box-sizing: border-box;
-      gap: 8px;
+      gap: 10px;
     }
 
-    /* サムネイル画像のスタイル修正 */
+    /* サムネイル画像のスタイル */
     .row-thumb-container {
       flex-shrink: 0;
       width: 44px;
@@ -142,7 +156,7 @@ export async function renderLogListView() {
 
     .row-info-container {
       flex: 1;
-      min-width: 0; /* はみ出し防止のキモ */
+      min-width: 0; /* はみ出し防止 */
       overflow: hidden;
     }
 
