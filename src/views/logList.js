@@ -35,13 +35,26 @@ export async function renderLogListView() {
       brandLogs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
       const rowsHTML = brandLogs.map(log => {
-        // 画像の格納プロパティ名の違い（images配列、単体のimageやphoto等）に幅広く対応
-        const thumbUrl = 
-          (Array.isArray(log.images) && log.images.length > 0 ? log.images[0] : null) ||
-          log.image || 
-          log.photo || 
-          log.photoUrl || 
-          null;
+        // 画像データを動的に自動探索（プロパティ名によらず data:image や http, blob を探す）
+        let thumbUrl = null;
+        if (Array.isArray(log.images) && log.images.length > 0) {
+          thumbUrl = log.images[0];
+        } else if (log.image) {
+          thumbUrl = log.image;
+        } else {
+          // すべてのプロパティを走査して画像データらしい文字列を探す
+          for (const key in log) {
+            const val = log[key];
+            if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('http') || val.startsWith('blob:'))) {
+              thumbUrl = val;
+              break;
+            }
+            if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string' && (val[0].startsWith('data:image') || val[0].startsWith('http') || val[0].startsWith('blob:'))) {
+              thumbUrl = val[0];
+              break;
+            }
+          }
+        }
 
         return `
           <div class="log-item-row" data-action="open-detail" data-id="${log.id}">
@@ -49,7 +62,11 @@ export async function renderLogListView() {
               <div class="row-thumb-container">
                 <img src="${thumbUrl}" alt="サムネイル" class="row-thumb">
               </div>
-            ` : ''}
+            ` : `
+              <div class="row-thumb-container empty-thumb">
+                <span>🍶</span>
+              </div>
+            `}
             <div class="row-info-container">
               <div class="row-date-line">
                 <span class="row-date">📅 ${log.date || '日付未登録'}</span>
@@ -146,6 +163,11 @@ export async function renderLogListView() {
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+
+    .empty-thumb {
+      font-size: 1.2rem;
+      background: #333;
     }
 
     .row-thumb {
