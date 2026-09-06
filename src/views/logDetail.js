@@ -84,12 +84,9 @@ export async function renderLogDetailModal(logId) {
       ` : ''}
     </div>
 
-    <div class="modal-footer" style="display: flex; justify-content: space-between; margin-top: 20px;">
-      <button type="button" class="btn-secondary" id="btn-delete-from-detail" data-id="${log.id}" style="color: #ff4d4f; border-color: #ff4d4f;">削除</button>
-      <div>
-        <button type="button" class="btn-primary" id="btn-edit-from-detail" data-id="${log.id}">編集する</button>
-        <button type="button" class="btn-secondary" id="btn-close-detail-footer">閉じる</button>
-      </div>
+    <div class="modal-footer" style="display: flex; justify-content: flex-end; margin-top: 20px; gap: 10px;">
+      <button type="button" class="btn-primary" id="btn-edit-from-detail" data-id="${log.id}">編集する</button>
+      <button type="button" class="btn-secondary" id="btn-close-detail-footer">閉じる</button>
     </div>
   </div>
 </div>

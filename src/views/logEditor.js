@@ -1,7 +1,7 @@
 import { getAllTags } from '../store/db.js';
 import { getApiKey, getSavedModel } from '../services/gemini.js';
 
-export async function renderLogEditorModal() {
+export async function renderLogEditorModal(logId = null) {
   const today = new Date().toISOString().split('T')[0];
   const existingTags = await getAllTags();
 
@@ -128,7 +128,7 @@ export async function renderLogEditorModal() {
         </div>
 
         <div class="form-group">
-          <label for="sake-ai-info" style="color: var(--accent-color);">🤖 AIによる情報・補足</label>
+          <label for="sake-ai-info" style="color: var(--accent-color); font-weight: bold;">🤖 AIによる情報・補足</label>
           <textarea id="sake-ai-info" class="input-dark ai-info-input" rows="2" placeholder="AI解析結果やおすすめの飲み方"></textarea>
         </div>
       </div>
@@ -140,7 +140,7 @@ export async function renderLogEditorModal() {
       <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 260px;">
         
         <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
-          <select id="modal-model-select" class="input-dark model-select" title="使用するAIモデルを選択" 
+          <select id="modal-model-select" class="input-dark model-select" title="使用するAIモデルを選択" \
             style="flex: 1; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
             ${initialOptionHTML}
           </select>
@@ -154,9 +154,10 @@ export async function renderLogEditorModal() {
         
       </div>
       
-      <div style="display: flex; gap: 10px; margin-left: auto;">
-        <button type="button" id="btn-cancel-modal" class="btn-sub">キャンセル</button>
-        <button type="button" id="btn-save-log" class="btn-primary">保存</button>
+      <div style="display: flex; gap: 10px; margin-left: auto; width: 100%; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+        ${logId ? `<button type="button" id="btn-delete-log-editor" data-id="${logId}" class="btn-secondary" style="color: #ff4d4f; border-color: #ff4d4f; font-weight: bold; margin-right: auto; padding: 10px 20px; border-radius: 8px;">🗑️ 削除</button>` : ''}
+        <button type="button" id="btn-cancel-modal" class="btn-sub" style="padding: 10px 20px; border-radius: 8px;">キャンセル</button>
+        <button type="button" id="btn-save-log" class="btn-primary" style="padding: 10px 20px; border-radius: 8px;">保存</button>
       </div>
       
     </div>
