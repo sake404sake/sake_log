@@ -192,8 +192,8 @@ function ensureSpinnerStyles() {
       cursor: grabbing !important;
     }
 
-    /* 削除ボタンのタッチ保証と視認性 */
-    .btn-img-del, .btn-batch-remove-img, .btn-ungrouped-remove {
+    /* 削除ボタンのタッチ保証と視認性（サムネイル内要素に限定し、ライトボックス内ボタンへの誤爆を防止） */
+    .preview-item > .btn-img-del, .draggable-thumb > .btn-batch-remove-img, .draggable-thumb > .btn-ungrouped-remove {
       position: absolute !important;
       top: 4px !important;
       right: 4px !important;
@@ -214,11 +214,11 @@ function ensureSpinnerStyles() {
     }
 
     @media (min-width: 601px) {
-      .btn-img-del {
+      .preview-item > .btn-img-del {
         opacity: 0 !important;
         transition: opacity 0.2s ease !important;
       }
-      .preview-item:hover .btn-img-del {
+      .preview-item:hover > .btn-img-del {
         opacity: 1 !important;
       }
     }
@@ -229,7 +229,7 @@ function ensureSpinnerStyles() {
         height: 85px !important;
         min-height: 85px !important;
       }
-      .btn-img-del, .btn-batch-remove-img, .btn-ungrouped-remove {
+      .preview-item > .btn-img-del, .draggable-thumb > .btn-batch-remove-img, .draggable-thumb > .btn-ungrouped-remove {
         opacity: 1 !important;
       }
     }
@@ -633,7 +633,27 @@ function blobToBase64(blob) {
   });
 }
 
+function resetThumbStyle(thumb) {
+  if (!thumb) return;
+  thumb.style.position = '';
+  thumb.style.left = '';
+  thumb.style.top = '';
+  thumb.style.width = '';
+  thumb.style.height = '';
+  thumb.style.transform = '';
+  thumb.style.zIndex = '';
+  thumb.style.boxShadow = '';
+  thumb.style.pointerEvents = '';
+  thumb.style.transition = '';
+}
+
 function openLightbox(imageSrc, ctx) {
+  // 拡大表示する前にアクティブなスワイプサムネイルのスタイルを確実にクリーンアップ
+  if (activeSwipeThumb) {
+    resetThumbStyle(activeSwipeThumb);
+    activeSwipeThumb = null;
+  }
+
   let lightbox = document.getElementById('lightbox-modal');
   if (!lightbox) {
     lightbox = document.createElement('div');
@@ -2069,14 +2089,7 @@ function initApp() {
 
       // タップ判定
       if (!isMoveTriggered && Math.abs(diffX) < 10 && Math.abs(diffY) < 10 && duration < 250) {
-        thumb.style.position = '';
-        thumb.style.left = '';
-        thumb.style.top = '';
-        thumb.style.width = '';
-        thumb.style.height = '';
-        thumb.style.transform = 'none';
-        thumb.style.zIndex = '';
-        thumb.style.boxShadow = 'none';
+        resetThumbStyle(thumb);
         
         const imgEl = thumb.querySelector('img');
         if (imgEl) {
@@ -2214,14 +2227,7 @@ function initApp() {
         }
       }
       
-      thumb.style.position = '';
-      thumb.style.left = '';
-      thumb.style.top = '';
-      thumb.style.width = '';
-      thumb.style.height = '';
-      thumb.style.transform = 'none';
-      thumb.style.zIndex = '';
-      thumb.style.boxShadow = 'none';
+      resetThumbStyle(thumb);
     }
   });
 
