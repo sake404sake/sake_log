@@ -174,7 +174,7 @@ export async function renderLogListView() {
     .brand-logs-list {
       display: flex;
       flex-direction: column;
-      gap: 12px; /* ログ同士の間隔を少し空ける */
+      gap: 12px;
       box-sizing: border-box;
       width: 100%;
       max-width: 100%;
@@ -242,12 +242,13 @@ export async function renderLogListView() {
       gap: 2px 6px;
       margin-top: 4px;
       width: 100%;
-      max-width: 100%;
+      min-width: 0;
       box-sizing: border-box;
     }
 
     .row-product {
       word-break: break-all;
+      overflow: hidden;
     }
 
     .row-brewery {
