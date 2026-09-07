@@ -397,7 +397,7 @@ export async function handleImageFiles(files) {
     if (!file.type.startsWith('image/')) continue;
 
     if (i === 0 && state.uploadedImages.length === 0) {
-      const extractedDate = extractPhotoDate(file);
+      const extractedDate = await extractPhotoDate(file);
       if (extractedDate) {
         const dateInput = document.getElementById('sake-date');
         if (dateInput) dateInput.value = extractedDate;

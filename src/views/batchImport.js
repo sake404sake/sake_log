@@ -1,14 +1,14 @@
 // src/views/batchImport.js
 
 import { state } from '../store/state.js';
-import { compressImage, groupImagesByTime } from '../utils/image.js';
+import { compressImage, groupImagesByTime, extractPhotoDateObject } from '../utils/image.js';
 
 export function renderBatchImportView() {
   return `
     <div class="batch-import-container">
       <div class="settings-card">
         <div class="card-title card-title-bulk">
-          <h3>📦 一括画像解析（複数ボトルを自動認識）</h3>
+          <h3>📦 一括画像解析<br>（複数ボトルを自動認識）</h3>
         </div>
         <p class="card-desc bulk-desc">
           複数のボトル写真を一度にアップロードできます。時間経過からお酒を自動でグルーピングし、一括で解析・登録が完了します。
@@ -39,7 +39,7 @@ export function renderBatchGroupsUI() {
     uploadZone.innerHTML = `
       <div style="padding: 30px; text-align: center; border: 2px dashed var(--border-color); border-radius: 12px; cursor: pointer; background: var(--card-bg);">
         <div style="font-size: 1.8rem; margin-bottom: 6px;">📁</div>
-        <div style="font-weight: bold; color: var(--text-main);">さらに写真を追加する</div>
+        <div style="font-weight: bold; color: var(--text-main);">まとめて写真を追加する</div>
       </div>
     `;
   }
@@ -170,13 +170,7 @@ export async function processFilesForBatch(files, append = true) {
     try {
       const compressed = await compressImage(file);
       
-      let date = null;
-      if (file.lastModified) {
-        const d = new Date(file.lastModified);
-        if (!isNaN(d.getTime())) {
-          date = d;
-        }
-      }
+      const date = await extractPhotoDateObject(file);
 
       items.push({
         file,
