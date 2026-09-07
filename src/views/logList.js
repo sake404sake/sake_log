@@ -35,64 +35,39 @@ export async function renderLogListView() {
       brandLogs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
       const rowsHTML = brandLogs.map(log => {
-        // 画像データを安全に抽出・探索するヘルパー関数（1枚目を取りこぼさないよう改善）
-        const extractThumbUrl = (obj) => {
-          if (!obj) return null;
+        let thumbUrl = null;
+        if (Array.isArray(log.imageUrls) && log.imageUrls.length > 0) {
+          thumbUrl = log.imageUrls[0];
+        } else {
+          let imgData = null;
+          const possibleImages = log.images || log.image || log.photos || log.photo;
           
-          const parseImageVal = (val) => {
-            if (!val) return null;
-            if (typeof val === 'string' && val.trim() !== '') {
-              return val;
-            }
-            if (typeof val === 'object') {
-              return val.url || val.src || val.data || val.path || null;
-            }
-            return null;
-          };
-
-          // よく使われるプロパティ名を優先順位順にチェック
-          const candidateKeys = ['imageUrls', 'images', 'image', 'photos', 'photo', 'imageUrl', 'image_url', 'img', 'picture', 'file', 'files'];
-          for (const key of candidateKeys) {
-            const val = obj[key];
-            if (Array.isArray(val) && val.length > 0) {
-              const first = parseImageVal(val[0]);
-              if (first) return first;
-            } else {
-              const parsed = parseImageVal(val);
-              if (parsed) return parsed;
-            }
+          if (Array.isArray(possibleImages) && possibleImages.length > 0) {
+            imgData = possibleImages[0];
+          } else if (possibleImages) {
+            imgData = possibleImages;
           }
 
-          // その他のプロパティを総当たりで走査
-          for (const key in obj) {
-            const val = obj[key];
-            if (Array.isArray(val) && val.length > 0) {
-              const first = parseImageVal(val[0]);
-              if (first) return first;
-            } else {
-              const parsed = parseImageVal(val);
-              if (parsed && typeof parsed === 'string' && parsed.length > 20) {
-                return parsed;
-              }
+          if (imgData) {
+            if (imgData instanceof Blob) {
+              thumbUrl = URL.createObjectURL(imgData);
+            } else if (typeof imgData === 'string') {
+              thumbUrl = imgData.startsWith('data:') ? imgData : `data:image/jpeg;base64,${imgData}`;
+            } else if (imgData instanceof Uint8Array || imgData instanceof ArrayBuffer) {
+              const blob = new Blob([imgData], { type: 'image/jpeg' });
+              thumbUrl = URL.createObjectURL(blob);
             }
           }
-          return null;
-        };
-
-        const thumbUrl = extractThumbUrl(log);
+        }
 
         return `
-          <div class="log-item-row" data-action="open-detail" data-id="${log.id}">
-            ${thumbUrl ? `
-              <div class="row-thumb-container">
-                <img src="${thumbUrl}" alt="サムネイル" class="row-thumb">
-              </div>
-            ` : `
-              <div class="row-thumb-container empty-thumb">
-                <span>🍶</span>
-              </div>
-            `}
-            <div class="row-info-container">
+          <div class="log-row-item" data-action="open-detail" data-id="${log.id}">
+            <div class="row-thumb-box">
+              ${thumbUrl 
+                ? `<img src="${thumbUrl}" class="row-thumb-img" alt="${log.name}" />` 
+                : `<div class="row-thumb-placeholder">🍶</div>`}
+            </div>
+            <div class="row-main-info">
               <div class="row-date-line">
                 <span class="row-date">📅 ${log.date || '日付未登録'}</span>
                 <span class="row-rating">★ ${log.rating || '4.0'}</span>
@@ -137,156 +112,8 @@ export async function renderLogListView() {
     <div class="dashboard-header">
       <h2>酒ログ一覧</h2>
     </div>
-
-    <div class="categories-wrapper">
+    <div class="category-accordion-list">
       ${categoriesHTML}
     </div>
-  </div>
-
-  <style>
-    .dashboard-container {
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-      overflow-x: hidden;
-      padding-bottom: 40px;
-    }
-
-    .dashboard-header {
-      margin-bottom: 20px;
-    }
-
-    .dashboard-header h2 {
-      margin: 0;
-      font-size: 1.5rem;
-    }
-
-    .brand-group-card {
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-      overflow: hidden;
-      margin-bottom: 16px;
-    }
-
-    .brand-logs-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      box-sizing: border-box;
-      width: 100%;
-      max-width: 100%;
-    }
-
-    .log-item-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-      gap: 10px;
-      padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.03);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    /* サムネイル画像のスタイル */
-    .row-thumb-container {
-      flex-shrink: 0;
-      width: 44px;
-      height: 44px;
-      border-radius: 6px;
-      overflow: hidden;
-      background: #222;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .empty-thumb {
-      font-size: 1.2rem;
-      background: #333;
-    }
-
-    .row-thumb {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    /* 情報コンテナ：幅を自動調整しつつ、必ず親の内側に収める */
-    .row-info-container {
-      flex: 1;
-      min-width: 0;
-      max-width: calc(100% - 78px);
-      overflow: hidden;
-      box-sizing: border-box;
-    }
-
-    .row-date-line {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 0.85rem;
-      color: #aaa;
-    }
-
-    .row-sub-info {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 2px 6px;
-      margin-top: 4px;
-      width: 100%;
-      min-width: 0;
-      box-sizing: border-box;
-    }
-
-    .row-product {
-      word-break: break-all;
-      overflow: hidden;
-    }
-
-    .row-brewery {
-      word-break: break-all;
-      color: #888;
-    }
-
-    .row-arrow {
-      flex-shrink: 0;
-      color: #666;
-      padding-left: 4px;
-    }
-
-    .brand-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      overflow: hidden;
-      margin-bottom: 8px;
-    }
-
-    .brand-title {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .category-summary {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      overflow: hidden;
-    }
-
-    .category-title {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  </style>`;
+  </div>`;
 }

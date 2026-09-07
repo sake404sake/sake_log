@@ -1,0 +1,202 @@
+// src/views/lightbox.js
+
+import { state } from '../store/state.js';
+import { renderImagePreviewList } from './logEditor.js';
+import { renderBatchGroupsUI } from './batchImport.js';
+
+export function openLightbox(imageSrc, ctx) {
+  let lightbox = document.getElementById('lightbox-modal');
+  if (!lightbox) {
+    lightbox = document.createElement('div');
+    lightbox.id = 'lightbox-modal';
+    lightbox.className = 'lightbox-overlay';
+    document.body.appendChild(lightbox);
+  }
+
+  state.activeLightboxCtx = ctx;
+
+  let controlsHTML = '';
+  let indicatorHTML = '';
+  let arrowPrevHTML = '';
+  let arrowNextHTML = '';
+  let total = 0;
+
+  if (ctx) {
+    if (ctx.type === 'editor-preview') {
+      const idx = ctx.idx;
+      total = state.uploadedImages.length;
+      const isMain = idx === state.activeThumbnailIndex;
+
+      indicatorHTML = `<div class="lightbox-indicator">${idx + 1} / ${total}</div>`;
+
+      if (total > 1) {
+        arrowPrevHTML = `<button type="button" class="lightbox-arrow-btn prev" ${idx > 0 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="前の写真へ">‹</button>`;
+        arrowNextHTML = `<button type="button" class="lightbox-arrow-btn next" ${idx < total - 1 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="次の写真へ">›</button>`;
+      }
+
+      controlsHTML = `
+        <div class="lightbox-controls" style="display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; width: 100%; max-width: 480px; pointer-events: auto;">
+          ${isMain 
+            ? `<button type="button" class="lightbox-ctrl-btn btn-main-set" disabled style="background: #10b981; border: none; color: #fff; cursor: default; pointer-events: none;">👑 代表メイン写真</button>` 
+            : `<button type="button" class="lightbox-ctrl-btn btn-main-unset" data-idx="${idx}">☆ メインに設定</button>`
+          }
+          <button type="button" class="lightbox-ctrl-btn btn-delete-img" data-idx="${idx}">🗑️ 削除</button>
+        </div>
+      `;
+    } else if (ctx.type === 'batch-group') {
+      const gIdx = ctx.gidx;
+      const iIdx = ctx.iidx;
+      const group = state.batchGroups[gIdx];
+      total = group ? group.length : 0;
+      const isMain = iIdx === 0;
+
+      indicatorHTML = `<div class="lightbox-indicator">${iIdx + 1} / ${total}</div>`;
+
+      if (total > 1) {
+        arrowPrevHTML = `<button type="button" class="lightbox-arrow-btn prev" ${iIdx > 0 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="前の写真へ">‹</button>`;
+        arrowNextHTML = `<button type="button" class="lightbox-arrow-btn next" ${iIdx < total - 1 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="次の写真へ">›</button>`;
+      }
+
+      controlsHTML = `
+        <div class="lightbox-controls" style="display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; width: 100%; max-width: 480px; pointer-events: auto;">
+          ${isMain 
+            ? `<button type="button" class="lightbox-ctrl-btn btn-batch-main-set" disabled style="background: #10b981; border: none; color: #fff; cursor: default; pointer-events: none;">👑 代表メイン写真</button>` 
+            : `<button type="button" class="lightbox-ctrl-btn btn-batch-main-unset" data-gidx="${gIdx}" data-iidx="${iIdx}">☆ メインに設定</button>`
+          }
+          <button type="button" class="lightbox-ctrl-btn btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}">📤 プールへ外す</button>
+        </div>
+      `;
+    } else if (ctx.type === 'pool') {
+      const idx = ctx.poolIdx;
+      total = state.ungroupedImages.length;
+      indicatorHTML = `<div class="lightbox-indicator">${idx + 1} / ${total}</div>`;
+
+      if (total > 1) {
+        arrowPrevHTML = `<button type="button" class="lightbox-arrow-btn prev" ${idx > 0 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="前の写真へ">‹</button>`;
+        arrowNextHTML = `<button type="button" class="lightbox-arrow-btn next" ${idx < total - 1 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="次の写真へ">›</button>`;
+      }
+
+      let groupOptionsHTML = '';
+      if (state.batchGroups.length > 0) {
+        groupOptionsHTML = `
+          <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.15); pointer-events: auto;">
+            <select class="lightbox-group-selector" style="background: transparent; color: #fff; border: none; font-size: 0.8rem; outline: none; max-width: 140px; cursor: pointer; font-weight: bold;">
+              ${state.batchGroups.map((g, i) => `<option value="${i}" style="background: #1e293b; color: #fff;">🍶 グループ #${i+1} (${g.length}枚)</option>`).join('')}
+            </select>
+            <button type="button" class="lightbox-ctrl-btn btn-pool-add-to-group" data-idx="${idx}" style="background: var(--accent-color) !important; color: #000 !important; border: none !important; padding: 6px 14px !important; font-size: 0.8rem !important; border-radius: 16px !important; height: auto !important; margin: 0 !important; box-shadow: none !important;">➕ 追加</button>
+          </div>
+        `;
+      }
+
+      controlsHTML = `
+        <div class="lightbox-controls" style="display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; width: 100%; max-width: 480px; pointer-events: auto;">
+          <button type="button" class="lightbox-ctrl-btn btn-pool-create-group" data-idx="${idx}" style="background: #10b981 !important; border-color: #10b981 !important; color: #fff !important;">✨ 新しいお酒にする</button>
+          ${groupOptionsHTML}
+          <button type="button" class="lightbox-ctrl-btn btn-pool-delete-img" data-idx="${idx}" style="background: rgba(239, 68, 68, 0.15) !important; border-color: rgba(239, 68, 68, 0.3) !important; color: #ef4444 !important;">🗑️ 完全に削除</button>
+        </div>
+      `;
+    } else if (ctx.type === 'detail-preview') {
+      const idx = ctx.idx;
+      total = state.detailImages.length;
+      indicatorHTML = `<div class="lightbox-indicator">${idx + 1} / ${total}</div>`;
+
+      if (total > 1) {
+        arrowPrevHTML = `<button type="button" class="lightbox-arrow-btn prev" ${idx > 0 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="前の写真へ">‹</button>`;
+        arrowNextHTML = `<button type="button" class="lightbox-arrow-btn next" ${idx < total - 1 ? '' : 'style="opacity: 0.15; cursor: not-allowed; pointer-events: none;"'} title="次の写真へ">›</button>`;
+      }
+      controlsHTML = '';
+    }
+  }
+
+  lightbox.innerHTML = `
+    <div class="lightbox-content" style="display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; width: 100%;">
+      <button type="button" class="lightbox-close" style="pointer-events: auto;">&times;</button>
+      ${arrowPrevHTML}
+      <img id="lightbox-img" src="${imageSrc}" alt="拡大画像" style="max-height: 60vh !important; pointer-events: auto; cursor: zoom-out;" />
+      ${arrowNextHTML}
+      ${indicatorHTML}
+      ${controlsHTML}
+    </div>
+  `;
+  lightbox.classList.add('active');
+}
+
+export function closeLightbox() {
+  const lightbox = document.getElementById('lightbox-modal');
+  if (lightbox) {
+    lightbox.classList.remove('active');
+  }
+  state.activeLightboxCtx = null;
+}
+
+export function triggerLightboxNext() {
+  if (!state.activeLightboxCtx) return;
+  const ctx = state.activeLightboxCtx;
+  if (ctx.type === 'editor-preview') {
+    const idx = ctx.idx;
+    if (idx < state.uploadedImages.length - 1) {
+      const nextIdx = idx + 1;
+      ctx.idx = nextIdx;
+      openLightbox(state.uploadedImages[nextIdx].previewUrl, ctx);
+    }
+  } else if (ctx.type === 'batch-group') {
+    const gIdx = ctx.gidx;
+    const iIdx = ctx.iidx;
+    const group = state.batchGroups[gIdx];
+    if (group && iIdx < group.length - 1) {
+      const nextIIdx = iIdx + 1;
+      ctx.iidx = nextIIdx;
+      openLightbox(group[nextIIdx].previewUrl, ctx);
+    }
+  } else if (ctx.type === 'pool') {
+    const idx = ctx.poolIdx;
+    if (idx < state.ungroupedImages.length - 1) {
+      const nextIdx = idx + 1;
+      ctx.poolIdx = nextIdx;
+      openLightbox(state.ungroupedImages[nextIdx].previewUrl, ctx);
+    }
+  } else if (ctx.type === 'detail-preview') {
+    const idx = ctx.idx;
+    if (idx < state.detailImages.length - 1) {
+      const nextIdx = idx + 1;
+      ctx.idx = nextIdx;
+      openLightbox(state.detailImages[nextIdx], ctx);
+    }
+  }
+}
+
+export function triggerLightboxPrev() {
+  if (!state.activeLightboxCtx) return;
+  const ctx = state.activeLightboxCtx;
+  if (ctx.type === 'editor-preview') {
+    const idx = ctx.idx;
+    if (idx > 0) {
+      const prevIdx = idx - 1;
+      ctx.idx = prevIdx;
+      openLightbox(state.uploadedImages[prevIdx].previewUrl, ctx);
+    }
+  } else if (ctx.type === 'batch-group') {
+    const gIdx = ctx.gidx;
+    const iIdx = ctx.iidx;
+    const group = state.batchGroups[gIdx];
+    if (group && iIdx > 0) {
+      const prevIIdx = iIdx - 1;
+      ctx.iidx = prevIIdx;
+      openLightbox(group[prevIIdx].previewUrl, ctx);
+    }
+  } else if (ctx.type === 'pool') {
+    const idx = ctx.poolIdx;
+    if (idx > 0) {
+      const prevIdx = idx - 1;
+      ctx.poolIdx = prevIdx;
+      openLightbox(state.ungroupedImages[prevIdx].previewUrl, ctx);
+    }
+  } else if (ctx.type === 'detail-preview') {
+    const idx = ctx.idx;
+    if (idx > 0) {
+      const prevIdx = idx - 1;
+      ctx.idx = prevIdx;
+      openLightbox(state.detailImages[prevIdx], ctx);
+    }
+  }
+}
