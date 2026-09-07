@@ -1,11 +1,301 @@
-// 圧縮前に撮影日時（呑んだ日）を抽出
+// src/utils/image.js
+
+// 圧縮前に撮影日時（呑んだ日）を抽出 (EXIFバイナリ解析対応版)
 export function extractPhotoDate(file) {
-  if (!file || !file.lastModified) return null;
-  const photoDate = new Date(file.lastModified);
-  const year = photoDate.getFullYear();
-  const month = String(photoDate.getMonth() + 1).padStart(2, '0');
-  const day = String(photoDate.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return new Promise((resolve) => {
+    if (!file) {
+      resolve(null);
+      return;
+    }
+    
+    // JPEG以外のファイル形式、またはEXIF解析が失敗した場合は lastModified にフォールバック
+    const fallback = () => {
+      if (file.lastModified) {
+        const photoDate = new Date(file.lastModified);
+        const year = photoDate.getFullYear();
+        const month = String(photoDate.getMonth() + 1).padStart(2, '0');
+        const day = String(photoDate.getDate()).padStart(2, '0');
+        resolve(`${year}-${month}-${day}`);
+      } else {
+        resolve(null);
+      }
+    };
+
+    if (!file.type.startsWith('image/jpeg') && !file.name.toLowerCase().endsWith('.jpg') && !file.name.toLowerCase().endsWith('.jpeg')) {
+      fallback();
+      return;
+    }
+
+    const reader = new FileReader();
+    // ヘッダー部分(最初の128KB)だけを読み込んで高速にパースする
+    const slice = file.slice(0, 131072);
+    reader.readAsArrayBuffer(slice);
+
+    reader.onload = (e) => {
+      try {
+        const buffer = e.target.result;
+        const view = new DataView(buffer);
+        
+        // JPEGのSOI (Start of Image) マーカー 0xFFD8 を確認
+        if (view.getUint16(0, false) !== 0xFFD8) {
+          fallback();
+          return;
+        }
+
+        let offset = 2;
+        const length = view.byteLength;
+        let exifFound = false;
+        let tiffOffset = 0;
+
+        while (offset < length - 8) {
+          const marker = view.getUint16(offset, false);
+          const segmentLength = view.getUint16(offset + 2, false);
+
+          // APP1 (0xFFE1) マーカーを探す (EXIFデータが格納されている領域)
+          if (marker === 0xFFE1) {
+            // Exif \0\0 ヘッダー (0x457869660000) を確認
+            if (view.getUint32(offset + 4, false) === 0x45786966 && view.getUint16(offset + 8, false) === 0x0000) {
+              exifFound = true;
+              tiffOffset = offset + 10; // TIFFヘッダーの開始位置
+              break;
+            }
+          }
+          offset += segmentLength + 2;
+        }
+
+        if (!exifFound) {
+          fallback();
+          return;
+        }
+
+        // TIFFヘッダーのパース
+        // バイトオーダーの確認: II(0x4949) = Little Endian, MM(0x4D4D) = Big Endian
+        const byteOrder = view.getUint16(tiffOffset, false);
+        const isLittleEndian = (byteOrder === 0x4949);
+
+        // マジックナンバー 0x002A の確認
+        if (view.getUint16(tiffOffset + 2, isLittleEndian) !== 0x002A) {
+          fallback();
+          return;
+        }
+
+        // 第1番目のIFD (IFD0) へのオフセット
+        const firstIFDOffset = view.getUint32(tiffOffset + 4, isLittleEndian);
+        let ifdOffset = tiffOffset + firstIFDOffset;
+
+        // タグを走査して EXIF IFD (0x8769) を探す
+        const entriesCount = view.getUint16(ifdOffset, isLittleEndian);
+        let exifSubIFDOffset = 0;
+
+        for (let i = 0; i < entriesCount; i++) {
+          const entryOffset = ifdOffset + 2 + (i * 12);
+          if (entryOffset + 12 > length) break;
+
+          const tag = view.getUint16(entryOffset, isLittleEndian);
+          if (tag === 0x8769) { // Exif IFD Pointer
+            exifSubIFDOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+            break;
+          }
+        }
+
+        if (exifSubIFDOffset === 0) {
+          fallback();
+          return;
+        }
+
+        // SubIFD (EXIF IFD) の走査
+        let subIFDOffset = tiffOffset + exifSubIFDOffset;
+        const subEntriesCount = view.getUint16(subIFDOffset, isLittleEndian);
+        let dateTimeOriginalOffset = 0;
+
+        for (let i = 0; i < subEntriesCount; i++) {
+          const entryOffset = subIFDOffset + 2 + (i * 12);
+          if (entryOffset + 12 > length) break;
+
+          const tag = view.getUint16(entryOffset, isLittleEndian);
+          if (tag === 0x9003) { // DateTimeOriginal (撮影日時)
+            dateTimeOriginalOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+            break;
+          }
+        }
+
+        if (dateTimeOriginalOffset === 0) {
+          fallback();
+          return;
+        }
+
+        // 撮影日時データ（ASCII文字列: "YYYY:MM:DD HH:MM:SS\0" の20バイト）の抽出
+        const dateStrOffset = tiffOffset + dateTimeOriginalOffset;
+        let dateCharCodes = []
+        for (let i = 0; i < 19; i++) {
+          dateCharCodes.push(view.getUint8(dateStrOffset + i));
+        }
+        const dateStr = String.fromCharCode(...dateCharCodes); // "YYYY:MM:DD HH:MM:SS"
+
+        // "YYYY:MM:DD" 部分を抽出して "YYYY-MM-DD" に変換
+        const parts = dateStr.split(' ')[0].split(':');
+        if (parts.length === 3) {
+          resolve(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        } else {
+          fallback();
+        }
+      } catch (err) {
+        console.error('EXIFパースエラー:', err);
+        fallback();
+      }
+    };
+
+    reader.onerror = () => {
+      fallback();
+    };
+  });
+}
+
+// 撮影日時の Date オブジェクトを抽出する非同期関数 (一括インポートの時間ベース自動グループ化用)
+export function extractPhotoDateObject(file) {
+  return new Promise((resolve) => {
+    if (!file) {
+      resolve(null);
+      return;
+    }
+
+    const fallback = () => {
+      if (file.lastModified) {
+        resolve(new Date(file.lastModified));
+      } else {
+        resolve(null);
+      }
+    };
+
+    if (!file.type.startsWith('image/jpeg') && !file.name.toLowerCase().endsWith('.jpg') && !file.name.toLowerCase().endsWith('.jpeg')) {
+      fallback();
+      return;
+    }
+
+    const reader = new FileReader();
+    const slice = file.slice(0, 131072);
+    reader.readAsArrayBuffer(slice);
+
+    reader.onload = (e) => {
+      try {
+        const buffer = e.target.result;
+        const view = new DataView(buffer);
+        
+        if (view.getUint16(0, false) !== 0xFFD8) {
+          fallback();
+          return;
+        }
+
+        let offset = 2;
+        const length = view.byteLength;
+        let exifFound = false;
+        let tiffOffset = 0;
+
+        while (offset < length - 8) {
+          const marker = view.getUint16(offset, false);
+          const segmentLength = view.getUint16(offset + 2, false);
+
+          if (marker === 0xFFE1) {
+            if (view.getUint32(offset + 4, false) === 0x45786966 && view.getUint16(offset + 8, false) === 0x0000) {
+              exifFound = true;
+              tiffOffset = offset + 10;
+              break;
+            }
+          }
+          offset += segmentLength + 2;
+        }
+
+        if (!exifFound) {
+          fallback();
+          return;
+        }
+
+        const byteOrder = view.getUint16(tiffOffset, false);
+        const isLittleEndian = (byteOrder === 0x4949);
+
+        if (view.getUint16(tiffOffset + 2, isLittleEndian) !== 0x002A) {
+          fallback();
+          return;
+        }
+
+        const firstIFDOffset = view.getUint32(tiffOffset + 4, isLittleEndian);
+        let ifdOffset = tiffOffset + firstIFDOffset;
+
+        const entriesCount = view.getUint16(ifdOffset, isLittleEndian);
+        let exifSubIFDOffset = 0;
+
+        for (let i = 0; i < entriesCount; i++) {
+          const entryOffset = ifdOffset + 2 + (i * 12);
+          if (entryOffset + 12 > length) break;
+
+          const tag = view.getUint16(entryOffset, isLittleEndian);
+          if (tag === 0x8769) {
+            exifSubIFDOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+            break;
+          }
+        }
+
+        if (exifSubIFDOffset === 0) {
+          fallback();
+          return;
+        }
+
+        let subIFDOffset = tiffOffset + exifSubIFDOffset;
+        const subEntriesCount = view.getUint16(subIFDOffset, isLittleEndian);
+        let dateTimeOriginalOffset = 0;
+
+        for (let i = 0; i < subEntriesCount; i++) {
+          const entryOffset = subIFDOffset + 2 + (i * 12);
+          if (entryOffset + 12 > length) break;
+
+          const tag = view.getUint16(entryOffset, isLittleEndian);
+          if (tag === 0x9003) {
+            dateTimeOriginalOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+            break;
+          }
+        }
+
+        if (dateTimeOriginalOffset === 0) {
+          fallback();
+          return;
+        }
+
+        const dateStrOffset = tiffOffset + dateTimeOriginalOffset;
+        let dateCharCodes = []
+        for (let i = 0; i < 19; i++) {
+          dateCharCodes.push(view.getUint8(dateStrOffset + i));
+        }
+        const dateStr = String.fromCharCode(...dateCharCodes); // "YYYY:MM:DD HH:MM:SS"
+
+        // "YYYY:MM:DD HH:MM:SS" を JS の Date オブジェクトに変換
+        const tParts = dateStr.split(' ');
+        const dParts = tParts[0].split(':');
+        const hParts = tParts[1].split(':');
+        
+        const dateObj = new Date(
+          Number(dParts[0]),
+          Number(dParts[1]) - 1,
+          Number(dParts[2]),
+          Number(hParts[0]),
+          Number(hParts[1]),
+          Number(hParts[2])
+        );
+
+        if (!isNaN(dateObj.getTime())) {
+          resolve(dateObj);
+        } else {
+          fallback();
+        }
+      } catch (err) {
+        console.error('EXIFパースエラー:', err);
+        fallback();
+      }
+    };
+
+    reader.onerror = () => {
+      fallback();
+    };
+  });
 }
 
 // 銘柄の文字が読める解像度を保ちつつ軽量化圧縮 (Blob & Base64を返却)
@@ -56,25 +346,21 @@ export function compressImage(file, maxWidth = 1600, quality = 0.75) {
 }
 
 /**
-*  画像配列を撮影時間ベースで2段階スマート・グルーピングする
-*  @param {Array} imageItems - { file: File, date: Date, ... } の形式を持つオブジェクトの配列
-*  @param {number} maxTimeGapMs - 第1段階の分割閾値（デフォルト: 3分 = 3 * 60 * 1000 ミリ秒）
-*  @param {number} maxGroupSize - 1グループの最大許容枚数（デフォルト: 5枚）
-*  @returns {Array<Array>} グルーピングされた2次元配列 */
+ * 画像配列を撮影時間ベースで2段階スマート・グルーピングする
+ * @param {Array} imageItems - { file: File, date: Date, ... } の形式を持つオブジェクト of 配列
+ * @param {number} maxTimeGapMs - 第1段階の分割閾値（デフォルト: 3分）
+ * @param {number} maxGroupSize - 1グループの最大許容枚数（デフォルト: 5枚）
+ * @returns {Array<Array>} グルーピングされた2次元配列
+ */
 export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxGroupSize = 5) {
   if (!imageItems || imageItems.length === 0) return [];
 
-  // 1. 撮影日時（EXIF）順に昇順ソート
-  // ※ dateプロパティが無い（EXIF取得不可など）場合は0として扱い先頭にまとめる
   const sortedItems = [...imageItems].sort((a, b) => {
     const timeA = a.date ? a.date.getTime() : 0;
     const timeB = b.date ? b.date.getTime() : 0;
     return timeA - timeB;
   });
 
-  // --------------------------------------------------
-  // 第1段階：絶対時間（大枠）による分割
-  // --------------------------------------------------
   let initialGroups = [];
   let currentGroup = [];
 
@@ -88,7 +374,6 @@ export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxG
       const timeB = item.date ? item.date.getTime() : 0;
       const gap = Math.abs(timeB - timeA);
 
-      // EXIFが存在し、かつ設定時間（3分）を超える空白があればグループを区切る
       if (gap >= maxTimeGapMs && timeA !== 0 && timeB !== 0) {
         initialGroups.push(currentGroup);
         currentGroup = [item];
@@ -102,19 +387,14 @@ export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxG
     initialGroups.push(currentGroup);
   }
 
-  // --------------------------------------------------
-  // 第2段階：枚数オーバー時の動的分割（再帰処理）
-  // --------------------------------------------------
   let finalGroups = [];
 
   const splitGroupIfNeeded = (group) => {
-    // グループが上限枚数（5枚）以下ならそのまま確定
     if (group.length <= maxGroupSize) {
       finalGroups.push(group);
       return;
     }
 
-    // 上限を超えている場合、グループ内で最も時間が空いている「最大ギャップ」を探す
     let maxGap = -1;
     let splitIndex = -1;
 
@@ -125,21 +405,17 @@ export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxG
 
       if (gap > maxGap) {
         maxGap = gap;
-        splitIndex = i; // ギャップが最大の箇所で分割するインデックス
+        splitIndex = i;
       }
     }
 
-    // 全ての時間が全く同じ（連写でギャップ0）、またはEXIF無しで分割点が特定できない場合
-    // 強制的に上限枚数（maxGroupSize）の位置で機械的にスライスする
     if (splitIndex === -1 || maxGap === 0) {
       splitIndex = maxGroupSize;
     }
 
-    // グループを最大ギャップの箇所で2つに分割
     const group1 = group.slice(0, splitIndex);
     const group2 = group.slice(splitIndex);
 
-    // 分割されたそれぞれのグループに対して、まだ上限を超えていないか再帰的にチェック
     splitGroupIfNeeded(group1);
     splitGroupIfNeeded(group2);
   };
@@ -148,5 +424,5 @@ export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxG
     splitGroupIfNeeded(group);
   });
 
-  return finalGroups; // [ [画像1, 画像2], [画像3, 画像4, 画像5], [画像6]... ] のような2次元配列を返す
+  return finalGroups;
 }
