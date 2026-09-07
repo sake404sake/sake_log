@@ -35,55 +35,45 @@ export async function renderLogListView() {
       brandLogs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
       const rowsHTML = brandLogs.map(log => {
-        // 画像データを安全に抽出・探索するヘルパー関数
+        // 画像データを安全に抽出・探索するヘルパー関数（1枚目を取りこぼさないよう改善）
         const extractThumbUrl = (obj) => {
           if (!obj) return null;
           
-          // db.js が生成する imageUrls を最優先でチェック
-          if (Array.isArray(obj.imageUrls) && obj.imageUrls.length > 0) {
-            const first = obj.imageUrls[0];
-            if (typeof first === 'string' && (first.startsWith('blob:') || first.startsWith('data:image') || first.startsWith('http'))) {
-              return first;
+          const parseImageVal = (val) => {
+            if (!val) return null;
+            if (typeof val === 'string' && val.trim() !== '') {
+              return val;
             }
-          }
+            if (typeof val === 'object') {
+              return val.url || val.src || val.data || val.path || null;
+            }
+            return null;
+          };
 
           // よく使われるプロパティ名を優先順位順にチェック
-          const candidateKeys = ['images', 'image', 'photos', 'photo', 'imageUrl', 'image_url', 'img', 'picture', 'file', 'files'];
+          const candidateKeys = ['imageUrls', 'images', 'image', 'photos', 'photo', 'imageUrl', 'image_url', 'img', 'picture', 'file', 'files'];
           for (const key of candidateKeys) {
             const val = obj[key];
-            if (val) {
-              if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('http') || val.startsWith('blob:'))) {
-                return val;
-              }
-              if (Array.isArray(val) && val.length > 0) {
-                const first = val[0];
-                if (typeof first === 'string' && (first.startsWith('data:image') || first.startsWith('http') || first.startsWith('blob:'))) {
-                  return first;
-                }
-                if (first && typeof first === 'object' && (first.url || first.src)) {
-                  return first.url || first.src;
-                }
-              }
-              if (typeof val === 'object' && (val.url || val.src)) {
-                return val.url || val.src;
-              }
+            if (Array.isArray(val) && val.length > 0) {
+              const first = parseImageVal(val[0]);
+              if (first) return first;
+            } else {
+              const parsed = parseImageVal(val);
+              if (parsed) return parsed;
             }
           }
 
           // その他のプロパティを総当たりで走査
           for (const key in obj) {
             const val = obj[key];
-            if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('http') || val.startsWith('blob:'))) {
-              return val;
-            }
             if (Array.isArray(val) && val.length > 0) {
-              const first = val[0];
-              if (typeof first === 'string' && (first.startsWith('data:image') || first.startsWith('http') || first.startsWith('blob:'))) {
-                return first;
+              const first = parseImageVal(val[0]);
+              if (first) return first;
+            } else {
+              const parsed = parseImageVal(val);
+              if (parsed && typeof parsed === 'string' && parsed.length > 20) {
+                return parsed;
               }
-            }
-            if (val && typeof val === 'object' && (val.url || val.src)) {
-              return val.url || val.src;
             }
           }
           return null;
