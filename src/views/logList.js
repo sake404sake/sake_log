@@ -39,6 +39,14 @@ export async function renderLogListView() {
         const extractThumbUrl = (obj) => {
           if (!obj) return null;
           
+          // db.js が生成する imageUrls を最優先でチェック
+          if (Array.isArray(obj.imageUrls) && obj.imageUrls.length > 0) {
+            const first = obj.imageUrls[0];
+            if (typeof first === 'string' && (first.startsWith('blob:') || first.startsWith('data:image') || first.startsWith('http'))) {
+              return first;
+            }
+          }
+
           // よく使われるプロパティ名を優先順位順にチェック
           const candidateKeys = ['images', 'image', 'photos', 'photo', 'imageUrl', 'image_url', 'img', 'picture', 'file', 'files'];
           for (const key of candidateKeys) {
