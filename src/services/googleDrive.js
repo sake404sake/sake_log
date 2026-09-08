@@ -1,5 +1,4 @@
 // src/services/googleDrive.js
-
 import { state } from '../store/state.js';
 import { openDB, getAllLogs, saveLog, permanentlyDeleteLog } from '../store/db.js';
 
@@ -51,6 +50,11 @@ export async function initGoogleAuth() {
     state.googleUserAvatar = localStorage.getItem('sella_google_user_avatar') || '';
   }
 
+  if (!window.google?.accounts?.oauth2) {
+    console.error('[GoogleDrive] Failed to access Google Accounts SDK. Delayed retrying inside login.');
+    return;
+  }
+
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: clientId,
     scope: SCOPES,
@@ -60,7 +64,8 @@ export async function initGoogleAuth() {
       }
       state.googleAccessToken = response.access_token;
       localStorage.setItem('sella_google_token', response.access_token);
-      
+      localStorage.setItem('sella_google_token_acquired_at', Date.now().toString()); // トークン取得ミリ秒を記録
+
       // 🌟 Google API から実際の名前とプロフィールアバター画像を取得する
       try {
         const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -94,16 +99,19 @@ export async function initGoogleAuth() {
  * ログイン画面を呼び出し
  */
 export function loginGoogle() {
+  const triggerAuth = () => {
+    if (!tokenClient) {
+      alert('Google OAuth クライアントIDが正しく設定されていないか、初期化に失敗しました。設定画面をご確認ください。');
+      return;
+    }
+    // ★重要: prompt を 'select_account' に固定し、複数端末・複数アカウントでのハングアップを確実に防ぐ
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
+  };
+
   if (!tokenClient) {
-    initGoogleAuth().then(() => {
-      if (!tokenClient) {
-        alert('Google OAuth クライアントIDが正しく設定されていないか、初期化に失敗しました。設定画面をご確認ください。');
-        return;
-      }
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    });
+    initGoogleAuth().then(triggerAuth);
   } else {
-    tokenClient.requestAccessToken({ prompt: '' });
+    triggerAuth();
   }
 }
 
@@ -124,6 +132,7 @@ export function logoutGoogle(clearLocal = false) {
   state.googleUserName = '';
   state.googleUserAvatar = '';
   localStorage.removeItem('sella_google_token');
+  localStorage.removeItem('sella_google_token_acquired_at');
   localStorage.removeItem('sella_google_logged_in');
   localStorage.removeItem('sella_google_user_name');
   localStorage.removeItem('sella_google_user_avatar');
@@ -144,26 +153,75 @@ export function logoutGoogle(clearLocal = false) {
 }
 
 /**
+ * ★新規追加: クライアントサイドでの事前トークン有効期限（1時間）チェック
+ */
+export function isTokenExpired() {
+  const acquiredAt = localStorage.getItem('sella_google_token_acquired_at');
+  if (!acquiredAt) return true;
+  
+  const oneHourMs = 3600 * 1000; // OAuth2トークンの標準的な寿命
+  const timePassed = Date.now() - parseInt(acquiredAt, 10);
+  return timePassed >= oneHourMs;
+}
+
+/**
+ * ★改善版: トークン期限切れ（401）が確定した際の後処理
+ */
+function handleTokenExpired() {
+  state.isGoogleLoggedIn = false;
+  state.googleAccessToken = null;
+  localStorage.removeItem('sella_google_token');
+  localStorage.removeItem('sella_google_token_acquired_at');
+  localStorage.removeItem('sella_google_logged_in');
+  
+  // UI描画をログイン前の表示に切り替えるためのイベント
+  document.dispatchEvent(new CustomEvent('google-logout-success'));
+  
+  // 同期中のインジケーターを解除
+  state.isSyncing = false;
+  document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: false } }));
+  
+  alert('Googleアカウントのセッション有効期限が切れました。安全な同期のため、お手数ですが再度ログインを行ってください。');
+}
+
+/**
  * Google Drive API 通信ヘルパー (認証ヘッダー付与)
  */
 async function driveFetch(url, options = {}) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
-  if (!token) throw new Error('Not authenticated with Google');
+  if (!token) {
+    throw new Error('Not authenticated with Google');
+  }
 
-  options.headers = {
-    ...options.headers,
-    'Authorization': `Bearer ${token}`
-  };
-
-  const response = await fetch(url, options);
-  if (response.status === 401) {
-    // 期限切れの場合、再ログインを促す
-    state.isGoogleLoggedIn = false;
-    localStorage.removeItem('sella_google_logged_in');
-    console.error('[GoogleDrive] Unauthorized (401). Token may be expired.');
+  // 1. クライアント側で事前に1時間を超えているか判定
+  if (isTokenExpired()) {
+    console.warn('[GoogleDrive] Token detected as expired before fetch request.');
+    handleTokenExpired();
     throw new Error('AUTH_EXPIRED');
   }
-  return response;
+
+  options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+
+  try {
+    const response = await fetch(url, options);
+    
+    // 2. サーバー側から401（未認可）が返ってきた場合
+    if (response.status === 401) {
+      console.error('[GoogleDrive] Unauthorized (401). Invalid token session.');
+      handleTokenExpired();
+      throw new Error('AUTH_EXPIRED');
+    }
+    
+    return response;
+  } catch (err) {
+    // ★重要: ネットワークエラー（オフライン、タイムアウト等）の場合
+    // fetch失敗による例外を検知し、ログインフラグを「破壊しない」ようにスルーさせる
+    if (err instanceof TypeError || err.message?.includes('fetch')) {
+      console.warn('[GoogleDrive] Network error detected. App is likely offline. Login state is preserved.');
+      throw new Error('OFFLINE_NETWORK_ERROR');
+    }
+    throw err;
+  }
 }
 
 /**
@@ -181,22 +239,17 @@ async function listCloudFiles() {
  * クラウドにJSONファイルを新規アップロード / 上書き保存する
  */
 async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
-  const metadata = {
-    name: fileName,
-    parents: ['appDataFolder']
-  };
-
+  const metadata = { name: fileName, parents: ['appDataFolder'] };
   const boundary = 'sella_multipart_boundary';
   const delimiter = `\r\n--${boundary}\r\n`;
   const close_delim = `\r\n--${boundary}--`;
 
-  const multipartBody = 
-    delimiter +
-    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-    JSON.stringify(metadata) +
-    delimiter +
-    'Content-Type: application/json\r\n\r\n' +
-    JSON.stringify(dataObj) +
+  const multipartBody = delimiter + 
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' + 
+    JSON.stringify(metadata) + 
+    delimiter + 
+    'Content-Type: application/json\r\n\r\n' + 
+    JSON.stringify(dataObj) + 
     close_delim;
 
   let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
@@ -209,9 +262,7 @@ async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
 
   const res = await driveFetch(url, {
     method,
-    headers: {
-      'Content-Type': `multipart/related; boundary=${boundary}`
-    },
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
     body: multipartBody
   });
 
@@ -234,25 +285,18 @@ async function downloadJsonFile(fileId) {
  */
 async function uploadImageFile(imgId, blob) {
   const fileName = `sella_img_${imgId}.bin`;
-  const metadata = {
-    name: fileName,
-    parents: ['appDataFolder']
-  };
-
+  const metadata = { name: fileName, parents: ['appDataFolder'] };
   const boundary = 'sella_img_multipart_boundary';
   const delimiter = `\r\n--${boundary}\r\n`;
   const close_delim = `\r\n--${boundary}--`;
 
   // ArrayBufferを読み込んでマルチパート送信
   const arrayBuffer = await blob.arrayBuffer();
-  
-  const headersPart = 
-    delimiter +
-    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-    JSON.stringify(metadata) +
-    delimiter +
+  const headersPart = delimiter + 
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' + 
+    JSON.stringify(metadata) + 
+    delimiter + 
     `Content-Type: ${blob.type || 'image/jpeg'}\r\n\r\n`;
-
   const footerPart = close_delim;
 
   // Blobの再結合により安全にバイナリとJSONメタデータを多重送信
@@ -263,10 +307,7 @@ async function uploadImageFile(imgId, blob) {
   ], { type: `multipart/related; boundary=${boundary}` });
 
   const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-  const res = await driveFetch(url, {
-    method: 'POST',
-    body: bodyBlob
-  });
+  const res = await driveFetch(url, { method: 'POST', body: bodyBlob });
 
   if (!res.ok) throw new Error(`Failed to upload image file ${fileName}`);
   return await res.json();
@@ -314,7 +355,7 @@ export async function syncAllData(silent = false) {
 
   try {
     console.log('[GoogleDriveSync] Starting sync session...');
-    
+
     // 1. クラウド上のファイル一覧を取得
     const cloudFiles = await listCloudFiles();
     const indexFile = cloudFiles.find(f => f.name === 'sella_index.json');
@@ -495,8 +536,16 @@ export async function syncAllData(silent = false) {
 
   } catch (err) {
     console.error('[GoogleDriveSync] Critical error during synchronization:', err);
-    if (!silent && err.message !== 'AUTH_EXPIRED') {
-      alert('データの同期中にエラーが発生しました。インターネット接続やGoogleの権限設定をご確認ください。');
+    if (err.message === 'OFFLINE_NETWORK_ERROR') {
+      // ネットワークオフライン時は静かに無視するか、手動時のみ通知する
+      if (!silent) {
+        alert('現在オフラインです。ネットワーク接続が復旧した際に再度自動同期されます。');
+      }
+    } else if (err.message !== 'AUTH_EXPIRED') {
+      // セッション切れ（AUTH_EXPIRED）以外の例外の場合のみ警告ダイアログを表示
+      if (!silent) {
+        alert('データの同期中にエラーが発生しました。インターネット接続やGoogleの権限設定をご確認ください。');
+      }
     }
   } finally {
     state.isSyncing = false;
@@ -509,7 +558,7 @@ export async function syncAllData(silent = false) {
  */
 export async function destroyAllSellaData() {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
-  
+
   // 1. ローカルIndexedDBの消去
   indexedDB.deleteDatabase('SellaDB');
 
