@@ -5,10 +5,11 @@ import { renderSettingsView } from './views/settings.js';
 import { renderLogEditorModal, openEditorModal, closeEditorModal, handleImageFiles, runAIAnalysis, updateFieldRevertUI, syncEditorFormToCurrentBatchGroup, renderImagePreviewList, TRACKED_FIELDS } from './views/logEditor.js';
 import { renderLogDetailModal, openDetailModal, closeDetailModal } from './views/logDetail.js';
 import { renderLogListView } from './views/logList.js';
-import { saveLog, deleteLog } from './store/db.js';
+import { saveLog, deleteLog, clearAllDrafts, openDB, getDraftLogs } from './store/db.js';
 import { renderBatchImportView, renderBatchGroupsUI, processFilesForBatch } from './views/batchImport.js';
 import { openLightbox, closeLightbox, triggerLightboxNext, triggerLightboxPrev } from './views/lightbox.js';
-import { state, base64ToBlob } from './store/state.js';
+import { state, base64ToBlob, blobToBase64 } from './store/state.js';
+import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth } from './services/googleDrive.js';
 
 // --- CSS動的注入 ---
 function ensureSpinnerStyles() {
@@ -113,11 +114,197 @@ function closeSidebar() {
   overlay?.classList.remove('active');
 }
 
+// ==========================================================================
+// ★一括登録データの IndexedDB 自動保存＆自動復旧システム
+// ==========================================================================
+
+/**
+ * 現在の一括インポート状態（プールとグループ）をIndexedDBに下書き保存
+ */
+export async function syncBatchStateToDB() {
+  try {
+    await clearAllDrafts(); // 旧下書きを一撃クリア
+
+    // 1. 画像プール (ungroupedImages) の保存
+    if (state.ungroupedImages.length > 0) {
+      const poolBlobs = [];
+      const poolItemsMeta = [];
+      for (const item of state.ungroupedImages) {
+        let blob = item.blob;
+        if (!blob && item.base64) {
+          blob = base64ToBlob(item.base64, item.mimeType || 'image/jpeg');
+        }
+        if (blob instanceof Blob) {
+          poolBlobs.push(blob);
+          poolItemsMeta.push({
+            base64: item.base64,
+            mimeType: item.mimeType || 'image/jpeg',
+            date: item.date ? item.date.toISOString() : null
+          });
+        }
+      }
+
+      const poolLogData = {
+        id: 'system_image_pool',
+        status: 'draft',
+        isPool: true,
+        name: '画像プール',
+        poolItemsMeta
+      };
+      await saveLog(poolLogData, poolBlobs);
+    }
+
+    // 2. 未保存グループ (batchGroups) の保存
+    for (let gIdx = 0; gIdx < state.batchGroups.length; gIdx++) {
+      const group = state.batchGroups[gIdx];
+      if (!group || group.length === 0) continue;
+
+      const groupBlobs = [];
+      const groupItemsMeta = [];
+      for (const item of group) {
+        let blob = item.blob;
+        if (!blob && item.base64) {
+          blob = base64ToBlob(item.base64, item.mimeType || 'image/jpeg');
+        }
+        if (blob instanceof Blob) {
+          groupBlobs.push(blob);
+          groupItemsMeta.push({
+            base64: item.base64,
+            mimeType: item.mimeType || 'image/jpeg',
+            date: item.date ? item.date.toISOString() : null
+          });
+        }
+      }
+
+      const groupLogData = {
+        id: 'draft_group_' + gIdx,
+        status: 'draft',
+        isGrouped: true,
+        name: group.name || '',
+        brewery: group.brewery || '',
+        category: group.category || '日本酒',
+        productName: group.productName || '',
+        region: group.region || '',
+        type: group.type || '',
+        abv: group.abv || '',
+        notes: group.notes || '',
+        aiInfo: group.aiInfo || '',
+        backupFormData: group.backupFormData ? { ...group.backupFormData } : null,
+        groupItemsMeta
+      };
+      await saveLog(groupLogData, groupBlobs);
+    }
+
+    console.log('[DraftSync] Batch state saved to IndexedDB.');
+
+    // Googleアカウントにログインしていればバックグラウンド同期
+    if (state.isGoogleLoggedIn) {
+      syncAllData(true);
+    }
+  } catch (err) {
+    console.error('[DraftSync] Autosave failed:', err);
+  }
+}
+
+/**
+ * IndexedDBから下書き状態の一括インポートを復元
+ */
+export async function loadBatchStateFromDB() {
+  try {
+    const drafts = await getDraftLogs();
+    if (drafts.length === 0) return;
+
+    console.log('[DraftSync] Recovering batch import drafts from IndexedDB...');
+    state.batchGroups = [];
+    state.ungroupedImages = [];
+
+    // プール (ungroupedImages) の復元
+    const poolLog = drafts.find(d => d.isPool);
+    if (poolLog && poolLog.imageUrls && poolLog.imageUrls.length > 0) {
+      const poolImages = poolLog.images || [];
+      const metaList = poolLog.poolItemsMeta || [];
+      for (let i = 0; i < poolLog.imageUrls.length; i++) {
+        const previewUrl = poolLog.imageUrls[i];
+        const blob = poolImages[i];
+        const meta = metaList[i] || {};
+        state.ungroupedImages.push({
+          blob,
+          base64: meta.base64 || '',
+          mimeType: meta.mimeType || 'image/jpeg',
+          previewUrl,
+          date: meta.date ? new Date(meta.date) : null
+        });
+      }
+    }
+
+    // グループ (batchGroups) の復元
+    const groupLogs = drafts.filter(d => d.isGrouped);
+    // ID順にソート (draft_group_0, draft_group_1, ...)
+    groupLogs.sort((a, b) => {
+      const idxA = Number(a.id.replace('draft_group_', ''));
+      const idxB = Number(b.id.replace('draft_group_', ''));
+      return idxA - idxB;
+    });
+
+    for (const gLog of groupLogs) {
+      const groupImages = gLog.images || [];
+      const metaList = gLog.groupItemsMeta || [];
+      const group = [];
+
+      for (let i = 0; i < gLog.imageUrls.length; i++) {
+        const previewUrl = gLog.imageUrls[i];
+        const blob = groupImages[i];
+        const meta = metaList[i] || {};
+        group.push({
+          blob,
+          base64: meta.base64 || '',
+          mimeType: meta.mimeType || 'image/jpeg',
+          previewUrl,
+          date: meta.date ? new Date(meta.date) : null
+        });
+      }
+
+      // グループ属性の復元
+      group.name = gLog.name || '';
+      group.brewery = gLog.brewery || '';
+      group.category = gLog.category || '日本酒';
+      group.productName = gLog.productName || '';
+      group.region = gLog.region || '';
+      group.type = gLog.type || '';
+      group.abv = gLog.abv || '';
+      group.notes = gLog.notes || '';
+      group.aiInfo = gLog.aiInfo || '';
+      if (gLog.backupFormData) {
+        group.backupFormData = { ...gLog.backupFormData };
+      }
+
+      state.batchGroups.push(group);
+    }
+
+    console.log('[DraftSync] Restore complete.');
+    renderBatchGroupsUI();
+  } catch (err) {
+    console.error('[DraftSync] Failed to restore drafts:', err);
+  }
+}
+
 // --- アプリケーション起動とグローバルイベント委譲 ---
 function initApp() {
   ensureSpinnerStyles();
+  
+  // Google 認証連携の初期化
+  initGoogleAuth();
 
-  // ★ 循環参照を完璧に解決する、安全な CustomEvent によるメッセージ仲介ルーター
+  // ★ 起動時に自動で未保存グループ・プールをDBから読み込んで復元
+  loadBatchStateFromDB();
+
+  // 起動時にログインしていればバックグラウンド同期
+  if (localStorage.getItem('sella_google_logged_in') === 'true') {
+    state.isGoogleLoggedIn = true;
+    syncAllData(true);
+  }
+
+  // 循環参照を解決した SPA用 CustomEvent 仲介ルーター
   document.addEventListener('navigation-request', async (e) => {
     const detail = e.detail;
     const targetView = typeof detail === 'string' ? detail : detail.view;
@@ -125,6 +312,11 @@ function initApp() {
     if (detail && detail.renderBatch) {
       renderBatchGroupsUI();
     }
+  });
+
+  // 一括インポート状態変更イベントを受けて IndexedDB に同期
+  document.addEventListener('batch-state-modified', async () => {
+    await syncBatchStateToDB();
   });
 
   // ファイル入力チェンジハンドラ
@@ -243,6 +435,7 @@ function initApp() {
 
     state.draggedItemInfo = null;
     renderBatchGroupsUI();
+    await syncBatchStateToDB(); // 自動保存
   });
 
   // クリックイベントのグローバル一括委譲
@@ -253,6 +446,37 @@ function initApp() {
       e.preventDefault();
       state.isPoolCollapsed = !state.isPoolCollapsed;
       renderBatchGroupsUI();
+      return;
+    }
+
+    // ☁️ Google ログイン/ログアウト/手動同期処理
+    if (e.target && e.target.id === 'btn-google-login') {
+      loginGoogle();
+      return;
+    }
+    if (e.target && e.target.id === 'btn-google-logout') {
+      const choice = confirm("Googleアカウント同期を切断しますか？\n\n[OK]: 共有端末等のため、ローカルブラウザのデータも完全に消去してログアウトする\n[キャンセル]: ローカルにデータは残したまま安全にログアウトする");
+      logoutGoogle(choice);
+      return;
+    }
+    if (e.target && e.target.id === 'btn-trigger-sync') {
+      await syncAllData(false);
+      return;
+    }
+    if (e.target && e.target.id === 'btn-save-client-id') {
+      const clientId = document.getElementById('google-client-id')?.value.trim();
+      localStorage.setItem('sella_google_client_id', clientId);
+      alert('Google クライアントIDを保存しました。反映のためアプリをリロードします。');
+      window.location.reload();
+      return;
+    }
+    if (e.target && e.target.id === 'btn-destroy-all-data') {
+      const input = document.getElementById('destroy-validation-input')?.value.trim();
+      if (input === 'データをすべて消去する') {
+        if (confirm('本当に実行しますか？この操作によりクラウド・ローカル双方の全ての酒ログと写真が永久に消滅します。')) {
+          await destroyAllSellaData();
+        }
+      }
       return;
     }
 
@@ -317,6 +541,7 @@ function initApp() {
           renderBatchGroupsUI();
           state.activeLightboxCtx.iidx = 0;
           openLightbox(state.batchGroups[gIdx][0].previewUrl, state.activeLightboxCtx);
+          await syncBatchStateToDB();
         }
         return;
       }
@@ -334,6 +559,7 @@ function initApp() {
           }
           renderBatchGroupsUI();
           closeLightbox();
+          await syncBatchStateToDB();
         }
         return;
       }
@@ -343,6 +569,7 @@ function initApp() {
         state.ungroupedImages.splice(idx, 1);
         renderBatchGroupsUI();
         closeLightbox();
+        await syncBatchStateToDB();
         return;
       }
 
@@ -354,6 +581,7 @@ function initApp() {
           renderBatchGroupsUI();
         }
         closeLightbox();
+        await syncBatchStateToDB();
         return;
       }
 
@@ -369,6 +597,7 @@ function initApp() {
           }
         }
         closeLightbox();
+        await syncBatchStateToDB();
         return;
       }
     }
@@ -451,7 +680,8 @@ function initApp() {
             rating: '4',
             tags: [],
             notes: group.notes || '',
-            aiInfo: group.aiInfo || ''
+            aiInfo: group.aiInfo || '',
+            status: 'active'
           };
 
           await saveLog(logData, orderedBlobs);
@@ -460,7 +690,15 @@ function initApp() {
         alert('すべてのグループの登録が完了しました！');
         state.batchGroups = [];
         state.ungroupedImages = [];
+        await clearAllDrafts(); // 下書き消去
+
         renderBatchGroupsUI();
+        
+        // クラウドとも即同期
+        if (state.isGoogleLoggedIn) {
+          syncAllData(true);
+        }
+
         navigateTo('logList');
       } catch (err) {
         console.error('一括登録エラー:', err);
@@ -515,7 +753,7 @@ function initApp() {
             group.region = result.region || group.region || '';
             group.type = result.type || group.type || '';
             group.abv = result.abv || group.abv || '';
-            // group.notes は AI解析結果で上書きしない（ユーザーの手書きメモをキープ）
+            group.notes = ''; // 🌟 ユーザー用メモ欄は絶対に空にする
             group.aiInfo = result.aiInfo || group.aiInfo || '';
           }
         } catch (err) {
@@ -525,6 +763,7 @@ function initApp() {
           batchAnalyzeBtn.innerHTML = originalText;
           batchAnalyzeBtn.disabled = false;
           renderBatchGroupsUI();
+          await syncBatchStateToDB(); // 自動保存
         }
       } else if (!hasApiKey()) {
         alert('APIキーが設定されていません。設定画面から登録してください。');
@@ -544,6 +783,7 @@ function initApp() {
         const secondHalf = group.slice(mid);
         state.batchGroups.splice(gIdx, 1, firstHalf, secondHalf);
         renderBatchGroupsUI();
+        await syncBatchStateToDB();
       } else {
         alert('これ以上分割できません（1枚のみです）。');
       }
@@ -561,47 +801,7 @@ function initApp() {
         state.ungroupedImages = state.ungroupedImages.concat(removed);
       }
       renderBatchGroupsUI();
-      return;
-    }
-
-    // 未保存グループ内写真の✕ボタン処理（プール戻し）
-    const batchRemoveImgBtn = e.target.closest('.btn-batch-remove-img');
-    if (batchRemoveImgBtn) {
-      e.stopPropagation();
-      const gIdx = Number(batchRemoveImgBtn.dataset.gidx);
-      const iIdx = Number(batchRemoveImgBtn.dataset.iidx);
-      if (state.batchGroups[gIdx]) {
-        const detached = state.batchGroups[gIdx].splice(iIdx, 1)[0];
-        if (detached) {
-          state.ungroupedImages.push(detached);
-        }
-        if (state.batchGroups[gIdx].length === 0) {
-          state.batchGroups.splice(gIdx, 1);
-        }
-        renderBatchGroupsUI();
-      }
-      return;
-    }
-
-    // 未分類プール写真の✕ボタン処理（個別完全削除）
-    const ungroupedRemoveBtn = e.target.closest('.btn-ungrouped-remove');
-    if (ungroupedRemoveBtn) {
-      e.stopPropagation();
-      const idx = Number(ungroupedRemoveBtn.dataset.idx);
-      state.ungroupedImages.splice(idx, 1);
-      renderBatchGroupsUI();
-      return;
-    }
-
-    // 未分類プール「これからグループを作成」ボタン
-    const createGroupBtn = e.target.closest('#btn-create-group-from-ungrouped');
-    if (createGroupBtn) {
-      e.stopPropagation();
-      if (state.ungroupedImages.length > 0) {
-        state.batchGroups.push([...state.ungroupedImages]);
-        state.ungroupedImages = [];
-        renderBatchGroupsUI();
-      }
+      await syncBatchStateToDB();
       return;
     }
 
@@ -641,8 +841,8 @@ function initApp() {
       return;
     }
 
-    // ★詳細画面でのスライドショーコントロール監視（三角アロークリック・スムーズスライド連動）
-    const detailArrow = e.target.closest('.sella-btn-prev, .sella-btn-next');
+    // ★詳細画面でのスライドショーコントロール監視
+    const detailArrow = e.target.closest('.carousel-btn');
     if (detailArrow && (detailArrow.id === 'btn-detail-prev' || detailArrow.id === 'btn-detail-next')) {
       e.stopPropagation();
       e.preventDefault();
@@ -650,27 +850,20 @@ function initApp() {
       const total = state.detailImages.length;
       if (total <= 1) return;
       
-      if (detailArrow.id === 'btn-detail-next') {
-        state.detailActiveIndex = (state.detailActiveIndex + 1) % total;
-      } else {
-        state.detailActiveIndex = (state.detailActiveIndex - 1 + total) % total;
-      }
-      
-      // viewport コンテナを該当画像の位置まで滑らかに横スクロール
       const scrollContainer = document.getElementById('detail-carousel-scroll');
       if (scrollContainer) {
         const width = scrollContainer.clientWidth;
+        if (detailArrow.id === 'btn-detail-next') {
+          state.detailActiveIndex = (state.detailActiveIndex + 1) % total;
+        } else {
+          state.detailActiveIndex = (state.detailActiveIndex - 1 + total) % total;
+        }
+        // 横スクロールを滑らかに実行
         scrollContainer.scrollTo({
-          left: width * state.detailActiveIndex,
+          left: state.detailActiveIndex * width,
           behavior: 'smooth'
         });
       }
-      
-      // インジケーター(ドット)を切り替え
-      const dots = document.querySelectorAll('#detail-carousel-dots .sella-dot');
-      dots.forEach((dot, idx) => {
-        dot.style.background = idx === state.detailActiveIndex ? 'var(--accent-color, #d4a359)' : 'rgba(255,255,255,0.4)';
-      });
       return;
     }
 
@@ -685,6 +878,12 @@ function initApp() {
       if (confirm('この酒ログを削除してもよろしいですか？')) {
         await deleteLog(id);
         closeDetailModal();
+        
+        // クラウドとも即同期 (論理削除の伝搬)
+        if (state.isGoogleLoggedIn) {
+          syncAllData(true);
+        }
+
         navigateTo('logList');
       }
       return;
@@ -695,6 +894,12 @@ function initApp() {
       if (confirm('この酒ログを完全に削除してもよろしいですか？')) {
         await deleteLog(id);
         closeEditorModal();
+
+        // クラウド同期
+        if (state.isGoogleLoggedIn) {
+          syncAllData(true);
+        }
+
         navigateTo('logList');
       }
       return;
@@ -812,7 +1017,8 @@ function initApp() {
         rating: document.getElementById('sake-rating')?.value || '4',
         tags,
         notes: document.getElementById('sake-notes')?.value.trim() || '',
-        aiInfo: document.getElementById('sake-ai-info')?.value.trim() || ''
+        aiInfo: document.getElementById('sake-ai-info')?.value.trim() || '',
+        status: 'active'
       };
 
       if (state.currentEditingLogId) {
@@ -824,9 +1030,15 @@ function initApp() {
       if (state.currentBatchGroupIndex !== null && state.currentBatchGroupIndex >= 0 && state.currentBatchGroupIndex < state.batchGroups.length) {
         state.batchGroups.splice(state.currentBatchGroupIndex, 1);
         state.currentBatchGroupIndex = null;
+        await syncBatchStateToDB(); // 下書き同期
       }
 
       closeEditorModal();
+
+      // クラウドと同期
+      if (state.isGoogleLoggedIn) {
+        syncAllData(true);
+      }
       
       if (!state.returnToBatchOnClose) {
         navigateTo(state.currentViewName);
@@ -836,7 +1048,7 @@ function initApp() {
   });
 
   // input/changeイベント
-  document.addEventListener('input', (e) => {
+  document.addEventListener('input', async (e) => {
     if (TRACKED_FIELDS.includes(e.target.id)) {
       updateFieldRevertUI();
     }
@@ -844,12 +1056,28 @@ function initApp() {
       const gIdx = Number(e.target.dataset.gidx);
       if (state.batchGroups[gIdx]) {
         state.batchGroups[gIdx].name = e.target.value;
+        await syncBatchStateToDB(); // 文字列変更をIndexedDBに即反映
       }
     }
     if (e.target.classList.contains('batch-brewery-input')) {
       const gIdx = Number(e.target.dataset.gidx);
       if (state.batchGroups[gIdx]) {
         state.batchGroups[gIdx].brewery = e.target.value;
+        await syncBatchStateToDB(); // 文字列変更をIndexedDBに即反映
+      }
+    }
+    if (e.target && e.target.id === 'destroy-validation-input') {
+      const btn = document.getElementById('btn-destroy-all-data');
+      if (btn) {
+        if (e.target.value.trim() === 'データをすべて消去する') {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        } else {
+          btn.disabled = true;
+          btn.style.opacity = '0.3';
+          btn.style.cursor = 'not-allowed';
+        }
       }
     }
   });
@@ -870,8 +1098,42 @@ function initApp() {
     }
   });
 
+  // Google ログイン成功イベントをハンドリング
+  document.addEventListener('google-login-success', () => {
+    // 設定画面を瞬時に再描画してログイン状態にする
+    if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
+      navigateTo('settings');
+    }
+  });
+
+  // 同期ステータス変更イベント
+  document.addEventListener('sync-state-change', (e) => {
+    const isSyncing = e.detail.syncing;
+    const syncBtn = document.getElementById('btn-trigger-sync');
+    if (syncBtn) {
+      if (isSyncing) {
+        syncBtn.disabled = true;
+        syncBtn.innerHTML = '<span class="sella-spinner"></span>同期中';
+      } else {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = '🔄 今すぐ同期';
+      }
+    }
+  });
+
+  document.addEventListener('sync-completed', () => {
+    const lbl = document.getElementById('sync-time-lbl');
+    if (lbl) {
+      lbl.innerText = localStorage.getItem('sella_last_synced_time') || '未同期';
+    }
+    // 同期によりローカルDBが書き換わった可能性があるため、Dashboardを表示中なら強制再描画
+    if (state.currentViewName === 'loglist' || state.currentViewName === 'dashboard' || state.currentViewName === 'log-list') {
+      navigateTo('logList');
+    }
+  });
+
   // ==========================================================================
-  // PointerEventsシステム
+  // PointerEventsシステム (ドラッグ並び替え)
   // ==========================================================================
   let pointerStartX = 0; let pointerStartY = 0; let pointerStartTime = 0; let isDragging = false; let activeSwipeThumb = null; let isMoveTriggered = false;
   let siblingPositions = []; let initialSiblings = []; let targetIdx = -1;
@@ -1050,7 +1312,7 @@ function initApp() {
     }
   });
 
-  document.addEventListener('pointerup', (e) => {
+  document.addEventListener('pointerup', async (e) => {
     if (!isDragging) return;
     isDragging = false;
 
@@ -1184,6 +1446,7 @@ function initApp() {
 
       if (isContainerMoved) {
         renderBatchGroupsUI();
+        await syncBatchStateToDB(); // 自動保存
         return;
       }
 
@@ -1234,6 +1497,7 @@ function initApp() {
               const [movedItem] = group.splice(iIdx, 1);
               group.splice(targetIdx, 0, movedItem);
               renderBatchGroupsUI();
+              await syncBatchStateToDB(); // 自動保存
               return;
             }
           }
@@ -1243,6 +1507,7 @@ function initApp() {
             const [movedItem] = state.ungroupedImages.splice(idx, 1);
             state.ungroupedImages.splice(targetIdx, 0, movedItem);
             renderBatchGroupsUI();
+            await syncBatchStateToDB(); // 自動保存
             return;
           }
         }
