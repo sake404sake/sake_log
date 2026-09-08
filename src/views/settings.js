@@ -6,7 +6,6 @@ import { state } from '../store/state.js';
 export function renderSettingsView() {
   const savedKey = getApiKey();
   const currentTheme = localStorage.getItem('sella_theme') || 'dark';
-
   const lastSynced = localStorage.getItem('sella_last_synced_time') || '未同期';
 
   const isGoogleConnected = state.isGoogleLoggedIn || localStorage.getItem('sella_google_logged_in') === 'true';
@@ -21,17 +20,40 @@ export function renderSettingsView() {
       .settings-card {
         box-sizing: border-box;
         width: 100%;
+        max-width: 100%;
+        overflow: hidden;
       }
       .settings-card .input-dark {
         min-width: 0 !important;
+        box-sizing: border-box !important;
       }
       .btn-external-link {
         word-break: break-all;
         white-space: normal;
       }
+      /* 📱 スマホ用超レスポンシブ強制パッチ (優先度の高い詳細セレクタで上書き) */
       @media (max-width: 600px) {
         .settings-card {
-          padding: 14px !important;
+          padding: 12px !important;
+        }
+        /* グローバルな style.txt の settings-card button nowrap を徹底的に上書き破壊 */
+        .settings-card button,
+        .settings-card .btn-primary,
+        .settings-card .btn-secondary,
+        #btn-destroy-all-data {
+          white-space: normal !important;
+          word-break: break-all !important;
+          flex-shrink: 1 !important;
+          height: auto !important;
+          min-height: 40px !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          padding: 10px 12px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          box-sizing: border-box !important;
+          text-align: center !important;
         }
         .settings-card .input-group {
           flex-direction: column !important;
@@ -44,10 +66,7 @@ export function renderSettingsView() {
         .settings-card .input-group input {
           width: 100% !important;
           flex: none !important;
-        }
-        .settings-card .input-group button {
-          width: 100% !important;
-          height: 40px !important;
+          box-sizing: border-box !important;
         }
         .settings-sync-status {
           flex-direction: column !important;
@@ -63,6 +82,20 @@ export function renderSettingsView() {
         .settings-sync-buttons button {
           width: 100% !important;
           margin: 0 !important;
+          box-sizing: border-box !important;
+        }
+        /* ガイド文や危険テキストの回り込み・はみ出し防止 */
+        .card-desc, .step-item span, label, .step-item {
+          word-break: break-all !important;
+          overflow-wrap: break-word !important;
+          white-space: normal !important;
+        }
+        .step-item {
+          display: flex !important;
+          align-items: flex-start !important;
+        }
+        .step-num {
+          flex-shrink: 0 !important;
         }
       }
     </style>
@@ -121,8 +154,6 @@ export function renderSettingsView() {
         <p class="card-desc">
           Google Driveの「アプリケーション専用隠しフォルダ (AppData)」領域を使用し、画像を含めた全ての酒ログデータをクラウドに安全に同期・バックアップします。他デバイス間での一括共有も可能です。
         </p>
-
-
 
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-top: 14px;">
           <div class="settings-sync-status" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
