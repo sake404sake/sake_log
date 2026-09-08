@@ -463,13 +463,7 @@ function initApp() {
       await syncAllData(false);
       return;
     }
-    if (e.target && e.target.id === 'btn-save-client-id') {
-      const clientId = document.getElementById('google-client-id')?.value.trim();
-      localStorage.setItem('sella_google_client_id', clientId);
-      alert('Google クライアントIDを保存しました。反映のためアプリをリロードします。');
-      window.location.reload();
-      return;
-    }
+
     if (e.target && e.target.id === 'btn-destroy-all-data') {
       const input = document.getElementById('destroy-validation-input')?.value.trim();
       if (input === 'データをすべて消去する') {
