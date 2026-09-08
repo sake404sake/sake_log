@@ -1513,6 +1513,82 @@ function initApp() {
     }
   });
 
+  
+  // 🌟 全画面表示（フルスクリーン）トグル制御
+  const fullscreenBtn = document.getElementById('btn-fullscreen');
+  if (fullscreenBtn) {
+    fullscreenBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen()
+          .then(() => {
+            const label = fullscreenBtn.querySelector('.label');
+            if (label) label.innerText = '全画面を解除';
+          })
+          .catch(err => {
+            console.error(`全画面表示の起動に失敗しました: ${err.message}`);
+          });
+      } else {
+        document.exitFullscreen().then(() => {
+          const label = fullscreenBtn.querySelector('.label');
+          if (label) label.innerText = '全画面表示';
+        });
+      }
+    });
+  }
+
+  // PWA/ホーム画面起動時のフルスクリーンデフォルト制御
+  // ※ ブラウザ制限により、ユーザーアクションなしの完全フルスクリーン（requestFullscreen）は自動起動できませんが、
+  // iOS/AndroidのPWA起動時は manifest.json により自動的にヘッダーなし全画面で立ち上がります。
+  // それとは別に、PWA起動時に自動でFullscreen APIを要求する実験的サポートを追加（ジェスチャー制限で拒否される場合は優しくスルーします）
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  if (isPWA) {
+    console.log('[PWA] Launched in standalone display mode (default fullscreen enabled).');
+    document.addEventListener('click', () => {
+      // 最初のユーザーインタラクションのタイミングで安全に全画面化を促す
+      if (!document.fullscreenElement && localStorage.getItem('sella_auto_fullscreen') === 'true') {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    }, { once: true });
+  }
+
+  // ブラウザ側の全画面状態変更イベントをキャッチしてボタンテキストを確実にシンクロさせる
+  document.addEventListener('fullscreenchange', () => {
+    if (fullscreenBtn) {
+      const label = fullscreenBtn.querySelector('.label');
+      if (label) {
+        if (document.fullscreenElement) {
+          label.innerText = '全画面を解除';
+        } else {
+          label.innerText = '全画面表示';
+        }
+      }
+    }
+  });
+
+  // 🌟 ユーザープロフィール領域（sidebar-user-profile）クリック時に設定画面に遷移するハンドラ
+  const profileEl = document.getElementById('sidebar-user-profile');
+  if (profileEl) {
+    profileEl.addEventListener('click', () => {
+      navigateTo('settings');
+    });
+  }
+
+  // 🌟 ログイン・ログアウト・同期完了イベントでサイドバーのプロファイル情報をリアルタイム同期
+  document.addEventListener('google-login-success', () => {
+    updateSidebarProfile();
+  });
+  document.addEventListener('google-logout-success', () => {
+    updateSidebarProfile();
+  });
+  document.addEventListener('sync-completed', () => {
+    updateSidebarProfile();
+  });
+
+  // 初回起動時のサイドバープロフィール描画
+  updateSidebarProfile();
+
+  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
+
   document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
   overlay?.addEventListener('click', closeSidebar);
 
@@ -1523,4 +1599,44 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
 } else {
   initApp();
+}
+
+
+
+/**
+ * 🌟 サイドバー最下部のユーザープロフィール表示を、
+ * Googleアカウントのログイン状態（名前、アバター写真）に合わせて動的に更新する
+ */
+export function updateSidebarProfile() {
+  const avatarEl = document.getElementById('sidebar-avatar');
+  const usernameEl = document.getElementById('sidebar-username');
+  const statusEl = document.getElementById('sidebar-user-status');
+
+  if (!avatarEl || !usernameEl) return;
+
+  const isConnected = state.isGoogleLoggedIn || localStorage.getItem('sella_google_logged_in') === 'true';
+
+  if (isConnected) {
+    const name = state.googleUserName || localStorage.getItem('sella_google_user_name') || 'Googleユーザー';
+    const avatarUrl = state.googleUserAvatar || localStorage.getItem('sella_google_user_avatar') || '';
+
+    usernameEl.innerText = name;
+    if (statusEl) {
+      statusEl.innerText = 'Google同期 有効';
+      statusEl.style.color = '#10b981'; // グリーン
+    }
+
+    if (avatarUrl) {
+      avatarEl.innerHTML = `<img src="${avatarUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" alt="アバター">`;
+    } else {
+      avatarEl.innerHTML = `<span id="sidebar-avatar-text" style="color: #000;">${name.charAt(0).toUpperCase()}</span>`;
+    }
+  } else {
+    usernameEl.innerText = '未ログイン';
+    if (statusEl) {
+      statusEl.innerText = 'タップしてログイン';
+      statusEl.style.color = 'var(--text-sub)';
+    }
+    avatarEl.innerHTML = '<span id="sidebar-avatar-text" style="color: #000;">G</span>';
+  }
 }
