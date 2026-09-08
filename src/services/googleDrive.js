@@ -10,7 +10,7 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.google
 // ==========================================================================
 // 🌟【デベロッパー向け】ここにあなたのGoogle Cloud OAuthクライアントIDを設定・編集してください
 // ==========================================================================
-export const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
 let tokenClient = null;
 
