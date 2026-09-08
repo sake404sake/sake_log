@@ -1,6 +1,5 @@
 // src/main.js
-
-import { populateModelDropdown, hasApiKey, analyzeLabelImage, setSavedModel } from './services/gemini.js';
+import { populateModelDropdown, hasApiKey, analyzeLabelImage, setSavedModel, saveApiKey } from './services/gemini.js';
 import { renderSettingsView } from './views/settings.js';
 import { renderLogEditorModal, openEditorModal, closeEditorModal, handleImageFiles, runAIAnalysis, updateFieldRevertUI, syncEditorFormToCurrentBatchGroup, renderImagePreviewList, TRACKED_FIELDS } from './views/logEditor.js';
 import { renderLogDetailModal, openDetailModal, closeDetailModal } from './views/logDetail.js';
@@ -17,11 +16,38 @@ function ensureSpinnerStyles() {
   const style = document.createElement('style');
   style.id = 'sella-spinner-style';
   style.textContent = `
-    @keyframes sellaSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .sella-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: sellaSpin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
-    .draggable-thumb { cursor: grab; transition: transform 0.15s, opacity 0.15s; touch-action: none; box-sizing: border-box; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; overflow: visible !important; }
-    .draggable-thumb:active { cursor: grabbing; }
-    .batch-group-card.drag-over, #ungrouped-pool-container.drag-over { border-color: var(--accent-color) !important; background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important; }
+    @keyframes sellaSpin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .sella-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: sellaSpin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    .draggable-thumb {
+      cursor: grab;
+      transition: transform 0.15s, opacity 0.15s;
+      touch-action: none;
+      box-sizing: border-box;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
+      overflow: visible !important;
+    }
+    .draggable-thumb:active {
+      cursor: grabbing;
+    }
+    .batch-group-card.drag-over, #ungrouped-pool-container.drag-over {
+      border-color: var(--accent-color) !important;
+      background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -80,7 +106,7 @@ export async function navigateTo(viewName) {
     appContainer.innerHTML = content;
 
     if (key === 'batchimport') {
-      renderBatchGroupsUI(); 
+      renderBatchGroupsUI();
     }
 
     if (key === 'settings' || key === 'setting') {
@@ -108,7 +134,6 @@ function openSidebar() {
   sidebar?.classList.add('open');
   overlay?.classList.add('active');
 }
-
 function closeSidebar() {
   sidebar?.classList.remove('open');
   overlay?.classList.remove('active');
@@ -118,14 +143,10 @@ function closeSidebar() {
 // ★一括登録データの IndexedDB 自動保存＆自動復旧システム
 // ==========================================================================
 
-/**
- * 現在の一括インポート状態（プールとグループ）をIndexedDBに下書き保存
- */
 export async function syncBatchStateToDB() {
   try {
-    await clearAllDrafts(); // 旧下書きを一撃クリア
+    await clearAllDrafts();
 
-    // 1. 画像プール (ungroupedImages) の保存
     if (state.ungroupedImages.length > 0) {
       const poolBlobs = [];
       const poolItemsMeta = [];
@@ -143,18 +164,10 @@ export async function syncBatchStateToDB() {
           });
         }
       }
-
-      const poolLogData = {
-        id: 'system_image_pool',
-        status: 'draft',
-        isPool: true,
-        name: '画像プール',
-        poolItemsMeta
-      };
+      const poolLogData = { id: 'system_image_pool', status: 'draft', isPool: true, name: '画像プール', poolItemsMeta };
       await saveLog(poolLogData, poolBlobs);
     }
 
-    // 2. 未保存グループ (batchGroups) の保存
     for (let gIdx = 0; gIdx < state.batchGroups.length; gIdx++) {
       const group = state.batchGroups[gIdx];
       if (!group || group.length === 0) continue;
@@ -175,7 +188,6 @@ export async function syncBatchStateToDB() {
           });
         }
       }
-
       const groupLogData = {
         id: 'draft_group_' + gIdx,
         status: 'draft',
@@ -194,10 +206,8 @@ export async function syncBatchStateToDB() {
       };
       await saveLog(groupLogData, groupBlobs);
     }
-
     console.log('[DraftSync] Batch state saved to IndexedDB.');
 
-    // Googleアカウントにログインしていればバックグラウンド同期
     if (state.isGoogleLoggedIn) {
       syncAllData(true);
     }
@@ -206,9 +216,6 @@ export async function syncBatchStateToDB() {
   }
 }
 
-/**
- * IndexedDBから下書き状態の一括インポートを復元
- */
 export async function loadBatchStateFromDB() {
   try {
     const drafts = await getDraftLogs();
@@ -218,7 +225,6 @@ export async function loadBatchStateFromDB() {
     state.batchGroups = [];
     state.ungroupedImages = [];
 
-    // プール (ungroupedImages) の復元
     const poolLog = drafts.find(d => d.isPool);
     if (poolLog && poolLog.imageUrls && poolLog.imageUrls.length > 0) {
       const poolImages = poolLog.images || [];
@@ -237,9 +243,7 @@ export async function loadBatchStateFromDB() {
       }
     }
 
-    // グループ (batchGroups) の復元
     const groupLogs = drafts.filter(d => d.isGrouped);
-    // ID順にソート (draft_group_0, draft_group_1, ...)
     groupLogs.sort((a, b) => {
       const idxA = Number(a.id.replace('draft_group_', ''));
       const idxB = Number(b.id.replace('draft_group_', ''));
@@ -264,7 +268,6 @@ export async function loadBatchStateFromDB() {
         });
       }
 
-      // グループ属性の復元
       group.name = gLog.name || '';
       group.brewery = gLog.brewery || '';
       group.category = gLog.category || '日本酒';
@@ -277,10 +280,8 @@ export async function loadBatchStateFromDB() {
       if (gLog.backupFormData) {
         group.backupFormData = { ...gLog.backupFormData };
       }
-
       state.batchGroups.push(group);
     }
-
     console.log('[DraftSync] Restore complete.');
     renderBatchGroupsUI();
   } catch (err) {
@@ -291,20 +292,14 @@ export async function loadBatchStateFromDB() {
 // --- アプリケーション起動とグローバルイベント委譲 ---
 function initApp() {
   ensureSpinnerStyles();
-  
-  // Google 認証連携の初期化
   initGoogleAuth();
-
-  // ★ 起動時に自動で未保存グループ・プールをDBから読み込んで復元
   loadBatchStateFromDB();
 
-  // 起動時にログインしていればバックグラウンド同期
   if (localStorage.getItem('sella_google_logged_in') === 'true') {
     state.isGoogleLoggedIn = true;
     syncAllData(true);
   }
 
-  // 循環参照を解決した SPA用 CustomEvent 仲介ルーター
   document.addEventListener('navigation-request', async (e) => {
     const detail = e.detail;
     const targetView = typeof detail === 'string' ? detail : detail.view;
@@ -314,12 +309,10 @@ function initApp() {
     }
   });
 
-  // 一括インポート状態変更イベントを受けて IndexedDB に同期
   document.addEventListener('batch-state-modified', async () => {
     await syncBatchStateToDB();
   });
 
-  // ファイル入力チェンジハンドラ
   document.addEventListener('change', async (e) => {
     if (e.target && e.target.id === 'file-input') {
       const files = e.target.files;
@@ -337,7 +330,7 @@ function initApp() {
     }
   });
 
-  // ドラッグ＆ドロップ UI フィードバック
+  // ドラッグ＆ドロップ UI
   document.addEventListener('dragover', (e) => {
     e.preventDefault();
     const card = e.target.closest('.batch-group-card');
@@ -365,7 +358,6 @@ function initApp() {
     }
   });
 
-  // HTML5 Drop (ファイルドロップによる画像追加)
   document.addEventListener('drop', async (e) => {
     e.preventDefault();
     document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
@@ -417,7 +409,6 @@ function initApp() {
       const targetGIdx = Number(targetGroupCard.dataset.gidx);
       if (!isNaN(targetGIdx) && state.batchGroups[targetGIdx]) {
         const targetGroup = state.batchGroups[targetGIdx];
-        
         if (targetThumb && targetThumb.dataset.gidx !== undefined && Number(targetThumb.dataset.gidx) === targetGIdx) {
           const targetIIdx = Number(targetThumb.dataset.iidx);
           targetGroup.splice(targetIIdx, 0, movedImage);
@@ -435,12 +426,11 @@ function initApp() {
 
     state.draggedItemInfo = null;
     renderBatchGroupsUI();
-    await syncBatchStateToDB(); // 自動保存
+    await syncBatchStateToDB();
   });
 
   // クリックイベントのグローバル一括委譲
   document.addEventListener('click', async (e) => {
-    // 📂 未分類プールの畳む／展開ボタン制御
     if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
       e.stopPropagation();
       e.preventDefault();
@@ -449,7 +439,62 @@ function initApp() {
       return;
     }
 
-    // ☁️ Google ログイン/ログアウト/手動同期処理
+    // 🌟 改善: APIキーの保存ボタンの処理を追加
+    if (e.target && e.target.id === 'btn-save-api-key') {
+      const apiKeyEl = document.getElementById('gemini-api-key');
+      const apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
+      if (!apiKey) {
+        alert('APIキーを入力してください。');
+        return;
+      }
+
+      saveApiKey(apiKey);
+
+      const msgEl = document.getElementById('api-key-msg');
+      if (msgEl) {
+        msgEl.style.display = 'block';
+        setTimeout(() => {
+          msgEl.style.display = 'none';
+        }, 3000);
+      }
+
+      await updateModelDropdown(true);
+
+      if (state.isGoogleLoggedIn) {
+        await syncAllData(true); // 変更検知されて sella_config.json へ暗号化同期が走る
+      }
+      return;
+    }
+
+    // 🌟 改善: 設定画面のモデルリスト再取得処理を追加
+    if (e.target && e.target.id === 'btn-reload-models') {
+      const originalText = e.target.innerText;
+      e.target.innerText = '取得中...';
+      e.target.disabled = true;
+      try {
+        await updateModelDropdown(true);
+        alert('モデルリストを更新しました！');
+      } catch (err) {
+        console.error(err);
+        alert('モデルリストの取得に失敗しました。APIキーに誤りがないかご確認ください。');
+      } finally {
+        e.target.innerText = originalText;
+        e.target.disabled = false;
+      }
+      return;
+    }
+
+    // 🌟 改善: エディタモーダル内のモデルリスト更新 (↺) の処理を追加
+    if (e.target && e.target.id === 'btn-reload-modal-models') {
+      const modalModelSelect = document.getElementById('modal-model-select');
+      if (modalModelSelect) {
+        modalModelSelect.innerHTML = '<option value="">モデルを取得中...</option>';
+        await populateModelDropdown(modalModelSelect, true);
+      }
+      return;
+    }
+
+    // Google ログイン/ログアウト/手動同期処理
     if (e.target && e.target.id === 'btn-google-login') {
       loginGoogle();
       return;
@@ -474,7 +519,7 @@ function initApp() {
       return;
     }
 
-    // 📸 ライトボックス起動
+    // ライトボックス
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]') || (e.target.tagName === 'IMG' && !e.target.closest('button, nav, header, aside, .lightbox-overlay, #sidebar') && (e.target.closest('#app') || e.target.closest('#detail-modal-overlay')) ? e.target : null);
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;
@@ -494,13 +539,11 @@ function initApp() {
       return;
     }
 
-    // ライトボックスを閉じる
     if (e.target.id === 'lightbox-modal' || e.target.classList.contains('lightbox-close') || e.target.closest('.lightbox-close')) {
       closeLightbox();
       return;
     }
 
-    // 📸 操作型ライトボックス内アクション
     const lbBtn = e.target.closest('.lightbox-ctrl-btn');
     if (lbBtn) {
       e.stopPropagation();
@@ -596,7 +639,6 @@ function initApp() {
       }
     }
 
-    // 左右アローボタン
     const arrowBtn = e.target.closest('.lightbox-arrow-btn');
     if (arrowBtn) {
       e.stopPropagation();
@@ -609,7 +651,6 @@ function initApp() {
       return;
     }
 
-    // 一括アップロードエミュレート
     if (e.target.closest('#batch-upload-zone') || e.target.closest('#btn-add-more-batch')) {
       e.preventDefault();
       const batchInput = document.getElementById('batch-file-input');
@@ -624,7 +665,6 @@ function initApp() {
         alert('登録するグループがありません。');
         return;
       }
-
       if (!confirm(`${state.batchGroups.length}件のお酒を一括登録しますか？`)) return;
 
       saveAllBtn.disabled = true;
@@ -677,22 +717,18 @@ function initApp() {
             aiInfo: group.aiInfo || '',
             status: 'active'
           };
-
           await saveLog(logData, orderedBlobs);
         }
 
         alert('すべてのグループの登録が完了しました！');
         state.batchGroups = [];
         state.ungroupedImages = [];
-        await clearAllDrafts(); // 下書き消去
-
+        await clearAllDrafts();
         renderBatchGroupsUI();
-        
-        // クラウドとも即同期
+
         if (state.isGoogleLoggedIn) {
           syncAllData(true);
         }
-
         navigateTo('logList');
       } catch (err) {
         console.error('一括登録エラー:', err);
@@ -706,7 +742,7 @@ function initApp() {
     // 一括AI解析実行
     const batchAnalyzeBtn = e.target.closest('.btn-batch-analyze');
     if (batchAnalyzeBtn) {
-      e.stopPropagation(); 
+      e.stopPropagation();
       const gIdx = Number(batchAnalyzeBtn.dataset.gidx);
       const group = state.batchGroups[gIdx];
       if (group && group.length > 0 && hasApiKey()) {
@@ -747,7 +783,7 @@ function initApp() {
             group.region = result.region || group.region || '';
             group.type = result.type || group.type || '';
             group.abv = result.abv || group.abv || '';
-            group.notes = ''; // 🌟 ユーザー用メモ欄は絶対に空にする
+            group.notes = '';
             group.aiInfo = result.aiInfo || group.aiInfo || '';
           }
         } catch (err) {
@@ -757,7 +793,7 @@ function initApp() {
           batchAnalyzeBtn.innerHTML = originalText;
           batchAnalyzeBtn.disabled = false;
           renderBatchGroupsUI();
-          await syncBatchStateToDB(); // 自動保存
+          await syncBatchStateToDB();
         }
       } else if (!hasApiKey()) {
         alert('APIキーが設定されていません。設定画面から登録してください。');
@@ -765,7 +801,7 @@ function initApp() {
       return;
     }
 
-    // 一括グループ分割
+    // 分割
     const batchSplitBtn = e.target.closest('.btn-batch-split');
     if (batchSplitBtn) {
       e.stopPropagation();
@@ -784,7 +820,7 @@ function initApp() {
       return;
     }
 
-    // 一括グループ丸ごと削除/解除
+    // 削除
     const batchDeleteGroupBtn = e.target.closest('.btn-batch-delete-group');
     if (batchDeleteGroupBtn) {
       e.stopPropagation();
@@ -799,7 +835,7 @@ function initApp() {
       return;
     }
 
-    // 一括編集モーダルオープン
+    // エディタ
     const batchOpenEditorBtn = e.target.closest('.btn-batch-open-editor');
     if (batchOpenEditorBtn) {
       e.stopPropagation();
@@ -809,19 +845,19 @@ function initApp() {
         const card = batchOpenEditorBtn.closest('.batch-group-card');
         const nameInput = card?.querySelector('.batch-name-input');
         const breweryInput = card?.querySelector('.batch-brewery-input');
-        
+
         const nameVal = nameInput ? nameInput.value.trim() : '';
         const breweryVal = breweryInput ? breweryInput.value.trim() : '';
         if (nameVal !== '') group.name = nameVal;
         if (breweryVal !== '') group.brewery = breweryVal;
 
-        state.returnToBatchOnClose = true; 
+        state.returnToBatchOnClose = true;
         await openEditorModal(null, group, gIdx);
       }
       return;
     }
 
-    // ログ詳細表示
+    // ログ詳細
     const rowItem = e.target.closest('[data-action="open-detail"]');
     if (rowItem) {
       const id = rowItem.dataset.id;
@@ -829,21 +865,20 @@ function initApp() {
       return;
     }
 
-    // モーダルクローズ
     if (e.target.id === 'btn-close-detail' || e.target.id === 'btn-close-detail-footer' || e.target.id === 'detail-modal-overlay') {
       closeDetailModal();
       return;
     }
 
-    // ★詳細画面でのスライドショーコントロール監視
+    // スライドショーコントロール
     const detailArrow = e.target.closest('.carousel-btn');
     if (detailArrow && (detailArrow.id === 'btn-detail-prev' || detailArrow.id === 'btn-detail-next')) {
       e.stopPropagation();
       e.preventDefault();
-      
+
       const total = state.detailImages.length;
       if (total <= 1) return;
-      
+
       const scrollContainer = document.getElementById('detail-carousel-scroll');
       if (scrollContainer) {
         const width = scrollContainer.clientWidth;
@@ -852,7 +887,6 @@ function initApp() {
         } else {
           state.detailActiveIndex = (state.detailActiveIndex - 1 + total) % total;
         }
-        // 横スクロールを滑らかに実行
         scrollContainer.scrollTo({
           left: state.detailActiveIndex * width,
           behavior: 'smooth'
@@ -872,12 +906,9 @@ function initApp() {
       if (confirm('この酒ログを削除してもよろしいですか？')) {
         await deleteLog(id);
         closeDetailModal();
-        
-        // クラウドとも即同期 (論理削除の伝搬)
         if (state.isGoogleLoggedIn) {
           syncAllData(true);
         }
-
         navigateTo('logList');
       }
       return;
@@ -888,18 +919,14 @@ function initApp() {
       if (confirm('この酒ログを完全に削除してもよろしいですか？')) {
         await deleteLog(id);
         closeEditorModal();
-
-        // クラウド同期
         if (state.isGoogleLoggedIn) {
           syncAllData(true);
         }
-
         navigateTo('logList');
       }
       return;
     }
 
-    // 新規登録モーダルオープン
     if (e.target.closest('#fab-add') || e.target.closest('[data-action="open-editor"]')) {
       e.preventDefault();
       state.returnToBatchOnClose = false;
@@ -907,7 +934,6 @@ function initApp() {
       return;
     }
 
-    // サイドバー/SPAビューナビゲーション
     const targetBtn = e.target.closest('[data-view]');
     if (targetBtn) {
       e.preventDefault();
@@ -932,7 +958,6 @@ function initApp() {
       return;
     }
 
-    // フィールド元に戻す
     const revertBtn = e.target.closest('.btn-revert-field');
     if (revertBtn) {
       const fieldId = revertBtn.dataset.fieldId;
@@ -944,7 +969,6 @@ function initApp() {
       return;
     }
 
-    // 画像削除（エディタ内）
     const delImgBtn = e.target.closest('.btn-img-del');
     if (delImgBtn) {
       const idx = Number(delImgBtn.dataset.idx);
@@ -956,7 +980,6 @@ function initApp() {
       return;
     }
 
-    // タグクイック選択
     const tagBtn = e.target.closest('.tag-chip-btn');
     if (tagBtn) {
       const tagText = tagBtn.dataset.tag;
@@ -971,7 +994,6 @@ function initApp() {
       return;
     }
 
-    // トリガーアップロードゾーン
     if (e.target.closest('#upload-zone') || e.target.closest('#btn-trigger-upload')) {
       e.preventDefault();
       const fileInput = document.getElementById('file-input');
@@ -979,7 +1001,6 @@ function initApp() {
       return;
     }
 
-    // --- 単体酒ログの保存処理 ---
     if (e.target && e.target.id === 'btn-save-log') {
       const name = document.getElementById('sake-name')?.value.trim();
       if (!name) {
@@ -1024,16 +1045,15 @@ function initApp() {
       if (state.currentBatchGroupIndex !== null && state.currentBatchGroupIndex >= 0 && state.currentBatchGroupIndex < state.batchGroups.length) {
         state.batchGroups.splice(state.currentBatchGroupIndex, 1);
         state.currentBatchGroupIndex = null;
-        await syncBatchStateToDB(); // 下書き同期
+        await syncBatchStateToDB();
       }
 
       closeEditorModal();
 
-      // クラウドと同期
       if (state.isGoogleLoggedIn) {
         syncAllData(true);
       }
-      
+
       if (!state.returnToBatchOnClose) {
         navigateTo(state.currentViewName);
       }
@@ -1050,14 +1070,14 @@ function initApp() {
       const gIdx = Number(e.target.dataset.gidx);
       if (state.batchGroups[gIdx]) {
         state.batchGroups[gIdx].name = e.target.value;
-        await syncBatchStateToDB(); // 文字列変更をIndexedDBに即反映
+        await syncBatchStateToDB();
       }
     }
     if (e.target.classList.contains('batch-brewery-input')) {
       const gIdx = Number(e.target.dataset.gidx);
       if (state.batchGroups[gIdx]) {
         state.batchGroups[gIdx].brewery = e.target.value;
-        await syncBatchStateToDB(); // 文字列変更をIndexedDBに即反映
+        await syncBatchStateToDB();
       }
     }
     if (e.target && e.target.id === 'destroy-validation-input') {
@@ -1092,15 +1112,12 @@ function initApp() {
     }
   });
 
-  // Google ログイン成功イベントをハンドリング
   document.addEventListener('google-login-success', () => {
-    // 設定画面を瞬時に再描画してログイン状態にする
     if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
       navigateTo('settings');
     }
   });
 
-  // 同期ステータス変更イベント
   document.addEventListener('sync-state-change', (e) => {
     const isSyncing = e.detail.syncing;
     const syncBtn = document.getElementById('btn-trigger-sync');
@@ -1120,7 +1137,6 @@ function initApp() {
     if (lbl) {
       lbl.innerText = localStorage.getItem('sella_last_synced_time') || '未同期';
     }
-    // 同期によりローカルDBが書き換わった可能性があるため、Dashboardを表示中なら強制再描画
     if (state.currentViewName === 'loglist' || state.currentViewName === 'dashboard' || state.currentViewName === 'log-list') {
       navigateTo('logList');
     }
@@ -1129,8 +1145,15 @@ function initApp() {
   // ==========================================================================
   // PointerEventsシステム (ドラッグ並び替え)
   // ==========================================================================
-  let pointerStartX = 0; let pointerStartY = 0; let pointerStartTime = 0; let isDragging = false; let activeSwipeThumb = null; let isMoveTriggered = false;
-  let siblingPositions = []; let initialSiblings = []; let targetIdx = -1;
+  let pointerStartX = 0;
+  let pointerStartY = 0;
+  let pointerStartTime = 0;
+  let isDragging = false;
+  let activeSwipeThumb = null;
+  let isMoveTriggered = false;
+  let siblingPositions = [];
+  let initialSiblings = [];
+  let targetIdx = -1;
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -1141,7 +1164,7 @@ function initApp() {
       const img = lightbox.querySelector('#lightbox-img');
       const closeBtn = lightbox.querySelector('.lightbox-close');
       const ctrlBtn = e.target.closest('.lightbox-ctrl-btn, .lightbox-arrow-btn');
-      
+
       if (closeBtn && (e.target === closeBtn || closeBtn.contains(e.target))) return;
       if (ctrlBtn) return;
 
@@ -1150,7 +1173,7 @@ function initApp() {
       pointerStartTime = Date.now();
       isDragging = true;
       isMoveTriggered = false;
-      
+
       if (img) {
         img.style.transition = 'none';
         img.setPointerCapture(e.pointerId);
@@ -1335,7 +1358,7 @@ function initApp() {
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(120%) scale(0.9)';
-                updatedImg.offsetHeight; // reflow
+                updatedImg.offsetHeight;
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
@@ -1348,7 +1371,7 @@ function initApp() {
               if (updatedImg) {
                 updatedImg.style.transition = 'none';
                 updatedImg.style.transform = 'translateX(-120%) scale(0.9)';
-                updatedImg.offsetHeight; // reflow
+                updatedImg.offsetHeight;
                 updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
                 updatedImg.style.transform = 'translateX(0) scale(1)';
               }
@@ -1368,7 +1391,7 @@ function initApp() {
       const isEditor = thumb.classList.contains('preview-item');
       const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
       const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
-      
+
       let siblings = [];
       if (isEditor) {
         siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
@@ -1387,7 +1410,6 @@ function initApp() {
         sib.style.boxShadow = 'none';
       });
 
-      // コンテナ間ドロップ移動判定
       let isContainerMoved = false;
       if (!isEditor && isMoveTriggered) {
         thumb.style.pointerEvents = 'none';
@@ -1440,18 +1462,17 @@ function initApp() {
 
       if (isContainerMoved) {
         renderBatchGroupsUI();
-        await syncBatchStateToDB(); // 自動保存
+        await syncBatchStateToDB();
         return;
       }
 
       thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
 
-      // タップ操作検出（拡大表示）
       if (!isMoveTriggered && Math.abs(diffX) < 15 && Math.abs(diffY) < 15 && duration < 350) {
         thumb.style.transform = 'none';
         thumb.style.zIndex = '';
         thumb.style.boxShadow = 'none';
-        
+
         const imgEl = thumb.querySelector('img');
         if (imgEl) {
           const contextType = imgEl.dataset.contextType;
@@ -1468,7 +1489,6 @@ function initApp() {
         return;
       }
 
-      // 2Dよけによる確定位置への適用
       if (isMoveTriggered && targetIdx !== -1) {
         if (isEditor) {
           const imgEl = thumb.querySelector('img');
@@ -1491,7 +1511,7 @@ function initApp() {
               const [movedItem] = group.splice(iIdx, 1);
               group.splice(targetIdx, 0, movedItem);
               renderBatchGroupsUI();
-              await syncBatchStateToDB(); // 自動保存
+              await syncBatchStateToDB();
               return;
             }
           }
@@ -1501,112 +1521,90 @@ function initApp() {
             const [movedItem] = state.ungroupedImages.splice(idx, 1);
             state.ungroupedImages.splice(targetIdx, 0, movedItem);
             renderBatchGroupsUI();
-            await syncBatchStateToDB(); // 自動保存
+            await syncBatchStateToDB();
             return;
           }
         }
       }
-      
+
       thumb.style.transform = 'none';
       thumb.style.zIndex = '';
       thumb.style.boxShadow = 'none';
     }
   });
+}
 
-  
-  // 🌟 全画面表示（フルスクリーン）トグル制御
-  const fullscreenBtn = document.getElementById('btn-fullscreen');
-  if (fullscreenBtn) {
-    fullscreenBtn.addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen()
-          .then(() => {
-            const label = fullscreenBtn.querySelector('.label');
-            if (label) label.innerText = '全画面を解除';
-          })
-          .catch(err => {
-            console.error(`全画面表示の起動に失敗しました: ${err.message}`);
-          });
-      } else {
-        document.exitFullscreen().then(() => {
+// 🌟 全画面表示トグル
+const fullscreenBtn = document.getElementById('btn-fullscreen');
+if (fullscreenBtn) {
+  fullscreenBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen()
+        .then(() => {
           const label = fullscreenBtn.querySelector('.label');
-          if (label) label.innerText = '全画面表示';
+          if (label) label.innerText = '全画面を解除';
+        })
+        .catch(err => {
+          console.error(`全画面表示の起動に失敗しました: ${err.message}`);
         });
-      }
-    });
-  }
-
-  // PWA/ホーム画面起動時のフルスクリーンデフォルト制御
-  // ※ ブラウザ制限により、ユーザーアクションなしの完全フルスクリーン（requestFullscreen）は自動起動できませんが、
-  // iOS/AndroidのPWA起動時は manifest.json により自動的にヘッダーなし全画面で立ち上がります。
-  // それとは別に、PWA起動時に自動でFullscreen APIを要求する実験的サポートを追加（ジェスチャー制限で拒否される場合は優しくスルーします）
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  if (isPWA) {
-    console.log('[PWA] Launched in standalone display mode (default fullscreen enabled).');
-    document.addEventListener('click', () => {
-      // 最初のユーザーインタラクションのタイミングで安全に全画面化を促す
-      if (!document.fullscreenElement && localStorage.getItem('sella_auto_fullscreen') === 'true') {
-        document.documentElement.requestFullscreen().catch(() => {});
-      }
-    }, { once: true });
-  }
-
-  // ブラウザ側の全画面状態変更イベントをキャッチしてボタンテキストを確実にシンクロさせる
-  document.addEventListener('fullscreenchange', () => {
-    if (fullscreenBtn) {
-      const label = fullscreenBtn.querySelector('.label');
-      if (label) {
-        if (document.fullscreenElement) {
-          label.innerText = '全画面を解除';
-        } else {
-          label.innerText = '全画面表示';
-        }
-      }
+    } else {
+      document.exitFullscreen().then(() => {
+        const label = fullscreenBtn.querySelector('.label');
+        if (label) label.innerText = '全画面表示';
+      });
     }
   });
+}
 
-  // 🌟 ユーザープロフィール領域（sidebar-user-profile）クリック時に設定画面に遷移するハンドラ
-  const profileEl = document.getElementById('sidebar-user-profile');
-  if (profileEl) {
-    profileEl.addEventListener('click', () => {
-      navigateTo('settings');
-    });
+const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+if (isPWA) {
+  console.log('[PWA] Launched in standalone display mode (default fullscreen enabled).');
+  document.addEventListener('click', () => {
+    if (!document.fullscreenElement && localStorage.getItem('sella_auto_fullscreen') === 'true') {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  }, { once: true });
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if (fullscreenBtn) {
+    const label = fullscreenBtn.querySelector('.label');
+    if (label) {
+      if (document.fullscreenElement) {
+        label.innerText = '全画面を解除';
+      } else {
+        label.innerText = '全画面表示';
+      }
+    }
   }
+});
 
-  // 🌟 ログイン・ログアウト・同期完了イベントでサイドバーのプロファイル情報をリアルタイム同期
-  document.addEventListener('google-login-success', () => {
-    updateSidebarProfile();
+const profileEl = document.getElementById('sidebar-user-profile');
+if (profileEl) {
+  profileEl.addEventListener('click', () => {
+    navigateTo('settings');
   });
-  document.addEventListener('google-logout-success', () => {
-    updateSidebarProfile();
+}
+
+document.addEventListener('google-login-success', () => { updateSidebarProfile(); });
+document.addEventListener('google-logout-success', () => { updateSidebarProfile(); });
+document.addEventListener('sync-completed', () => { updateSidebarProfile(); });
+
+updateSidebarProfile();
+
+document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
+overlay?.addEventListener('click', closeSidebar);
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    initApp();
+    navigateTo('logList');
   });
-  document.addEventListener('sync-completed', () => {
-    updateSidebarProfile();
-  });
-
-  // 初回起動時のサイドバープロフィール描画
-  updateSidebarProfile();
-
-  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
-
-  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
-  overlay?.addEventListener('click', closeSidebar);
-
+} else {
+  initApp();
   navigateTo('logList');
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp);
-} else {
-  initApp();
-}
-
-
-
-/**
- * 🌟 サイドバー最下部のユーザープロフィール表示を、
- * Googleアカウントのログイン状態（名前、アバター写真）に合わせて動的に更新する
- */
 export function updateSidebarProfile() {
   const avatarEl = document.getElementById('sidebar-avatar');
   const usernameEl = document.getElementById('sidebar-username');
@@ -1623,7 +1621,7 @@ export function updateSidebarProfile() {
     usernameEl.innerText = name;
     if (statusEl) {
       statusEl.innerText = 'Google同期 有効';
-      statusEl.style.color = '#10b981'; // グリーン
+      statusEl.style.color = '#10b981';
     }
 
     if (avatarUrl) {
