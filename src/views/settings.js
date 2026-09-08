@@ -6,7 +6,7 @@ import { state } from '../store/state.js';
 export function renderSettingsView() {
   const savedKey = getApiKey();
   const currentTheme = localStorage.getItem('sella_theme') || 'dark';
-  const googleClientId = localStorage.getItem('sella_google_client_id') || '';
+
   const lastSynced = localStorage.getItem('sella_last_synced_time') || '未同期';
 
   const isGoogleConnected = state.isGoogleLoggedIn || localStorage.getItem('sella_google_logged_in') === 'true';
@@ -122,16 +122,7 @@ export function renderSettingsView() {
           Google Driveの「アプリケーション専用隠しフォルダ (AppData)」領域を使用し、画像を含めた全ての酒ログデータをクラウドに安全に同期・バックアップします。他デバイス間での一括共有も可能です。
         </p>
 
-        <div class="form-group" style="margin-bottom: 16px;">
-          <label for="google-client-id">Google OAuth クライアントID</label>
-          <div class="input-group" style="display: flex; gap: 8px; margin-bottom: 8px;">
-            <input type="text" class="input-dark" id="google-client-id" value="${googleClientId}" placeholder="例: 12345678-abc.apps.googleusercontent.com" style="flex: 1; min-width: 0;" />
-            <button type="button" class="btn-secondary" id="btn-save-client-id">保存</button>
-          </div>
-          <p style="font-size: 0.72rem; color: var(--text-sub); line-height: 1.3; margin: 0;">
-            ※ 同期機能を利用するには、ご自身が Google Cloud Console で作成した「ウェブ アプリケーション」のクライアントIDを保存する必要があります。
-          </p>
-        </div>
+
 
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-top: 14px;">
           <div class="settings-sync-status" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
