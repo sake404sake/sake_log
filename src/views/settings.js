@@ -12,6 +12,61 @@ export function renderSettingsView() {
   const isGoogleConnected = state.isGoogleLoggedIn || localStorage.getItem('sella_google_logged_in') === 'true';
 
   return `
+    <style>
+      .settings-container {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+      .settings-card {
+        box-sizing: border-box;
+        width: 100%;
+      }
+      .settings-card .input-dark {
+        min-width: 0 !important;
+      }
+      .btn-external-link {
+        word-break: break-all;
+        white-space: normal;
+      }
+      @media (max-width: 600px) {
+        .settings-card {
+          padding: 14px !important;
+        }
+        .settings-card .input-group {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          width: 100% !important;
+          gap: 8px !important;
+        }
+        .settings-card .input-group .input-dark,
+        .settings-card .input-group select,
+        .settings-card .input-group input {
+          width: 100% !important;
+          flex: none !important;
+        }
+        .settings-card .input-group button {
+          width: 100% !important;
+          height: 40px !important;
+        }
+        .settings-sync-status {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          gap: 12px !important;
+        }
+        .settings-sync-buttons {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          width: 100% !important;
+          gap: 8px !important;
+        }
+        .settings-sync-buttons button {
+          width: 100% !important;
+          margin: 0 !important;
+        }
+      }
+    </style>
+
     <div class="settings-container">
       <div class="dashboard-header" style="margin-bottom: 16px;">
         <h2>設定・認証連携</h2>
@@ -40,7 +95,7 @@ export function renderSettingsView() {
         <div class="form-group" style="margin-bottom: 16px;">
           <label for="gemini-api-key">Gemini APIキー</label>
           <div class="input-group" style="display: flex; gap: 8px;">
-            <input type="password" class="input-dark" id="gemini-api-key" value="${savedKey}" placeholder="AIzaSy..." style="flex: 1;" />
+            <input type="password" class="input-dark" id="gemini-api-key" value="${savedKey}" placeholder="AIzaSy..." style="flex: 1; min-width: 0;" />
             <button class="btn-primary" id="btn-save-api-key" style="height: auto;">保存</button>
           </div>
           <p id="api-key-msg" style="font-size: 0.8rem; margin-top: 8px; color: #4cd964; display: none;">✓ キーを保存しました</p>
@@ -49,7 +104,7 @@ export function renderSettingsView() {
         <div class="form-group">
           <label for="select-gemini-model">使用するAIモデル</label>
           <div class="input-group" style="display: flex; gap: 8px;">
-            <select id="select-gemini-model" class="input-dark" style="flex: 1;">
+            <select id="select-gemini-model" class="input-dark" style="flex: 1; min-width: 0;">
               <option value="">モデルを取得中...</option>
             </select>
             <button type="button" id="btn-reload-models" class="btn-secondary">再取得</button>
@@ -70,7 +125,7 @@ export function renderSettingsView() {
         <div class="form-group" style="margin-bottom: 16px;">
           <label for="google-client-id">Google OAuth クライアントID</label>
           <div class="input-group" style="display: flex; gap: 8px; margin-bottom: 8px;">
-            <input type="text" class="input-dark" id="google-client-id" value="${googleClientId}" placeholder="例: 12345678-abc.apps.googleusercontent.com" style="flex: 1;" />
+            <input type="text" class="input-dark" id="google-client-id" value="${googleClientId}" placeholder="例: 12345678-abc.apps.googleusercontent.com" style="flex: 1; min-width: 0;" />
             <button type="button" class="btn-secondary" id="btn-save-client-id">保存</button>
           </div>
           <p style="font-size: 0.72rem; color: var(--text-sub); line-height: 1.3; margin: 0;">
@@ -79,7 +134,7 @@ export function renderSettingsView() {
         </div>
 
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-top: 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div class="settings-sync-status" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div>
               <div style="font-weight: bold; color: var(--text-main); font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
                 <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${isGoogleConnected ? '#10b981' : '#ef4444'};"></span>
@@ -90,16 +145,16 @@ export function renderSettingsView() {
               </div>
             </div>
             
-            <div style="display: flex; gap: 8px; align-items: center;">
+            <div class="settings-sync-buttons" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
               ${isGoogleConnected ? `
                 <button type="button" id="btn-trigger-sync" class="btn-primary" style="background: #10b981;" ${state.isSyncing ? 'disabled' : ''}>
                   ${state.isSyncing ? '<span class="sella-spinner"></span>同期中' : '🔄 今すぐ同期'}
                 </button>
-                <button type="button" id="btn-google-logout" class="btn-secondary" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">
+                <button type="button" id="btn-google-logout" class="btn-secondary" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3); margin: 0;">
                   切断 (ログアウト)
                 </button>
               ` : `
-                <button type="button" id="btn-google-login" class="btn-primary" style="background: var(--accent-color); color: #000;">
+                <button type="button" id="btn-google-login" class="btn-primary" style="background: var(--accent-color); color: #000; width: 100%;">
                   Googleアカウントでログイン
                 </button>
               `}
