@@ -29,6 +29,8 @@ export const state = {
   googleAccessToken: null,
   isGoogleLoggedIn: false,
   googleUserEmail: '',
+  googleUserName: '',     // 🌟追加: ログインユーザーの表示名
+  googleUserAvatar: '',   // 🌟追加: ログインユーザーのプロフィール画像URL
   isSyncing: false,
   lastSyncedTime: ''
 };
