@@ -17,7 +17,7 @@ export function renderLogDetailModal(log) {
         <div class="modal-body">
           ${imageUrls.length > 0 ? `
             <!-- 🌟 image-preview-wrapper クラスは style.txt により 220px 枠の flex 描画になるため、最外殻にのみ採用します -->
-            <div class="image-preview-wrapper" style="position: relative; width: 100%; height: 220px; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; padding: 0 !important;">
+            <div class="sella-carousel-container" style="position: relative; width: 100%; height: 220px; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--border-color); display: block !important; padding: 0 !important; margin: 0;">
               
               <!-- 🌟【!important衝突回避設計】style.txt の [class*="carousel"] などの強力な flex 競合を避けるため、それらの文字列を一切含まないクラス体系で横フリック横スクロール（スナップスクロール）を実現します -->
               <div class="sella-scroll-viewport" id="detail-carousel-scroll" style="display: flex !important; overflow-x: auto !important; scroll-snap-type: x mandatory !important; width: 100% !important; height: 100% !important; scrollbar-width: none !important; -ms-overflow-style: none !important; scroll-behavior: smooth !important; -webkit-overflow-scrolling: touch !important; padding: 0 !important; margin: 0 !important;">
