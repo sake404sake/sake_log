@@ -7,6 +7,11 @@ import { openDB, getAllLogs, saveLog, permanentlyDeleteLog } from '../store/db.j
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=drive&version=v3';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 
+// ==========================================================================
+// 🌟【デベロッパー向け】ここにあなたのGoogle Cloud OAuthクライアントIDを設定・編集してください
+// ==========================================================================
+export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
+
 let tokenClient = null;
 
 /**
@@ -32,7 +37,11 @@ export function loadGoogleSDK() {
  */
 export async function initGoogleAuth() {
   await loadGoogleSDK();
-  const clientId = localStorage.getItem('sella_google_client_id') || '';
+  const clientId = GOOGLE_CLIENT_ID;
+  if (!clientId || clientId.includes('YOUR_CLIENT_ID_HERE')) {
+    console.warn('[GoogleDrive] Client ID is not configured. Google Drive Sync is disabled.');
+    return;
+  }
   if (!clientId) {
     console.warn('[GoogleDrive] Client ID is not configured in settings.');
     return;
