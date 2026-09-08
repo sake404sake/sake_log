@@ -121,7 +121,7 @@ function serializeCustomSettings() {
   const custom = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key.startsWith('sella_') && !EXCLUDED_LOCAL_KEYS.includes(key)) {
+    if (key && key.startsWith('sella_') && !EXCLUDED_LOCAL_KEYS.includes(key)) {
       custom[key] = localStorage.getItem(key);
     }
   }
@@ -327,7 +327,7 @@ export function isTokenExpired() {
 }
 
 /**
- * ★改善版: トキーン期限切れ（401）が確定した際の後処理
+ * ★改善版: トークン期限切れ（401）が確定した際の後処理
  */
 function handleTokenExpired() {
   state.isGoogleLoggedIn = false;
@@ -405,8 +405,8 @@ async function listCloudFiles() {
  */
 async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
   const metadata = { name: fileName };
-  // 🌟 重要: Google Drive API v3 の仕様により、PATCH（既存更新）時は parents フィールドを含めてはならない。
-  // 新規作成（POST）時のみ親フォルダを指定する。
+  
+  // 🌟 Google Drive API v3 仕様対応: 新規保存（POST）時のみ parents を設定
   if (!existingFileId) {
     metadata.parents = ['appDataFolder'];
   }
