@@ -8,7 +8,7 @@ import { saveLog, deleteLog, clearAllDrafts, openDB, getDraftLogs } from './stor
 import { renderBatchImportView, renderBatchGroupsUI, processFilesForBatch } from './views/batchImport.js';
 import { openLightbox, closeLightbox, triggerLightboxNext, triggerLightboxPrev } from './views/lightbox.js';
 import { state, base64ToBlob, blobToBase64 } from './store/state.js';
-import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth, refreshGoogleTokenIfNeeded } from './services/googleDrive.js';
+import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth } from './services/googleDrive.js';
 
 // --- CSS動的注入 ---
 function ensureSpinnerStyles() {
@@ -289,19 +289,14 @@ export async function loadBatchStateFromDB() {
 }
 
 // --- アプリケーション起動とグローバルイベント委譲 ---
-async function initApp() {
+function initApp() {
   ensureSpinnerStyles();
-  await initGoogleAuth();
+  initGoogleAuth();
   loadBatchStateFromDB();
 
-  // 🌟 起動時サイレント・リフレッシュログイン統合
   if (localStorage.getItem('sella_google_logged_in') === 'true') {
     state.isGoogleLoggedIn = true;
-    console.log('[Init] Detected active login session. Initializing background silent refresh...');
-    const refreshSuccess = await refreshGoogleTokenIfNeeded();
-    if (refreshSuccess) {
-      syncAllData(true); // サイレント同期
-    }
+    syncAllData(true);
   }
 
   document.addEventListener('navigation-request', async (e) => {
@@ -444,7 +439,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // 🌟 APIキーの保存ボタンの処理
+  // 🌟 改善: APIキーの保存ボタンの処理を追加
   if (e.target && e.target.id === 'btn-save-api-key') {
     const apiKeyEl = document.getElementById('gemini-api-key');
     const apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
@@ -471,7 +466,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // 🌟 設定画面のモデルリスト再取得処理
+  // 🌟 改善: 設定画面のモデルリスト再取得処理を追加
   if (e.target && e.target.id === 'btn-reload-models') {
     const originalText = e.target.innerText;
     e.target.innerText = '取得中...';
@@ -489,7 +484,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // 🌟 エディタモーダル内のモデルリスト更新 (↺) の処理
+  // 🌟 改善: エディタモーダル内のモデルリスト更新 (↺) の処理を追加
   if (e.target && e.target.id === 'btn-reload-modal-models') {
     const modalModelSelect = document.getElementById('modal-model-select');
     if (modalModelSelect) {
@@ -1098,22 +1093,6 @@ document.addEventListener('input', async (e) => {
         btn.style.cursor = 'not-allowed';
       }
     }
-  }
-});
-
-document.addEventListener('change', (e) => {
-  if (e.target && e.target.id === 'theme-select') {
-    setTheme(e.target.value);
-  }
-  if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
-    setSavedModel(e.target.value);
-    const globalSelect = document.getElementById('select-gemini-model');
-    const modalSelect = document.getElementById('modal-model-select');
-    if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
-    if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
-  }
-  if (TRACKED_FIELDS.includes(e.target.id)) {
-    updateFieldRevertUI();
   }
 });
 
