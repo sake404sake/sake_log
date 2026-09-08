@@ -3,22 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Sella - お酒ログ</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Sella - お酒試飲ログ</title>
   
-  <!-- iOS Safari 向け PWA（全画面・スタンドアロン）対応用メタタグ -->
+  <!-- アプリケーションスタイルシート -->
+  <link rel="stylesheet" href="src/style.css">
+  
+  <!-- 🌟 ブラウザのタブ用標準ファビコン -->
+  <link rel="icon" type="image/png" href="src/icons/favicon.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="src/icons/icon-192.png" sizes="192x192">
+
+  <!-- 🌟 iOS (Safari) ホーム画面アイコン（Web Clip）用の絶対指定 -->
+  <link rel="apple-touch-icon" href="src/icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="src/icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="src/icons/apple-touch-icon.png">
+
+  <!-- 🌟 iOS Safari でのネイティブPWA立ち上げ（全画面）を可能にする特殊メタタグ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Sella">
+  <meta name="theme-color" content="#121316">
 
-  <!-- PWA 設定ファイル (manifest.json) の紐付け -->
-  <link rel="manifest" href="./manifest.json">
+  <!-- 🌟 Android / PWA対応マニフェストへのリンク -->
+  <link rel="manifest" href="manifest.json">
 </head>
 <body>
+
   <div class="app-container">
-    <!-- モバイルドロワー用オーバーレイ -->
+    <!-- 背景オーバーレイ（モバイルドロワー用） -->
     <div class="drawer-overlay" id="drawer-overlay"></div>
-    
+
     <!-- 左側サイドバー（メニュー） -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -108,12 +121,14 @@
         </div>
       </div>
     </aside>
+
+    <!-- フローティングアクションボタン (FAB) -->
+    <button id="fab-add" class="fab-btn" data-view="logEditor" title="酒ログを追加">＋</button>
+
   </div>
 
-  <!-- 酒ログ追加フローティングボタン (FAB) -->
-  <button id="fab-add" class="fab-btn" data-view="logEditor" title="酒ログを追加">＋</button>
+  <!-- アプリケーションエントリーJavaScript -->
+  <script type="module" src="src/main.js"></script>
 
-  <!-- SPA メインロジック読み込み -->
-  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
