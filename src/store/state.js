@@ -23,7 +23,14 @@ export const state = {
   detailActiveIndex: 0,
 
   // 現在アクティブなビュー名
-  currentViewName: 'logList'
+  currentViewName: 'logList',
+
+  // ★Googleアカウント同期ステータス
+  googleAccessToken: null,
+  isGoogleLoggedIn: false,
+  googleUserEmail: '',
+  isSyncing: false,
+  lastSyncedTime: ''
 };
 
 // 状態リセット用ヘルパー
