@@ -5,12 +5,13 @@ import { openDB, getAllLogs, saveLog, permanentlyDeleteLog } from '../store/db.j
 
 // GISのクライアントスクリプトとDrive APIのURL定義
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=drive&version=v3';
-const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+// 🌟 Google Drive AppDataスコープと、ユーザーの表示名・アバター用のprofileスコープを統合
+const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 
 // ==========================================================================
 // 🌟【デベロッパー向け】ここにあなたのGoogle Cloud OAuthクライアントIDを設定・編集してください
 // ==========================================================================
-export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com';
 
 let tokenClient = null;
 
@@ -42,9 +43,12 @@ export async function initGoogleAuth() {
     console.warn('[GoogleDrive] Client ID is not configured. Google Drive Sync is disabled.');
     return;
   }
-  if (!clientId) {
-    console.warn('[GoogleDrive] Client ID is not configured in settings.');
-    return;
+
+  // 起動時にログイン状態とユーザープロファイルキャッシュを復元
+  if (localStorage.getItem('sella_google_logged_in') === 'true') {
+    state.isGoogleLoggedIn = true;
+    state.googleUserName = localStorage.getItem('sella_google_user_name') || 'Googleユーザー';
+    state.googleUserAvatar = localStorage.getItem('sella_google_user_avatar') || '';
   }
 
   tokenClient = window.google.accounts.oauth2.initTokenClient({
@@ -57,7 +61,22 @@ export async function initGoogleAuth() {
       state.googleAccessToken = response.access_token;
       localStorage.setItem('sella_google_token', response.access_token);
       
-      // プロファイル情報からメールアドレスを擬似抽出
+      // 🌟 Google API から実際の名前とプロフィールアバター画像を取得する
+      try {
+        const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { 'Authorization': `Bearer ${response.access_token}` }
+        });
+        if (profileRes.ok) {
+          const userInfo = await profileRes.json();
+          state.googleUserName = userInfo.name || 'Googleユーザー';
+          state.googleUserAvatar = userInfo.picture || '';
+          localStorage.setItem('sella_google_user_name', state.googleUserName);
+          localStorage.setItem('sella_google_user_avatar', state.googleUserAvatar);
+        }
+      } catch (err) {
+        console.error('[GoogleDrive] Failed to fetch user profile info:', err);
+      }
+
       state.isGoogleLoggedIn = true;
       state.googleUserEmail = 'Google Drive 同期有効';
       localStorage.setItem('sella_google_logged_in', 'true');
@@ -102,8 +121,15 @@ export function logoutGoogle(clearLocal = false) {
   state.googleAccessToken = null;
   state.isGoogleLoggedIn = false;
   state.googleUserEmail = '';
+  state.googleUserName = '';
+  state.googleUserAvatar = '';
   localStorage.removeItem('sella_google_token');
   localStorage.removeItem('sella_google_logged_in');
+  localStorage.removeItem('sella_google_user_name');
+  localStorage.removeItem('sella_google_user_avatar');
+
+  // プロフィール更新イベントを発火してUIを同期
+  document.dispatchEvent(new CustomEvent('google-logout-success'));
 
   if (clearLocal) {
     // 共用PC用に IndexedDB を完全に初期化
