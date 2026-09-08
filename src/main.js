@@ -314,12 +314,31 @@ document.addEventListener('batch-state-modified', async () => {
 });
 
 document.addEventListener('change', async (e) => {
+  if (e.target && e.target.id === 'theme-select') {
+    setTheme(e.target.value);
+    if (state.isGoogleLoggedIn) {
+      await syncAllData(true);
+    }
+    return;
+  }
+  if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
+    setSavedModel(e.target.value);
+    const globalSelect = document.getElementById('select-gemini-model');
+    const modalSelect = document.getElementById('modal-model-select');
+    if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
+    if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
+    if (state.isGoogleLoggedIn) {
+      await syncAllData(true);
+    }
+    return;
+  }
   if (e.target && e.target.id === 'file-input') {
     const files = e.target.files;
     if (files && files.length > 0) {
       await handleImageFiles(files);
     }
     e.target.value = '';
+    return;
   }
   if (e.target && e.target.id === 'batch-file-input') {
     const files = e.target.files;
@@ -327,6 +346,7 @@ document.addEventListener('change', async (e) => {
       await processFilesForBatch(files, true);
     }
     e.target.value = '';
+    return;
   }
 });
 
