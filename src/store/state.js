@@ -27,10 +27,11 @@ export const state = {
 
   // ★Googleアカウント同期ステータス
   googleAccessToken: null,
+  googleUserSub: null, // 🌟追加：暗号化の鍵となる一意のID (sub)
   isGoogleLoggedIn: false,
   googleUserEmail: '',
-  googleUserName: '',     // 🌟追加: ログインユーザーの表示名
-  googleUserAvatar: '',   // 🌟追加: ログインユーザーのプロフィール画像URL
+  googleUserName: '', // 🌟追加: ログインユーザーの表示名
+  googleUserAvatar: '', // 🌟追加: ログインユーザーのプロフィール画像URL
   isSyncing: false,
   lastSyncedTime: ''
 };
