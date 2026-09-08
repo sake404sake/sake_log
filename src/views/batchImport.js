@@ -8,17 +8,18 @@ export function renderBatchImportView() {
     <div class="batch-import-container">
       <div class="settings-card">
         <div class="card-title card-title-bulk">
-          <h3>📦 一括画像解析<br>（複数ボトルを自動認識）</h3>
+          <span style="font-size: 1.25rem;">📦</span>
+          <h3>一括画像解析（複数ボトルを自動認識）</h3>
         </div>
         <p class="card-desc bulk-desc">
-          複数のボトル写真を一度にアップロードできます。時間経過からお酒を自動でグルーピングし、一括で解析・登録が完了します。
+          複数のボトル写真を一度にアップロードできます。撮影時間からお酒を自動でグルーピングし、一括で解析・登録が完了します。
         </p>
 
         <!-- アップロードゾーン -->
         <div class="image-upload-zone" id="batch-upload-zone" style="height: 180px;">
           <div class="upload-placeholder">
             <span class="upload-icon">📁</span>
-            <p class="upload-text">ここに複数の写真ファイルをドロップ、またはタップして選択</p>
+            <p class="upload-text">ここに複数の写真ファイルをドロップ、またはタップして選択<br><small style="color:var(--text-sub)">(撮影日時・順序自動解析)</small></p>
           </div>
         </div>
         <input type="file" id="batch-file-input" style="display: none;" multiple accept="image/*" />
@@ -39,7 +40,7 @@ export function renderBatchGroupsUI() {
     uploadZone.innerHTML = `
       <div style="padding: 30px; text-align: center; border: 2px dashed var(--border-color); border-radius: 12px; cursor: pointer; background: var(--card-bg);">
         <div style="font-size: 1.8rem; margin-bottom: 6px;">📁</div>
-        <div style="font-weight: bold; color: var(--text-main);">まとめて写真を追加する</div>
+        <div style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">さらに写真を追加する</div>
       </div>
     `;
   }
@@ -170,7 +171,16 @@ export async function processFilesForBatch(files, append = true) {
     try {
       const compressed = await compressImage(file);
       
-      const date = await extractPhotoDateObject(file);
+      // スマホ対応: EXIFから非同期で撮影日時を正確にデコードする
+      let date = await extractPhotoDateObject(file);
+      
+      if (!date && file.lastModified) {
+        // フォールバック
+        const d = new Date(file.lastModified);
+        if (!isNaN(d.getTime())) {
+          date = d;
+        }
+      }
 
       items.push({
         file,
@@ -215,5 +225,7 @@ export async function processFilesForBatch(files, append = true) {
     alert('画像の自動グルーピング処理中に予期せぬエラーが発生しました。');
   } finally {
     renderBatchGroupsUI();
+    // 状態が変化したため自動保存をトリガー
+    document.dispatchEvent(new CustomEvent('batch-state-modified'));
   }
 }
