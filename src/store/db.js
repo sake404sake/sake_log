@@ -35,7 +35,7 @@ export async function getLogById(id, includeDeleted = false) {
   const imgStore = tx.objectStore('images');
 
   const log = await new Promise((res) => {
-    const req = logStore.get(typeof id === 'number' ? id : String(id));
+    const req = logStore.get(!isNaN(Number(id)) ? Number(id) : String(id));
     req.onsuccess = () => res(req.result);
     req.onerror = () => res(null);
   });
@@ -193,7 +193,7 @@ export async function deleteLog(id) {
   const logStore = tx.objectStore('logs');
 
   const log = await new Promise((res) => {
-    const req = logStore.get(typeof id === 'number' ? id : String(id));
+    const req = logStore.get(!isNaN(Number(id)) ? Number(id) : String(id));
     req.onsuccess = () => res(req.result);
     req.onerror = () => res(null);
   });
@@ -219,7 +219,7 @@ export async function permanentlyDeleteLog(id) {
   const imgStore = tx.objectStore('images');
 
   const log = await new Promise((res) => {
-    const req = logStore.get(typeof id === 'number' ? id : String(id));
+    const req = logStore.get(!isNaN(Number(id)) ? Number(id) : String(id));
     req.onsuccess = () => res(req.result);
     req.onerror = () => res(null);
   });
@@ -229,7 +229,7 @@ export async function permanentlyDeleteLog(id) {
   }
 
   return new Promise((res) => {
-    const req = logStore.delete(typeof id === 'number' ? id : String(id));
+    const req = logStore.delete(!isNaN(Number(id)) ? Number(id) : String(id));
     req.onsuccess = () => res();
   });
 }
