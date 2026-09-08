@@ -1,0 +1,21 @@
+{
+  "name": "Sella お酒ログ",
+  "short_name": "Sella",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#121316",
+  "theme_color": "#121316",
+  "description": "高精度AIラベル解析とクラウド同期を備えた、お酒の試飲ログアプリ",
+  "icons": [
+    {
+      "src": "src/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "src/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
