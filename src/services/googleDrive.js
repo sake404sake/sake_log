@@ -2,25 +2,15 @@
 import { state } from '../store/state.js';
 import { openDB, getAllLogs, saveLog, permanentlyDeleteLog } from '../store/db.js';
 
-// GISのクライアントスクリプトとDrive APIのURL定義
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=drive&version=v3';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 
-// ==========================================================================
-// Google Cloud OAuthクライアントID
-// ==========================================================================
 export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
 let tokenClient = null;
 
-// ==========================================================================
-// Sella Settings Sync Protocol (V15 Specification) ゼロナレッジ暗号モジュール
-// ==========================================================================
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
-/**
- * Google ID (sub) からメモリ上にAES-GCM 256bit鍵を動的導出する
- */
 async function deriveKeyFromGoogleId(googleUserId) {
   const keyMaterial = await window.crypto.subtle.importKey(
     'raw',
@@ -39,14 +29,11 @@ async function deriveKeyFromGoogleId(googleUserId) {
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
-    false, // 鍵のエクスポートを禁止（インメモリ保護）
+    false,
     ['encrypt', 'decrypt']
   );
 }
 
-/**
- * 平文のAPIキーを暗号化
- */
 export async function encryptApiKey(plainApiKey, googleUserId) {
   if (!plainApiKey) return { cipherText: '', iv: '' };
   
@@ -66,9 +53,6 @@ export async function encryptApiKey(plainApiKey, googleUserId) {
   };
 }
 
-/**
- * 暗号化されたAPIキーを復号
- */
 export async function decryptApiKey(cipherTextBase64, ivBase64, googleUserId) {
   if (!cipherTextBase64 || !ivBase64) return '';
   
@@ -90,7 +74,6 @@ export async function decryptApiKey(cipherTextBase64, ivBase64, googleUserId) {
   }
 }
 
-// 同期から除外すべきローカル依存設定キー（デバイス特性依存）
 const EXCLUDED_LOCAL_KEYS = [
   'sella_font_scale',
   'sella_auto_fullscreen',
@@ -337,7 +320,6 @@ async function listCloudFiles() {
 async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
   const metadata = { name: fileName };
   
-  // Google Drive API v3 仕様: 新規作成(POST)時のみ parents を指定
   if (!existingFileId) {
     metadata.parents = ['appDataFolder'];
   }
@@ -444,9 +426,6 @@ async function deleteCloudFile(fileId) {
   }
 }
 
-/**
- * 双方向マージ・クラウド同期エンジン
- */
 export async function syncAllData(silent = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) return;
@@ -472,7 +451,6 @@ export async function syncAllData(silent = false) {
 
     let localSettingsUpdatedAt = localStorage.getItem('sella_settings_updated_at');
 
-    // ローカル設定が変更されたか（またはまだ同期キャッシュが無いか）を判定
     const isSettingsChanged = 
       lastSavedTheme === null ||
       lastSavedApiKey === null ||
@@ -482,7 +460,6 @@ export async function syncAllData(silent = false) {
       currentBgImage !== lastSavedBgImage ||
       (lastSavedCustomStr !== null && JSON.stringify(currentCustom) !== lastSavedCustomStr);
 
-    // ユーザーが手動でAPIキーを入力、テーマ変更等を行った場合は localSettingsUpdatedAt を最新化！
     if (isSettingsChanged && (currentApiKey || currentTheme !== 'dark' || localSettingsUpdatedAt)) {
       localSettingsUpdatedAt = new Date().toISOString();
       localStorage.setItem('sella_settings_updated_at', localSettingsUpdatedAt);
@@ -494,15 +471,11 @@ export async function syncAllData(silent = false) {
       localStorage.setItem('sella_last_sync_custom', JSON.stringify(currentCustom));
     }
 
-    // 1. クラウド上のファイル一覧を取得
     const cloudFiles = await listCloudFiles();
     const indexFile = cloudFiles.find(f => f.name === 'sella_index.json');
     const configFile = cloudFiles.find(f => f.name === 'sella_config.json');
     const cloudImageFiles = cloudFiles.filter(f => f.name.startsWith('sella_img_'));
 
-    // ==========================================================================
-    // 🌟 ゼロナレッジ暗号化 (Sella Settings Sync Protocol V15) 設定同期セクション
-    // ==========================================================================
     const googleUserId = state.googleUserSub || localStorage.getItem('sella_google_user_sub') || localStorage.getItem('sella_google_sub');
 
     if (googleUserId) {
@@ -523,8 +496,6 @@ export async function syncAllData(silent = false) {
         const localTime = localSettingsUpdatedAt ? new Date(localSettingsUpdatedAt).getTime() : 0;
         const cloudTime = new Date(cloudSettings.updatedAt || 0).getTime();
 
-        // 🌟 完全安定ロジック:
-        // ローカルが未初期化かつAPIキーも無い場合、またはクラウドの方が厳密に新しい場合のみクラウド優先で復元！
         const isLocalUninitializedAndEmpty = !localSettingsUpdatedAt && !currentApiKey;
         const isLocalKeyEmptyButCloudHas = !currentApiKey && cloudSettings.encryptedApiKey;
 
@@ -560,7 +531,6 @@ export async function syncAllData(silent = false) {
             }
           }
 
-          // キャッシュ同期
           localStorage.setItem('sella_last_sync_theme', cloudSettings.theme || 'dark');
           localStorage.setItem('sella_last_sync_apikey', decryptedKey || currentApiKey || '');
           localStorage.setItem('sella_last_sync_model', cloudSettings.selectedModel || 'models/gemini-2.5-flash');
@@ -571,7 +541,6 @@ export async function syncAllData(silent = false) {
           shouldUploadConfig = true;
         }
       } else {
-        // クラウドに設定ファイルが存在しない場合
         shouldUploadConfig = true;
       }
 
@@ -595,10 +564,6 @@ export async function syncAllData(silent = false) {
     } else {
       console.warn('[GoogleDriveSync] Google User sub (ID) not found. Settings sync skipped for security.');
     }
-
-    // ==========================================================================
-    // 📊 お酒ログ & 画像データ 同期セクション (sella_index.json)
-    // ==========================================================================
 
     const db = await openDB();
     const localLogs = await new Promise((res) => {
