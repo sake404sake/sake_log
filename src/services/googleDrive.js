@@ -7,14 +7,14 @@ const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=driv
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 
 // ==========================================================================
-// 🌟 Google Cloud OAuthクライアントID
+// Google Cloud OAuthクライアントID
 // ==========================================================================
 export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
 let tokenClient = null;
 
 // ==========================================================================
-// 🌟 Sella Settings Sync Protocol (V15 Specification) ゼロナレッジ暗号モジュール
+// Sella Settings Sync Protocol (V15 Specification) ゼロナレッジ暗号モジュール
 // ==========================================================================
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
@@ -39,7 +39,7 @@ async function deriveKeyFromGoogleId(googleUserId) {
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
-    false,
+    false, // 鍵のエクスポートを禁止（インメモリ保護）
     ['encrypt', 'decrypt']
   );
 }
@@ -101,6 +101,7 @@ const EXCLUDED_LOCAL_KEYS = [
   'sella_google_user_name',
   'sella_google_user_avatar',
   'sella_google_user_sub',
+  'sella_google_sub',
   'sella_theme',
   'sella_settings_updated_at',
   'sella_last_synced_time',
@@ -305,11 +306,13 @@ async function driveFetch(url, options = {}) {
 
   try {
     const response = await fetch(url, options);
+    
     if (response.status === 401) {
       console.error('[GoogleDrive] Unauthorized (401). Invalid token session.');
       handleTokenExpired();
       throw new Error('AUTH_EXPIRED');
     }
+    
     return response;
   } catch (err) {
     if (err instanceof TypeError || err.message?.includes('fetch')) {
@@ -334,27 +337,20 @@ async function listCloudFiles() {
 async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
   const metadata = { name: fileName };
   
-  // 🌟 Google Drive API v3 仕様: 新規作成(POST)時のみ parents を指定
+  // Google Drive API v3 仕様: 新規作成(POST)時のみ parents を指定
   if (!existingFileId) {
     metadata.parents = ['appDataFolder'];
   }
 
   const boundary = 'sella_multipart_boundary';
-  const delimiter = `
---${boundary}
-`;
-  const close_delim = `
---${boundary}--`;
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const close_delim = `\r\n--${boundary}--`;
 
   const multipartBody = delimiter + 
-    'Content-Type: application/json; charset=UTF-8
-
-' + 
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' + 
     JSON.stringify(metadata) + 
     delimiter + 
-    'Content-Type: application/json
-
-' + 
+    'Content-Type: application/json\r\n\r\n' + 
     JSON.stringify(dataObj) + 
     close_delim;
 
@@ -393,22 +389,15 @@ async function uploadImageFile(imgId, blob) {
   const fileName = `sella_img_${imgId}.bin`;
   const metadata = { name: fileName, parents: ['appDataFolder'] };
   const boundary = 'sella_img_multipart_boundary';
-  const delimiter = `
---${boundary}
-`;
-  const close_delim = `
---${boundary}--`;
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const close_delim = `\r\n--${boundary}--`;
 
   const arrayBuffer = await blob.arrayBuffer();
   const headersPart = delimiter + 
-    'Content-Type: application/json; charset=UTF-8
-
-' + 
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' + 
     JSON.stringify(metadata) + 
     delimiter + 
-    `Content-Type: ${blob.type || 'image/jpeg'}
-
-`;
+    `Content-Type: ${blob.type || 'image/jpeg'}\r\n\r\n`;
   const footerPart = close_delim;
 
   const bodyBlob = new Blob([
@@ -456,7 +445,7 @@ async function deleteCloudFile(fileId) {
 }
 
 /**
- * ★★★ 双方向マージ・クラウド同期エンジン ★★★
+ * 双方向マージ・クラウド同期エンジン
  */
 export async function syncAllData(silent = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
@@ -483,16 +472,18 @@ export async function syncAllData(silent = false) {
 
     let localSettingsUpdatedAt = localStorage.getItem('sella_settings_updated_at');
 
-    const hasSyncCache = lastSavedTheme !== null || lastSavedApiKey !== null;
-    const isCustomChanged = lastSavedCustomStr !== null && JSON.stringify(currentCustom) !== lastSavedCustomStr;
+    // ローカル設定が変更されたか（またはまだ同期キャッシュが無いか）を判定
+    const isSettingsChanged = 
+      lastSavedTheme === null ||
+      lastSavedApiKey === null ||
+      currentTheme !== lastSavedTheme || 
+      currentApiKey !== lastSavedApiKey || 
+      currentModel !== lastSavedModel ||
+      currentBgImage !== lastSavedBgImage ||
+      (lastSavedCustomStr !== null && JSON.stringify(currentCustom) !== lastSavedCustomStr);
 
-    if (hasSyncCache && (
-        currentTheme !== lastSavedTheme || 
-        currentApiKey !== lastSavedApiKey || 
-        currentModel !== lastSavedModel ||
-        currentBgImage !== lastSavedBgImage ||
-        isCustomChanged)) {
-      
+    // ユーザーが手動でAPIキーを入力、テーマ変更等を行った場合は localSettingsUpdatedAt を最新化！
+    if (isSettingsChanged && (currentApiKey || currentTheme !== 'dark' || localSettingsUpdatedAt)) {
       localSettingsUpdatedAt = new Date().toISOString();
       localStorage.setItem('sella_settings_updated_at', localSettingsUpdatedAt);
       
@@ -532,12 +523,12 @@ export async function syncAllData(silent = false) {
         const localTime = localSettingsUpdatedAt ? new Date(localSettingsUpdatedAt).getTime() : 0;
         const cloudTime = new Date(cloudSettings.updatedAt || 0).getTime();
 
-        // 🌟 バグ修正の最重要ポイント:
-        // 新規端末(localSettingsUpdatedAtが未保持)の場合、あるいはクラウドの方が新しい場合、
-        // またはローカルのAPIキーが空でクラウドにキーが存在する場合は「100%クラウドを優先して引き込む」！
+        // 🌟 完全安定ロジック:
+        // ローカルが未初期化かつAPIキーも無い場合、またはクラウドの方が厳密に新しい場合のみクラウド優先で復元！
+        const isLocalUninitializedAndEmpty = !localSettingsUpdatedAt && !currentApiKey;
         const isLocalKeyEmptyButCloudHas = !currentApiKey && cloudSettings.encryptedApiKey;
 
-        if (cloudTime > localTime || !localSettingsUpdatedAt || isLocalKeyEmptyButCloudHas) {
+        if ((cloudTime > localTime) || isLocalUninitializedAndEmpty || isLocalKeyEmptyButCloudHas) {
           console.log('[GoogleDriveSync] Cloud settings are newer or local is uninitialized. Restoring cloud settings to local...');
           
           if (cloudSettings.theme) {
@@ -576,11 +567,11 @@ export async function syncAllData(silent = false) {
           localStorage.setItem('sella_last_sync_bgimage', cloudSettings.backgroundImage || '');
           localStorage.setItem('sella_last_sync_custom', JSON.stringify(cloudSettings.customSettings || {}));
 
-        } else if (localTime > cloudTime) {
+        } else if (localTime > cloudTime || (localSettingsUpdatedAt && !cloudSettings)) {
           shouldUploadConfig = true;
         }
       } else {
-        // クラウドに設定ファイルが存在しない場合のみアップロード
+        // クラウドに設定ファイルが存在しない場合
         shouldUploadConfig = true;
       }
 
@@ -790,9 +781,7 @@ export async function syncAllData(silent = false) {
       }
     } else if (err.message !== 'AUTH_EXPIRED') {
       if (!silent) {
-        alert(`データの同期中にエラーが発生しました。
-
-詳細エラー: ${err.message}`);
+        alert(`データの同期中にエラーが発生しました。\n詳細エラー: ${err.message}`);
       }
     }
   } finally {
