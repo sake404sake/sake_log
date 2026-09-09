@@ -320,12 +320,14 @@ export function renderImagePreviewList() {
     </div>`
   ).join('');
 
+  // 🌟【シンタックスエラー修復箇所】閉じタグおよび閉じバックティックを正確に補完
   const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">
     <div class="add-more-content">
       <span class="add-icon">＋</span>
       <span class="add-text">追加</span>
     </div>
   </div>`;
+
   container.innerHTML = itemsHTML + addMoreHTML;
 }
 
