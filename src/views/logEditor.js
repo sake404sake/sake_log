@@ -212,6 +212,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
             console.error('Base64変換エラー:', e);
           }
         }
+        state.activeThumbnailIndex = 0;
         renderImagePreviewList();
       }
     }
@@ -260,6 +261,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
         console.error('バッチ画像ロードエラー:', e);
       }
     }
+    state.activeThumbnailIndex = 0;
     renderImagePreviewList();
   }
 }
@@ -311,21 +313,27 @@ export function renderImagePreviewList() {
     btnAnalyze.style.display = (hasApiKey() && state.uploadedImages.length > 0) ? 'inline-flex' : 'none';
   }
 
-  const itemsHTML = state.uploadedImages.map((img, idx) =>
-    `<div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
+  if (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined || state.activeThumbnailIndex >= state.uploadedImages.length) {
+    state.activeThumbnailIndex = 0;
+  }
+
+  const itemsHTML = state.uploadedImages.map((img, idx) => `
+    <div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
       <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
       <div class="preview-actions">
         <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
       </div>
-    </div>`
-  ).join('');
-
-  const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">
-    <div class="add-more-content">
-      <span class="add-icon">＋</span>
-      <span class="add-text">追加</span>
     </div>
-  </div>`;
+  `).join('');
+
+  const addMoreHTML = `
+    <div class="preview-item add-more-item" id="btn-trigger-upload">
+      <div class="add-more-content">
+        <span class="add-icon">＋</span>
+        <span class="add-text">追加</span>
+      </div>
+    </div>
+  `;
   container.innerHTML = itemsHTML + addMoreHTML;
 }
 
@@ -374,15 +382,12 @@ export function updateFieldRevertUI() {
   });
 }
 
-/**
- * 🌟 AIラベル解析の実行関数 (エディタ用)
- */
 export async function runAIAnalysis(targetImg) {
   if (!targetImg) {
     alert('解析する画像を選択してください。');
     return;
   }
-  
+
   if (!hasApiKey()) {
     alert('APIキーが設定されていません。設定画面でキーを登録してください。');
     return;
@@ -442,7 +447,10 @@ export async function runAIAnalysis(targetImg) {
 }
 
 /**
- * 🌟【完全修復版】画像ファイル選択時の処理
+ * 🌟【完全修復版】画像ファイル選択時の非同期処理
+ * 1枚目の写真に対する EXIF 日時抽出を非同期・非ブロッキング（fire-and-forget）とし、
+ * 万が一 EXIF デコードが遅延・例外・ハングした場合でも、1枚目の圧縮およびプレビュー登録処理が
+ * 絶対に100%停止しないように堅牢化。
  */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
@@ -450,22 +458,26 @@ export async function handleImageFiles(files) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
+    // HEIC/HEIF等で file.type が空文字の場合の代替拡張子判定フォールバック
     const isImage = (file.type && file.type.startsWith('image/')) || 
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
+    // 🌟 非ブロッキングEXIF撮影日時抽出 (fire-and-forget)
     if (i === 0 && state.uploadedImages.length === 0) {
-      try {
-        const extractedDate = await extractPhotoDate(file);
+      extractPhotoDate(file).then(extractedDate => {
         if (extractedDate) {
           const dateInput = document.getElementById('sake-date');
-          if (dateInput) dateInput.value = extractedDate;
+          if (dateInput && !dateInput.value) {
+            dateInput.value = extractedDate;
+          }
         }
-      } catch (err) {
-        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました (圧縮処理へ続行):', err);
-      }
+      }).catch(err => {
+        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップ:', err);
+      });
     }
 
+    // 🌟 画像の圧縮とプレビュー登録 (ブロックされることなく即時実行)
     try {
       const compressed = await compressImage(file);
       const previewUrl = URL.createObjectURL(compressed.blob);
@@ -481,7 +493,7 @@ export async function handleImageFiles(files) {
     }
   }
 
-  if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
+  if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined || state.activeThumbnailIndex >= state.uploadedImages.length)) {
     state.activeThumbnailIndex = 0;
   }
 
