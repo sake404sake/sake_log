@@ -18,20 +18,20 @@ export const state = {
   // ライトボックス用
   activeLightboxCtx: null,
 
-  // 詳細モーダル（スライドショー）用
+  // ★詳細モーダル（スライドショー）用
   detailImages: [],
   detailActiveIndex: 0,
 
   // 現在アクティブなビュー名
   currentViewName: 'logList',
 
-  // Googleアカウント同期ステータス
+  // ★Googleアカウント同期ステータス
   googleAccessToken: null,
-  googleUserSub: null, // 暗号化の鍵となる一意のID (sub)
+  googleUserSub: null, // 🌟追加：暗号化の鍵となる一意のID (sub)
   isGoogleLoggedIn: false,
   googleUserEmail: '',
-  googleUserName: '',
-  googleUserAvatar: '',
+  googleUserName: '', // 🌟追加: ログインユーザーの表示名
+  googleUserAvatar: '', // 🌟追加: ログインユーザーのプロフィール画像URL
   isSyncing: false,
   lastSyncedTime: ''
 };
