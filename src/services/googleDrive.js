@@ -2,15 +2,25 @@
 import { state } from '../store/state.js';
 import { openDB, getAllLogs, saveLog, permanentlyDeleteLog } from '../store/db.js';
 
+// GISのクライアントスクリプトとDrive APIのURL定義
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=drive&version=v3';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 
+// ==========================================================================
+// 🌟 Google Cloud OAuthクライアントID
+// ==========================================================================
 export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
 let tokenClient = null;
 
+// ==========================================================================
+// 🌟 Sella Settings Sync Protocol (V15 Specification) ゼロナレッジ暗号モジュール
+// ==========================================================================
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
+/**
+ * Google ID (sub) からメモリ上にAES-GCM 256bit鍵を動的導出する
+ */
 async function deriveKeyFromGoogleId(googleUserId) {
   const keyMaterial = await window.crypto.subtle.importKey(
     'raw',
@@ -29,11 +39,14 @@ async function deriveKeyFromGoogleId(googleUserId) {
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
-    false,
+    false, // 鍵のエクスポートを禁止（インメモリ保護）
     ['encrypt', 'decrypt']
   );
 }
 
+/**
+ * 平文のAPIキーを暗号化
+ */
 export async function encryptApiKey(plainApiKey, googleUserId) {
   if (!plainApiKey) return { cipherText: '', iv: '' };
   
@@ -53,6 +66,9 @@ export async function encryptApiKey(plainApiKey, googleUserId) {
   };
 }
 
+/**
+ * 暗号化されたAPIキーを復号
+ */
 export async function decryptApiKey(cipherTextBase64, ivBase64, googleUserId) {
   if (!cipherTextBase64 || !ivBase64) return '';
   
@@ -74,6 +90,7 @@ export async function decryptApiKey(cipherTextBase64, ivBase64, googleUserId) {
   }
 }
 
+// 同期から除外すべきローカル依存設定キー（デバイス特性依存）
 const EXCLUDED_LOCAL_KEYS = [
   'sella_font_scale',
   'sella_auto_fullscreen',
@@ -97,6 +114,9 @@ const EXCLUDED_LOCAL_KEYS = [
   'gemini_selected_model'
 ];
 
+/**
+ * localStorageから前方互換性のあるカスタム設定を抽出シリアライズ
+ */
 function serializeCustomSettings() {
   const custom = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -108,6 +128,9 @@ function serializeCustomSettings() {
   return custom;
 }
 
+/**
+ * カスタム設定オブジェクトをlocalStorageへ書き戻し
+ */
 function deserializeCustomSettings(customObj) {
   if (!customObj) return;
   Object.keys(customObj).forEach(key => {
@@ -117,6 +140,9 @@ function deserializeCustomSettings(customObj) {
   });
 }
 
+/**
+ * Google Identity Services のクライアントライブラリを動的ロード
+ */
 export function loadGoogleSDK() {
   return new Promise((resolve) => {
     if (window.google?.accounts?.oauth2) {
@@ -132,6 +158,9 @@ export function loadGoogleSDK() {
   });
 }
 
+/**
+ * Google OAuth の初期化
+ */
 export async function initGoogleAuth() {
   await loadGoogleSDK();
   const clientId = GOOGLE_CLIENT_ID;
@@ -194,6 +223,9 @@ export async function initGoogleAuth() {
   });
 }
 
+/**
+ * ログイン画面を呼び出し (ポップアップ表示)
+ */
 export function loginGoogle() {
   const triggerAuth = () => {
     if (!tokenClient) {
@@ -210,6 +242,9 @@ export function loginGoogle() {
   }
 }
 
+/**
+ * ログアウトを実行
+ */
 export function logoutGoogle(clearLocal = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (token) {
@@ -250,6 +285,9 @@ export function logoutGoogle(clearLocal = false) {
   }
 }
 
+/**
+ * トークンの1時間経過判定
+ */
 export function isTokenExpired() {
   const acquiredAt = localStorage.getItem('sella_google_token_acquired_at');
   if (!acquiredAt) return true;
@@ -259,6 +297,59 @@ export function isTokenExpired() {
   return timePassed >= oneHourMs;
 }
 
+/**
+ * 🌟【追加】完全に無音（サイレント）でトークンをバックグラウンド再取得・延命させる関数
+ */
+export function refreshTokenSilently() {
+  return new Promise((resolve, reject) => {
+    const doRequest = () => {
+      if (!tokenClient) {
+        reject(new Error('Token client not initialized'));
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        reject(new Error('Silent token refresh timeout'));
+      }, 8000);
+
+      const previousCallback = tokenClient.callback;
+      tokenClient.callback = async (response) => {
+        clearTimeout(timeout);
+        tokenClient.callback = previousCallback; // restore
+        if (response && response.access_token) {
+          state.googleAccessToken = response.access_token;
+          localStorage.setItem('sella_google_token', response.access_token);
+          localStorage.setItem('sella_google_token_acquired_at', Date.now().toString());
+          state.isGoogleLoggedIn = true;
+          localStorage.setItem('sella_google_logged_in', 'true');
+          console.log('[GoogleDrive] Silent token refresh succeeded.');
+          resolve(response.access_token);
+        } else {
+          reject(response?.error || new Error('Silent refresh failed'));
+        }
+      };
+
+      try {
+        // prompt: '' でダイアログを出さずにバックグラウンド認証
+        tokenClient.requestAccessToken({ prompt: '' });
+      } catch (err) {
+        clearTimeout(timeout);
+        tokenClient.callback = previousCallback;
+        reject(err);
+      }
+    };
+
+    if (!tokenClient) {
+      initGoogleAuth().then(doRequest).catch(reject);
+    } else {
+      doRequest();
+    }
+  });
+}
+
+/**
+ * セッション完全失効時のクリーンアップ処理
+ */
 function handleTokenExpired() {
   state.isGoogleLoggedIn = false;
   state.googleAccessToken = null;
@@ -273,27 +364,54 @@ function handleTokenExpired() {
   alert('Googleアカウントのセッション有効期限が切れました。安全な同期のため、お手数ですが再度ログインを行ってください。');
 }
 
+/**
+ * 🌟【強化版】Google Drive API 通信ヘルパー (自動サイレントリフレッシュ対応)
+ */
 async function driveFetch(url, options = {}) {
-  const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
+  let token = state.googleAccessToken || localStorage.getItem('sella_google_token');
+  
+  // トークンが無いがログインフラグがある場合、サイレントリフレッシュを試みる
+  if (!token && localStorage.getItem('sella_google_logged_in') === 'true') {
+    try {
+      token = await refreshTokenSilently();
+    } catch (e) {
+      console.warn('[GoogleDrive] Silent refresh failed on missing token:', e);
+    }
+  }
+
   if (!token) {
     throw new Error('Not authenticated with Google');
   }
 
+  // 1時間経過していた場合、サイレントリフレッシュを実行してトークンを自動延命
   if (isTokenExpired()) {
-    console.warn('[GoogleDrive] Token detected as expired before fetch request.');
-    handleTokenExpired();
-    throw new Error('AUTH_EXPIRED');
+    console.warn('[GoogleDrive] Token detected as expired. Performing silent token refresh...');
+    try {
+      token = await refreshTokenSilently();
+    } catch (err) {
+      console.error('[GoogleDrive] Silent refresh failed:', err);
+      handleTokenExpired();
+      throw new Error('AUTH_EXPIRED');
+    }
   }
 
   options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
 
   try {
-    const response = await fetch(url, options);
+    let response = await fetch(url, options);
     
+    // サーバーから 401（未認可）が返ってきた場合も1度だけサイレントリフレッシュして再試行
     if (response.status === 401) {
-      console.error('[GoogleDrive] Unauthorized (401). Invalid token session.');
-      handleTokenExpired();
-      throw new Error('AUTH_EXPIRED');
+      console.warn('[GoogleDrive] Received 401 Unauthorized. Attempting silent refresh retry...');
+      try {
+        token = await refreshTokenSilently();
+        options.headers['Authorization'] = `Bearer ${token}`;
+        response = await fetch(url, options);
+      } catch (refErr) {
+        console.error('[GoogleDrive] Silent refresh on 401 failed:', refErr);
+        handleTokenExpired();
+        throw new Error('AUTH_EXPIRED');
+      }
     }
     
     return response;
@@ -306,6 +424,9 @@ async function driveFetch(url, options = {}) {
   }
 }
 
+/**
+ * AppData内のファイル一覧を取得
+ */
 async function listCloudFiles() {
   const url = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,mimeType)';
   const res = await driveFetch(url);
@@ -317,6 +438,9 @@ async function listCloudFiles() {
   return data.files || [];
 }
 
+/**
+ * クラウドにJSONファイルを新規アップロード / 上書き保存する
+ */
 async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
   const metadata = { name: fileName };
   
@@ -357,6 +481,9 @@ async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
   return await res.json();
 }
 
+/**
+ * クラウドのJSONファイルをダウンロード
+ */
 async function downloadJsonFile(fileId) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   const res = await driveFetch(url);
@@ -367,6 +494,9 @@ async function downloadJsonFile(fileId) {
   return await res.json();
 }
 
+/**
+ * クラウドにバイナリ画像Blobをアップロードする
+ */
 async function uploadImageFile(imgId, blob) {
   const fileName = `sella_img_${imgId}.bin`;
   const metadata = { name: fileName, parents: ['appDataFolder'] };
@@ -398,6 +528,9 @@ async function uploadImageFile(imgId, blob) {
   return await res.json();
 }
 
+/**
+ * クラウドからバイナリ画像ファイルをダウンロードしてIndexedDBに同期
+ */
 async function downloadImageFile(fileId, imgId) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   const res = await driveFetch(url);
@@ -417,6 +550,9 @@ async function downloadImageFile(fileId, imgId) {
   });
 }
 
+/**
+ * クラウド上のファイルを物理削除
+ */
 async function deleteCloudFile(fileId) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}`;
   const res = await driveFetch(url, { method: 'DELETE' });
@@ -426,6 +562,9 @@ async function deleteCloudFile(fileId) {
   }
 }
 
+/**
+ * 🌟 双方向マージ・クラウド同期エンジン (設定・モデル・暗号キー・ログ・画像全対応)
+ */
 export async function syncAllData(silent = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) return;
@@ -454,13 +593,14 @@ export async function syncAllData(silent = false) {
     const isSettingsChanged = 
       lastSavedTheme === null ||
       lastSavedApiKey === null ||
+      lastSavedModel === null ||
       currentTheme !== lastSavedTheme || 
       currentApiKey !== lastSavedApiKey || 
       currentModel !== lastSavedModel ||
       currentBgImage !== lastSavedBgImage ||
       (lastSavedCustomStr !== null && JSON.stringify(currentCustom) !== lastSavedCustomStr);
 
-    if (isSettingsChanged && (currentApiKey || currentTheme !== 'dark' || localSettingsUpdatedAt)) {
+    if (isSettingsChanged && (currentApiKey || currentModel || currentTheme !== 'dark' || localSettingsUpdatedAt)) {
       localSettingsUpdatedAt = new Date().toISOString();
       localStorage.setItem('sella_settings_updated_at', localSettingsUpdatedAt);
       
@@ -476,6 +616,9 @@ export async function syncAllData(silent = false) {
     const configFile = cloudFiles.find(f => f.name === 'sella_config.json');
     const cloudImageFiles = cloudFiles.filter(f => f.name.startsWith('sella_img_'));
 
+    // ==========================================================================
+    // 🌟 ゼロナレッジ暗号化 (Sella Settings Sync Protocol V15) 設定同期セクション
+    // ==========================================================================
     const googleUserId = state.googleUserSub || localStorage.getItem('sella_google_user_sub') || localStorage.getItem('sella_google_sub');
 
     if (googleUserId) {
@@ -508,9 +651,16 @@ export async function syncAllData(silent = false) {
             const themeSelect = document.getElementById('theme-select');
             if (themeSelect) themeSelect.value = cloudSettings.theme;
           }
+
+          // 🌟【修復】モデル選択情報を復元し、DOM画面のセレクトボックスも即時更新！
           if (cloudSettings.selectedModel) {
             localStorage.setItem('gemini_selected_model', cloudSettings.selectedModel);
+            const globalModelSelect = document.getElementById('select-gemini-model');
+            const modalModelSelect = document.getElementById('modal-model-select');
+            if (globalModelSelect) globalModelSelect.value = cloudSettings.selectedModel;
+            if (modalModelSelect) modalModelSelect.value = cloudSettings.selectedModel;
           }
+
           if (cloudSettings.backgroundImage !== undefined) {
             localStorage.setItem('sella_bg_image', cloudSettings.backgroundImage || '');
           }
@@ -564,6 +714,10 @@ export async function syncAllData(silent = false) {
     } else {
       console.warn('[GoogleDriveSync] Google User sub (ID) not found. Settings sync skipped for security.');
     }
+
+    // ==========================================================================
+    // 📊 お酒ログ & 画像データ 同期セクション (sella_index.json)
+    // ==========================================================================
 
     const db = await openDB();
     const localLogs = await new Promise((res) => {
