@@ -362,28 +362,28 @@ async function driveFetch(url, options = {}) {
     throw new Error('Not authenticated with Google');
   }
 
-  options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
-
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウト
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
   options.signal = controller.signal;
 
   try {
     const response = await fetch(url, options);
     clearTimeout(timeoutId);
-
+    
     if (response.status === 401) {
       console.warn('[GoogleDrive] 401 Unauthorized. Attempting silent refresh...');
       await refreshTokenSilently();
       const newToken = state.googleAccessToken || localStorage.getItem('sella_google_token');
       if (newToken && newToken !== token) {
+        const c2 = new AbortController();
+        const t2 = setTimeout(() => c2.abort(), 15000);
         options.headers['Authorization'] = `Bearer ${newToken}`;
-        const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), 15000);
-        options.signal = controller2.signal;
-        const retryRes = await fetch(url, options);
-        clearTimeout(timeoutId2);
-        return retryRes;
+        options.signal = c2.signal;
+        const res2 = await fetch(url, options);
+        clearTimeout(t2);
+        return res2;
       }
     }
 
@@ -391,8 +391,8 @@ async function driveFetch(url, options = {}) {
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      console.warn('[GoogleDrive] Request timed out after 15s.');
-      throw new Error('NETWORK_TIMEOUT');
+      console.warn('[GoogleDrive] Request timed out after 15s');
+      throw new Error('TIMEOUT_ERROR');
     }
     if (err instanceof TypeError || err.message?.includes('fetch')) {
       console.warn('[GoogleDrive] Network offline. Preserving login state.');
