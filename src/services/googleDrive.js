@@ -35,6 +35,7 @@ async function deriveKeyFromGoogleId(googleUserId) {
 
 export async function encryptApiKey(plainApiKey, googleUserId) {
   if (!plainApiKey) return { cipherText: '', iv: '' };
+  
   const key = await deriveKeyFromGoogleId(googleUserId);
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(plainApiKey);
@@ -53,6 +54,7 @@ export async function encryptApiKey(plainApiKey, googleUserId) {
 
 export async function decryptApiKey(cipherTextBase64, ivBase64, googleUserId) {
   if (!cipherTextBase64 || !ivBase64) return '';
+  
   try {
     const key = await deriveKeyFromGoogleId(googleUserId);
     const cipherBuffer = new Uint8Array(atob(cipherTextBase64).split('').map(c => c.charCodeAt(0)));
@@ -66,7 +68,7 @@ export async function decryptApiKey(cipherTextBase64, ivBase64, googleUserId) {
 
     return new TextDecoder().decode(decryptedBuffer);
   } catch (err) {
-    console.error('[SyncCrypto] Decryption failed. Incorrect credentials or modified payload.', err);
+    console.error('[SyncCrypto] Decryption failed:', err);
     return '';
   }
 }
@@ -133,7 +135,7 @@ export async function initGoogleAuth() {
   await loadGoogleSDK();
   const clientId = GOOGLE_CLIENT_ID;
   if (!clientId || clientId.includes('YOUR_CLIENT_ID_HERE')) {
-    console.warn('[GoogleDrive] Client ID is not configured. Google Drive Sync is disabled.');
+    console.warn('[GoogleDrive] Client ID is not configured.');
     return;
   }
 
@@ -209,21 +211,20 @@ export function loginGoogle() {
 }
 
 /**
- * 🌟 サイレントリフレッシュ (認証自動延長)
- * ポップアップを出さずにバックグラウンドで新しいアクセストークンを取得
+ * サイレントでトークンをリフレッシュ（バックグラウンド延命）
  */
 export function refreshTokenSilently() {
   return new Promise((resolve) => {
     if (!tokenClient) {
-      resolve(false);
-      return;
-    }
-    try {
+      initGoogleAuth().then(() => {
+        if (tokenClient) {
+          tokenClient.requestAccessToken({ prompt: '' });
+        }
+        resolve();
+      }).catch(() => resolve());
+    } else {
       tokenClient.requestAccessToken({ prompt: '' });
-      resolve(true);
-    } catch (e) {
-      console.warn('[GoogleDrive] Silent refresh failed:', e);
-      resolve(false);
+      resolve();
     }
   });
 }
@@ -249,12 +250,18 @@ export function logoutGoogle(clearLocal = false) {
   localStorage.removeItem('sella_google_user_avatar');
   localStorage.removeItem('sella_google_user_sub');
   localStorage.removeItem('sella_google_sub');
+  localStorage.removeItem('sella_settings_updated_at');
+  localStorage.removeItem('sella_last_sync_theme');
+  localStorage.removeItem('sella_last_sync_apikey');
+  localStorage.removeItem('sella_last_sync_model');
+  localStorage.removeItem('sella_last_sync_bgimage');
+  localStorage.removeItem('sella_last_sync_custom');
 
   document.dispatchEvent(new CustomEvent('google-logout-success'));
 
   if (clearLocal) {
     indexedDB.deleteDatabase('SellaDB');
-    alert('ローカルデータをすべて消去してログアウトしました。');
+    alert('ローカルデータをすべて消去してログアウトしました。アプリを再ロードします。');
     window.location.reload();
   } else {
     alert('ログアウトしました。お酒データはローカルに保持されています。');
@@ -268,55 +275,45 @@ export function isTokenExpired() {
   
   const oneHourMs = 3600 * 1000;
   const timePassed = Date.now() - parseInt(acquiredAt, 10);
-  return timePassed >= (oneHourMs - 5 * 60 * 1000); // 期限切れ5分前に安全に検知
+  return timePassed >= oneHourMs;
 }
 
 /**
- * トークン有効期限切れ時の安全なリカバリ
- * 勝手にログイン情報を消去せず、サイレントリフレッシュまたは継続試行
+ * 🌟【修復】1時間経過しても強制ログアウトせず、バックグラウンドでの無音再取得を試みる
  */
-async function handleTokenExpired() {
-  console.warn('[GoogleDrive] Token expired. Attempting silent refresh...');
-  const refreshed = await refreshTokenSilently();
-  if (!refreshed) {
-    console.warn('[GoogleDrive] Silent refresh failed. User needs manual re-auth.');
-  }
-}
-
 async function driveFetch(url, options = {}) {
   let token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   
-  if (!token) {
-    throw new Error('Not authenticated with Google');
+  if (isTokenExpired()) {
+    console.log('[GoogleDrive] Token expired. Attempting silent refresh...');
+    await refreshTokenSilently();
+    // 給与待ちまたは次回リクエストにトークンを渡す
+    token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   }
 
-  if (isTokenExpired()) {
-    console.warn('[GoogleDrive] Token is near expiry, attempting refresh before fetch.');
-    await handleTokenExpired();
-    token = state.googleAccessToken || localStorage.getItem('sella_google_token');
+  if (!token) {
+    throw new Error('Not authenticated with Google');
   }
 
   options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
 
   try {
-    let response = await fetch(url, options);
-
+    const response = await fetch(url, options);
+    
     if (response.status === 401) {
-      console.warn('[GoogleDrive] Received 401 Unauthorized. Retrying with refresh...');
-      await handleTokenExpired();
+      console.warn('[GoogleDrive] 401 Unauthorized. Attempting silent refresh...');
+      await refreshTokenSilently();
       const newToken = state.googleAccessToken || localStorage.getItem('sella_google_token');
       if (newToken && newToken !== token) {
         options.headers['Authorization'] = `Bearer ${newToken}`;
-        response = await fetch(url, options);
-      } else {
-        throw new Error('AUTH_EXPIRED');
+        return await fetch(url, options);
       }
     }
-
+    
     return response;
   } catch (err) {
     if (err instanceof TypeError || err.message?.includes('fetch')) {
-      console.warn('[GoogleDrive] Network error detected. App is likely offline. Login state is preserved.');
+      console.warn('[GoogleDrive] Network offline. Preserving login state.');
       throw new Error('OFFLINE_NETWORK_ERROR');
     }
     throw err;
@@ -336,30 +333,15 @@ async function listCloudFiles() {
 
 async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
   const metadata = { name: fileName };
-  
-  // 🌟 上書き (PATCH) の際は parents を含めない (Google Drive v3 仕様準拠)
   if (!existingFileId) {
     metadata.parents = ['appDataFolder'];
   }
 
   const boundary = 'sella_multipart_boundary';
-  const delimiter = `
---${boundary}
-`;
-  const close_delim = `
---${boundary}--`;
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const close_delim = `\r\n--${boundary}--`;
 
-  const multipartBody = delimiter + 
-    'Content-Type: application/json; charset=UTF-8
-
-' + 
-    JSON.stringify(metadata) + 
-    delimiter + 
-    'Content-Type: application/json
-
-' + 
-    JSON.stringify(dataObj) + 
-    close_delim;
+  const multipartBody = delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata) + delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(dataObj) + close_delim;
 
   let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
   let method = 'POST';
@@ -396,22 +378,11 @@ async function uploadImageFile(imgId, blob) {
   const fileName = `sella_img_${imgId}.bin`;
   const metadata = { name: fileName, parents: ['appDataFolder'] };
   const boundary = 'sella_img_multipart_boundary';
-  const delimiter = `
---${boundary}
-`;
-  const close_delim = `
---${boundary}--`;
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const close_delim = `\r\n--${boundary}--`;
 
   const arrayBuffer = await blob.arrayBuffer();
-  const headersPart = delimiter + 
-    'Content-Type: application/json; charset=UTF-8
-
-' + 
-    JSON.stringify(metadata) + 
-    delimiter + 
-    `Content-Type: ${blob.type || 'image/jpeg'}
-
-`;
+  const headersPart = delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata) + delimiter + `Content-Type: ${blob.type || 'image/jpeg'}\r\n\r\n`;
   const footerPart = close_delim;
 
   const bodyBlob = new Blob([
@@ -460,7 +431,7 @@ async function deleteCloudFile(fileId) {
 
 export async function syncAllData(silent = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
-  if (!token) return;
+  if (!token && !localStorage.getItem('sella_google_logged_in')) return;
 
   if (state.isSyncing) return;
   state.isSyncing = true;
@@ -511,14 +482,14 @@ export async function syncAllData(silent = false) {
     const googleUserId = state.googleUserSub || localStorage.getItem('sella_google_user_sub') || localStorage.getItem('sella_google_sub');
 
     if (googleUserId) {
-      console.log('[GoogleDriveSync] Initializing settings sync with Zero-Knowledge encryption...');
+      console.log('[GoogleDriveSync] Initializing settings sync...');
 
       let cloudSettings = null;
       if (configFile) {
         try {
           cloudSettings = await downloadJsonFile(configFile.id);
         } catch (err) {
-          console.error('[GoogleDriveSync] Failed to parse sella_config.json, recreating...', err);
+          console.error('[GoogleDriveSync] Failed to parse sella_config.json:', err);
         }
       }
 
@@ -542,10 +513,10 @@ export async function syncAllData(silent = false) {
           }
           if (cloudSettings.selectedModel) {
             localStorage.setItem('gemini_selected_model', cloudSettings.selectedModel);
-            const modelSelect = document.getElementById('select-gemini-model');
-            if (modelSelect) modelSelect.value = cloudSettings.selectedModel;
-            const modalModelSelect = document.getElementById('modal-model-select');
-            if (modalModelSelect) modalModelSelect.value = cloudSettings.selectedModel;
+            const globalSelect = document.getElementById('select-gemini-model');
+            const modalSelect = document.getElementById('modal-model-select');
+            if (globalSelect) globalSelect.value = cloudSettings.selectedModel;
+            if (modalSelect) modalSelect.value = cloudSettings.selectedModel;
           }
           if (cloudSettings.backgroundImage !== undefined) {
             localStorage.setItem('sella_bg_image', cloudSettings.backgroundImage || '');
@@ -581,7 +552,7 @@ export async function syncAllData(silent = false) {
       }
 
       if (shouldUploadConfig) {
-        console.log('[GoogleDriveSync] Local settings are newer. Encrypting and uploading...');
+        console.log('[GoogleDriveSync] Uploading local settings...');
         const encrypted = await encryptApiKey(currentApiKey, googleUserId);
         
         const configPayload = {
@@ -595,10 +566,7 @@ export async function syncAllData(silent = false) {
         };
 
         await uploadJsonFile('sella_config.json', configPayload, configFile?.id);
-        console.log('[GoogleDriveSync] Settings encrypted and synced successfully.');
       }
-    } else {
-      console.warn('[GoogleDriveSync] Google User sub (ID) not found. Settings sync skipped for security.');
     }
 
     const db = await openDB();
@@ -614,7 +582,7 @@ export async function syncAllData(silent = false) {
       try {
         cloudIndex = await downloadJsonFile(indexFile.id);
       } catch (err) {
-        console.error('[GoogleDriveSync] Failed to parse cloud index, recreating...', err);
+        console.error('[GoogleDriveSync] Failed to parse index file:', err);
       }
     }
 
@@ -624,7 +592,6 @@ export async function syncAllData(silent = false) {
 
     const allIds = new Set([...localLogsMap.keys(), ...cloudLogsMap.keys()]);
 
-    let hasLocalLogsChanges = false;
     let hasCloudLogsChanges = false;
 
     for (const id of allIds) {
@@ -637,7 +604,6 @@ export async function syncAllData(silent = false) {
 
         if (localTime > cloudTime) {
           mergedLogsMap.set(id, local);
-          hasLocalLogsChanges = true;
         } else if (cloudTime > localTime) {
           mergedLogsMap.set(id, cloud);
           hasCloudLogsChanges = true;
@@ -646,7 +612,6 @@ export async function syncAllData(silent = false) {
         }
       } else if (local) {
         mergedLogsMap.set(id, local);
-        hasLocalLogsChanges = true;
       } else if (cloud) {
         mergedLogsMap.set(id, cloud);
         hasCloudLogsChanges = true;
@@ -654,7 +619,6 @@ export async function syncAllData(silent = false) {
     }
 
     if (hasCloudLogsChanges) {
-      console.log('[GoogleDriveSync] Applying cloud updates to Local DB...');
       const tx = db.transaction(['logs'], 'readwrite');
       const logStore = tx.objectStore('logs');
       for (const log of mergedLogsMap.values()) {
@@ -665,7 +629,6 @@ export async function syncAllData(silent = false) {
       }
     }
 
-    console.log('[GoogleDriveSync] Auditing and syncing image binaries...');
     const requiredImageIds = new Set();
     for (const log of mergedLogsMap.values()) {
       if (log.isDeleted) continue;
@@ -698,7 +661,6 @@ export async function syncAllData(silent = false) {
     }
 
     if (uploadTargets.length > 0) {
-      console.log(`[GoogleDriveSync] Uploading ${uploadTargets.length} images...`);
       await Promise.all(uploadTargets.map(async (imgId) => {
         const blobRecord = await new Promise((res) => {
           const tx = db.transaction(['images'], 'readonly');
@@ -720,24 +682,9 @@ export async function syncAllData(silent = false) {
     }
 
     if (downloadTargets.length > 0) {
-      console.log(`[GoogleDriveSync] Downloading ${downloadTargets.length} images...`);
       await Promise.all(downloadTargets.map(async (imgId) => {
         const cloudFile = cloudImageFilesMap.get(imgId);
         await downloadImageFile(cloudFile.id, imgId);
-      }));
-    }
-
-    const deleteTargets = [];
-    for (const [imgId, cloudFile] of cloudImageFilesMap.entries()) {
-      if (!requiredImageIds.has(imgId)) {
-        deleteTargets.push(cloudFile);
-      }
-    }
-
-    if (deleteTargets.length > 0) {
-      console.log(`[GoogleDriveSync] Purging ${deleteTargets.length} unused cloud images...`);
-      await Promise.all(deleteTargets.map(async (cloudFile) => {
-        await deleteCloudFile(cloudFile.id);
       }));
     }
 
@@ -747,40 +694,18 @@ export async function syncAllData(silent = false) {
     };
     await uploadJsonFile('sella_index.json', updatedIndex, indexFile?.id);
 
-    const EXPIRE_LIMIT_MS = 30 * 24 * 60 * 60 * 1000;
-    const nowTime = Date.now();
-    for (const log of mergedLogsMap.values()) {
-      if (log.isDeleted && log.deletedAt) {
-        const deletedTime = new Date(log.deletedAt).getTime();
-        if (nowTime - deletedTime > EXPIRE_LIMIT_MS) {
-          console.log(`[GoogleDriveSync] Expired logic delete: Permanently deleting ${log.id}...`);
-          await permanentlyDeleteLog(log.id);
-          if (Array.isArray(log.imageIds)) {
-            for (const imgId of log.imageIds) {
-              const cloudImg = cloudImageFilesMap.get(Number(imgId));
-              if (cloudImg) await deleteCloudFile(cloudImg.id);
-            }
-          }
-        }
-      }
-    }
-
     const timeStr = new Date().toLocaleTimeString();
     localStorage.setItem('sella_last_synced_time', timeStr);
     state.lastSyncedTime = timeStr;
 
-    console.log('[GoogleDriveSync] Sync session completed successfully.');
     if (!silent) alert('Googleアカウント上のデータと正常に同期されました！');
 
     document.dispatchEvent(new CustomEvent('sync-completed'));
 
   } catch (err) {
-    console.error('[GoogleDriveSync] Critical error during synchronization:', err);
-    if (err.message === 'OFFLINE_NETWORK_ERROR') {
-      if (!silent) alert('現在オフラインです。ネットワーク接続が復旧した際に再度自動同期されます。');
-    } else if (err.message !== 'AUTH_EXPIRED') {
-      if (!silent) alert(`データの同期中にエラーが発生しました。
-詳細エラー: ${err.message}`);
+    console.error('[GoogleDriveSync] Error during sync:', err);
+    if (!silent && err.message !== 'OFFLINE_NETWORK_ERROR') {
+      alert(`データの同期中にエラーが発生しました: ${err.message}`);
     }
   } finally {
     state.isSyncing = false;
@@ -790,22 +715,18 @@ export async function syncAllData(silent = false) {
 
 export async function destroyAllSellaData() {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
-
   indexedDB.deleteDatabase('SellaDB');
-
   if (token) {
     try {
       const files = await listCloudFiles();
       for (const f of files) {
-        console.log(`[GoogleDrive] Purging cloud file on destroy: ${f.name}`);
         await deleteCloudFile(f.id);
       }
     } catch (err) {
       console.error('[GoogleDrive] Failed to clean cloud data:', err);
     }
   }
-
   localStorage.clear();
-  alert('すべての酒ログデータ、画像、およびクラウドバックアップを完全に消去しました。システムを初期状態から再起動します。');
+  alert('すべてのデータを削除しました。');
   window.location.reload();
 }
