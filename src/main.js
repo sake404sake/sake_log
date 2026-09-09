@@ -10,7 +10,6 @@ import { openLightbox, closeLightbox, triggerLightboxNext, triggerLightboxPrev }
 import { state, base64ToBlob, blobToBase64 } from './store/state.js';
 import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth } from './services/googleDrive.js';
 
-// --- CSS動的注入 ---
 function ensureSpinnerStyles() {
   if (document.getElementById('sella-spinner-style')) return;
   const style = document.createElement('style');
@@ -52,7 +51,6 @@ function ensureSpinnerStyles() {
   document.head.appendChild(style);
 }
 
-// --- テーマ適用 ---
 export function setTheme(themeName) {
   const validThemes = ['dark', 'light', 'sakura', 'gaming', 'japan-modern'];
   let targetTheme = themeName;
@@ -80,9 +78,12 @@ export async function updateModelDropdown(forceRefresh = false) {
   if (selectEl) {
     await populateModelDropdown(selectEl, forceRefresh);
   }
+  const modalSelectEl = document.getElementById('modal-model-select');
+  if (modalSelectEl) {
+    await populateModelDropdown(modalSelectEl, forceRefresh);
+  }
 }
 
-// --- SPAシンプルルーター ---
 const views = {
   dashboard: renderLogListView,
   loglist: renderLogListView,
@@ -98,23 +99,17 @@ export async function navigateTo(viewName) {
   if (!appContainer) return;
 
   const key = viewName ? viewName.toLowerCase() : 'dashboard';
+  const renderFn = views[key] || renderLogListView;
+
   state.currentViewName = key;
-  const renderView = views[key] || views.dashboard;
 
   try {
-    const content = await renderView();
-    appContainer.innerHTML = content;
-
-    if (key === 'batchimport') {
-      renderBatchGroupsUI();
-    }
+    const html = await renderFn();
+    appContainer.innerHTML = html;
 
     if (key === 'settings' || key === 'setting') {
-      const themeSelect = document.getElementById('theme-select');
-      if (themeSelect) {
-        themeSelect.value = localStorage.getItem('sella_theme') || 'dark';
-      }
-      updateModelDropdown();
+      await updateModelDropdown();
+      updateSidebarProfile();
     }
   } catch (err) {
     console.error('View Render Error:', err);
@@ -138,10 +133,6 @@ function closeSidebar() {
   sidebar?.classList.remove('open');
   overlay?.classList.remove('active');
 }
-
-// ==========================================================================
-// ★一括登録データの IndexedDB 自動保存＆自動復旧システム
-// ==========================================================================
 
 export async function syncBatchStateToDB() {
   try {
@@ -289,7 +280,6 @@ export async function loadBatchStateFromDB() {
   }
 }
 
-// --- アプリケーション起動とグローバルイベント委譲 ---
 function initApp() {
   ensureSpinnerStyles();
   initGoogleAuth();
@@ -314,23 +304,49 @@ function initApp() {
   });
 
   document.addEventListener('change', async (e) => {
+    if (e.target && e.target.id === 'theme-select') {
+      setTheme(e.target.value);
+      if (state.isGoogleLoggedIn) {
+        await syncAllData(true);
+      }
+      return;
+    }
+
+    if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
+      setSavedModel(e.target.value);
+      const globalSelect = document.getElementById('select-gemini-model');
+      const modalSelect = document.getElementById('modal-model-select');
+      if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
+      if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
+      if (state.isGoogleLoggedIn) {
+        await syncAllData(true);
+      }
+      return;
+    }
+
     if (e.target && e.target.id === 'file-input') {
       const files = e.target.files;
       if (files && files.length > 0) {
         await handleImageFiles(files);
       }
       e.target.value = '';
+      return;
     }
+
     if (e.target && e.target.id === 'batch-file-input') {
       const files = e.target.files;
       if (files && files.length > 0) {
         await processFilesForBatch(files, true);
       }
       e.target.value = '';
+      return;
+    }
+
+    if (TRACKED_FIELDS.includes(e.target.id)) {
+      updateFieldRevertUI();
     }
   });
 
-  // ドラッグ＆ドロップ UI
   document.addEventListener('dragover', (e) => {
     e.preventDefault();
     const card = e.target.closest('.batch-group-card');
@@ -429,7 +445,6 @@ function initApp() {
     await syncBatchStateToDB();
   });
 
-  // クリックイベントのグローバル一括委譲
   document.addEventListener('click', async (e) => {
     if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
       e.stopPropagation();
@@ -439,7 +454,6 @@ function initApp() {
       return;
     }
 
-    // 🌟 改善: APIキーの保存ボタンの処理を追加
     if (e.target && e.target.id === 'btn-save-api-key') {
       const apiKeyEl = document.getElementById('gemini-api-key');
       const apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
@@ -461,12 +475,11 @@ function initApp() {
       await updateModelDropdown(true);
 
       if (state.isGoogleLoggedIn) {
-        await syncAllData(true); // 変更検知されて sella_config.json へ暗号化同期が走る
+        await syncAllData(true);
       }
       return;
     }
 
-    // 🌟 改善: 設定画面のモデルリスト再取得処理を追加
     if (e.target && e.target.id === 'btn-reload-models') {
       const originalText = e.target.innerText;
       e.target.innerText = '取得中...';
@@ -484,7 +497,6 @@ function initApp() {
       return;
     }
 
-    // 🌟 改善: エディタモーダル内のモデルリスト更新 (↺) の処理を追加
     if (e.target && e.target.id === 'btn-reload-modal-models') {
       const modalModelSelect = document.getElementById('modal-model-select');
       if (modalModelSelect) {
@@ -494,7 +506,6 @@ function initApp() {
       return;
     }
 
-    // Google ログイン/ログアウト/手動同期処理
     if (e.target && e.target.id === 'btn-google-login') {
       loginGoogle();
       return;
@@ -519,7 +530,6 @@ function initApp() {
       return;
     }
 
-    // ライトボックス
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]') || (e.target.tagName === 'IMG' && !e.target.closest('button, nav, header, aside, .lightbox-overlay, #sidebar') && (e.target.closest('#app') || e.target.closest('#detail-modal-overlay')) ? e.target : null);
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;
@@ -658,7 +668,6 @@ function initApp() {
       return;
     }
 
-    // --- 一括まとめて保存処理 ---
     const saveAllBtn = e.target.closest('#btn-save-all-batches');
     if (saveAllBtn) {
       if (state.batchGroups.length === 0) {
@@ -739,7 +748,6 @@ function initApp() {
       return;
     }
 
-    // 一括AI解析実行
     const batchAnalyzeBtn = e.target.closest('.btn-batch-analyze');
     if (batchAnalyzeBtn) {
       e.stopPropagation();
@@ -801,7 +809,6 @@ function initApp() {
       return;
     }
 
-    // 分割
     const batchSplitBtn = e.target.closest('.btn-batch-split');
     if (batchSplitBtn) {
       e.stopPropagation();
@@ -820,7 +827,6 @@ function initApp() {
       return;
     }
 
-    // 削除
     const batchDeleteGroupBtn = e.target.closest('.btn-batch-delete-group');
     if (batchDeleteGroupBtn) {
       e.stopPropagation();
@@ -835,7 +841,6 @@ function initApp() {
       return;
     }
 
-    // エディタ
     const batchOpenEditorBtn = e.target.closest('.btn-batch-open-editor');
     if (batchOpenEditorBtn) {
       e.stopPropagation();
@@ -857,7 +862,6 @@ function initApp() {
       return;
     }
 
-    // ログ詳細
     const rowItem = e.target.closest('[data-action="open-detail"]');
     if (rowItem) {
       const id = rowItem.dataset.id;
@@ -870,7 +874,6 @@ function initApp() {
       return;
     }
 
-    // スライドショーコントロール
     const detailArrow = e.target.closest('.carousel-btn');
     if (detailArrow && (detailArrow.id === 'btn-detail-prev' || detailArrow.id === 'btn-detail-next')) {
       e.stopPropagation();
@@ -1061,7 +1064,6 @@ function initApp() {
     }
   });
 
-  // input/changeイベント
   document.addEventListener('input', async (e) => {
     if (TRACKED_FIELDS.includes(e.target.id)) {
       updateFieldRevertUI();
@@ -1096,33 +1098,6 @@ function initApp() {
     }
   });
 
-  document.addEventListener('change', async (e) => {
-    if (e.target && e.target.id === 'theme-select') {
-      setTheme(e.target.value);
-      localStorage.setItem('sella_settings_updated_at', new Date().toISOString());
-      if (state.isGoogleLoggedIn) {
-        await syncAllData(true);
-      }
-      return;
-    }
-    if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
-      setSavedModel(e.target.value);
-      const globalSelect = document.getElementById('select-gemini-model');
-      const modalSelect = document.getElementById('modal-model-select');
-      if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
-      if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
-      
-      localStorage.setItem('sella_settings_updated_at', new Date().toISOString());
-      if (state.isGoogleLoggedIn) {
-        await syncAllData(true);
-      }
-      return;
-    }
-    if (TRACKED_FIELDS.includes(e.target.id)) {
-      updateFieldRevertUI();
-    }
-  });
-
   document.addEventListener('google-login-success', () => {
     if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
       navigateTo('settings');
@@ -1148,14 +1123,14 @@ function initApp() {
     if (lbl) {
       lbl.innerText = localStorage.getItem('sella_last_synced_time') || '未同期';
     }
+    if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
+      updateModelDropdown();
+    }
     if (state.currentViewName === 'loglist' || state.currentViewName === 'dashboard' || state.currentViewName === 'log-list') {
       navigateTo('logList');
     }
   });
 
-  // ==========================================================================
-  // PointerEventsシステム (ドラッグ並び替え)
-  // ==========================================================================
   let pointerStartX = 0;
   let pointerStartY = 0;
   let pointerStartTime = 0;
@@ -1545,7 +1520,6 @@ function initApp() {
   });
 }
 
-// 🌟 全画面表示トグル
 const fullscreenBtn = document.getElementById('btn-fullscreen');
 if (fullscreenBtn) {
   fullscreenBtn.addEventListener('click', () => {
@@ -1589,22 +1563,6 @@ document.addEventListener('fullscreenchange', () => {
     }
   }
 });
-
-const profileEl = document.getElementById('sidebar-user-profile');
-if (profileEl) {
-  profileEl.addEventListener('click', () => {
-    navigateTo('settings');
-  });
-}
-
-document.addEventListener('google-login-success', () => { updateSidebarProfile(); });
-document.addEventListener('google-logout-success', () => { updateSidebarProfile(); });
-document.addEventListener('sync-completed', () => { updateSidebarProfile(); });
-
-updateSidebarProfile();
-
-document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
-overlay?.addEventListener('click', closeSidebar);
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
