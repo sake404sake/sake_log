@@ -27,7 +27,7 @@ export const state = {
 
   // Googleアカウント同期ステータス
   googleAccessToken: null,
-  googleUserSub: null, // 暗号化の鍵となる一意のID (sub)
+  googleUserSub: null,
   isGoogleLoggedIn: false,
   googleUserEmail: '',
   googleUserName: '',
@@ -36,7 +36,6 @@ export const state = {
   lastSyncedTime: ''
 };
 
-// 状態リセット用ヘルパー
 export function resetEditorState() {
   state.uploadedImages = [];
   state.activeThumbnailIndex = 0;
@@ -45,7 +44,6 @@ export function resetEditorState() {
   state.currentBatchGroupIndex = null;
 }
 
-// Base64-Blob相互変換ユーティリティ
 export function base64ToBlob(base64, mimeType = 'image/jpeg') {
   if (!base64) return null;
   try {
