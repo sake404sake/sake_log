@@ -1,3 +1,4 @@
+// src/views/logEditor.js
 import { getAllTags, getLogById } from '../store/db.js';
 import { getApiKey, getSavedModel, populateModelDropdown, hasApiKey, analyzeLabelImage } from '../services/gemini.js';
 import { state, resetEditorState, blobToBase64, base64ToBlob } from '../store/state.js';
@@ -223,7 +224,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
     setVal('sake-region', initialBatchGroup.region || '');
     setVal('sake-type', initialBatchGroup.type || '');
     setVal('sake-abv', initialBatchGroup.abv || '');
-    if (initialBatchGroup[0] && initialBatchGroup[0].date) {
+    if (initialBatchGroup && initialBatchGroup[0] && initialBatchGroup[0].date) {
       const d = initialBatchGroup[0].date instanceof Date ? initialBatchGroup[0].date : new Date(initialBatchGroup[0].date);
       setVal('sake-date', !isNaN(d) ? d.toISOString().split('T')[0] : '');
     }
@@ -437,6 +438,11 @@ export async function runAIAnalysis(targetImg) {
   }
 }
 
+/**
+ * 🌟【完全修復版】画像ファイル選択時の処理
+ * 選択されたすべての画像ファイルを1枚も漏らさず確実に配列に追加。
+ * EXIF処理は画像の圧縮・追加完了後にバックグラウンドで安全に実行。
+ */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
 
@@ -447,8 +453,37 @@ export async function handleImageFiles(files) {
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 🌟 EXIF日付抽出を非ブロッキング非同期で発火 (圧縮・プレビュー追加を絶対待機させない)
-    if (i === 0 && state.uploadedImages.length === 0) {
+    let blob = null;
+    let base64 = '';
+    let mimeType = file.type || 'image/jpeg';
+    let previewUrl = '';
+
+    try {
+      const compressed = await compressImage(file);
+      blob = compressed.blob || file;
+      base64 = compressed.base64 || '';
+      mimeType = compressed.mimeType || mimeType;
+      previewUrl = URL.createObjectURL(blob);
+    } catch (e) {
+      console.warn(`画像 [${file.name || i}] 圧縮フォールバック:`, e);
+      blob = file;
+      try {
+        previewUrl = URL.createObjectURL(file);
+      } catch (err) {
+        console.error(`画像 [${file.name || i}] URL生成エラー:`, err);
+        continue;
+      }
+    }
+
+    state.uploadedImages.push({
+      blob,
+      base64,
+      mimeType,
+      previewUrl
+    });
+
+    // 1枚目の写真の日付抽出は、画像が安全に配列に追加された後に非同期実行
+    if (i === 0 && (state.uploadedImages.length === 1 || !document.getElementById('sake-date')?.value)) {
       extractPhotoDate(file).then(extractedDate => {
         if (extractedDate) {
           const dateInput = document.getElementById('sake-date');
@@ -459,21 +494,6 @@ export async function handleImageFiles(files) {
       }).catch(err => {
         console.warn('EXIF解析非同期スキップ:', err);
       });
-    }
-
-    // メイン処理: 1枚目も即座に圧縮してプレビュー追加
-    try {
-      const compressed = await compressImage(file);
-      const previewUrl = URL.createObjectURL(compressed.blob);
-
-      state.uploadedImages.push({
-        blob: compressed.blob,
-        base64: compressed.base64,
-        mimeType: compressed.mimeType,
-        previewUrl
-      });
-    } catch (e) {
-      console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
     }
   }
 
