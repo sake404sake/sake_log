@@ -320,14 +320,12 @@ export function renderImagePreviewList() {
     </div>`
   ).join('');
 
-  // 🌟 バックティックと閉じ構文を確実に完結
   const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">
     <div class="add-more-content">
       <span class="add-icon">＋</span>
       <span class="add-text">追加</span>
     </div>
   </div>`;
-
   container.innerHTML = itemsHTML + addMoreHTML;
 }
 
@@ -444,9 +442,8 @@ export async function runAIAnalysis(targetImg) {
 }
 
 /**
- * 🌟【完全修復版】画像ファイル選択時の処理
- * 1枚目の画像での EXIF 撮影日時抽出がブロッキング(ハングアップ)して画像の追加・描画が中断されないよう、
- * 完全な非ブロッキング非同期(タイムアウト付き)で実行する。
+ * 🌟 画像ファイル選択時の処理
+ * EXIF撮影日時抽出が画像圧縮・追加処理を絶対ブロックしない非同期設計。
  */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
@@ -454,27 +451,25 @@ export async function handleImageFiles(files) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
-    // HEIC/HEIF等で file.type が空文字の場合の拡張子判定フォールバック
     const isImage = (file.type && file.type.startsWith('image/')) || 
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 1枚目の EXIF 撮影日時抽出を非ブロッキング非同期で実行（画像の圧縮・プレビュー追加を一切停止させない）
+    // EXIF日付抽出を非ブロッキング非同期で発火 (compression を絶対に阻止・遅延させない)
     if (i === 0 && state.uploadedImages.length === 0) {
-      Promise.race([
-        extractPhotoDate(file),
-        new Promise(res => setTimeout(() => res(null), 1000)) // 1秒タイムアウト安全装置
-      ]).then(extractedDate => {
+      extractPhotoDate(file).then(extractedDate => {
         if (extractedDate) {
           const dateInput = document.getElementById('sake-date');
-          if (dateInput) dateInput.value = extractedDate;
+          if (dateInput && !dateInput.value) {
+            dateInput.value = extractedDate;
+          }
         }
       }).catch(err => {
-        console.warn('EXIF解析スキップ:', err);
+        console.warn('EXIF抽出非同期スキップ:', err);
       });
     }
 
-    // 画像の圧縮とプレビュー登録（メイン処理）
+    // 即座に圧縮＆追加
     try {
       const compressed = await compressImage(file);
       const previewUrl = URL.createObjectURL(compressed.blob);
@@ -490,7 +485,6 @@ export async function handleImageFiles(files) {
     }
   }
 
-  // サムネイルインデックスの初期化を保証
   if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
     state.activeThumbnailIndex = 0;
   }
