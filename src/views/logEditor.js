@@ -320,6 +320,7 @@ export function renderImagePreviewList() {
     </div>`
   ).join('');
 
+  // 🌟 バックティックと閉じ構文を確実に完結
   const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">
     <div class="add-more-content">
       <span class="add-icon">＋</span>
@@ -444,7 +445,8 @@ export async function runAIAnalysis(targetImg) {
 
 /**
  * 🌟【完全修復版】画像ファイル選択時の処理
- * 1枚目の画像での EXIF 日時抽出の非同期待機によるブロッキングを防ぐ非非同期・ノンブロッキング処理。
+ * 1枚目の画像での EXIF 撮影日時抽出がブロッキング(ハングアップ)して画像の追加・描画が中断されないよう、
+ * 完全な非ブロッキング非同期(タイムアウト付き)で実行する。
  */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
@@ -452,22 +454,27 @@ export async function handleImageFiles(files) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
+    // HEIC/HEIF等で file.type が空文字の場合の拡張子判定フォールバック
     const isImage = (file.type && file.type.startsWith('image/')) || 
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 🌟 1枚目の画像に対する EXIF 撮影日時抽出処理を完全ノンブロッキング化
+    // 1枚目の EXIF 撮影日時抽出を非ブロッキング非同期で実行（画像の圧縮・プレビュー追加を一切停止させない）
     if (i === 0 && state.uploadedImages.length === 0) {
-      extractPhotoDate(file).then(extractedDate => {
+      Promise.race([
+        extractPhotoDate(file),
+        new Promise(res => setTimeout(() => res(null), 1000)) // 1秒タイムアウト安全装置
+      ]).then(extractedDate => {
         if (extractedDate) {
           const dateInput = document.getElementById('sake-date');
           if (dateInput) dateInput.value = extractedDate;
         }
       }).catch(err => {
-        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました (圧縮処理へ続行):', err);
+        console.warn('EXIF解析スキップ:', err);
       });
     }
 
+    // 画像の圧縮とプレビュー登録（メイン処理）
     try {
       const compressed = await compressImage(file);
       const previewUrl = URL.createObjectURL(compressed.blob);
@@ -483,6 +490,7 @@ export async function handleImageFiles(files) {
     }
   }
 
+  // サムネイルインデックスの初期化を保証
   if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
     state.activeThumbnailIndex = 0;
   }
