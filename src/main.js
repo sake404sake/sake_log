@@ -1096,9 +1096,14 @@ function initApp() {
     }
   });
 
-  document.addEventListener('change', (e) => {
+  document.addEventListener('change', async (e) => {
     if (e.target && e.target.id === 'theme-select') {
       setTheme(e.target.value);
+      localStorage.setItem('sella_settings_updated_at', new Date().toISOString());
+      if (state.isGoogleLoggedIn) {
+        await syncAllData(true);
+      }
+      return;
     }
     if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
       setSavedModel(e.target.value);
@@ -1106,6 +1111,12 @@ function initApp() {
       const modalSelect = document.getElementById('modal-model-select');
       if (globalSelect && globalSelect.value !== e.target.value) globalSelect.value = e.target.value;
       if (modalSelect && modalSelect.value !== e.target.value) modalSelect.value = e.target.value;
+      
+      localStorage.setItem('sella_settings_updated_at', new Date().toISOString());
+      if (state.isGoogleLoggedIn) {
+        await syncAllData(true);
+      }
+      return;
     }
     if (TRACKED_FIELDS.includes(e.target.id)) {
       updateFieldRevertUI();
