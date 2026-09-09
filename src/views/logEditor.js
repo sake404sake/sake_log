@@ -1,19 +1,19 @@
 // src/views/logEditor.js
+
 import { getAllTags, getLogById } from '../store/db.js';
 import { getApiKey, getSavedModel, populateModelDropdown, hasApiKey, analyzeLabelImage } from '../services/gemini.js';
 import { state, resetEditorState, blobToBase64, base64ToBlob } from '../store/state.js';
 import { compressImage, extractPhotoDate } from '../utils/image.js';
 
 export const TRACKED_FIELDS = [
-  'sake-category', 'sake-name', 'sake-product', 'sake-brewery', 
-  'sake-region', 'sake-type', 'sake-abv', 'sake-notes', 'sake-ai-info'
+  'sake-category', 'sake-name', 'sake-product', 'sake-brewery', 'sake-region', 'sake-type', 'sake-abv', 'sake-notes', 'sake-ai-info'
 ];
 
 export async function renderLogEditorModal(logId = null) {
   const today = new Date().toISOString().split('T')[0];
   const existingTags = await getAllTags();
   const tagChipsHTML = existingTags.map(tag => `<button type="button" class="tag-chip-btn" data-tag="${tag}">+ ${tag}</button>`).join('');
-
+  
   const apiKey = getApiKey();
   const savedModel = getSavedModel();
   let initialOptionHTML = '<option value="">APIキーを入力してください</option>';
@@ -21,145 +21,145 @@ export async function renderLogEditorModal(logId = null) {
     if (savedModel) {
       initialOptionHTML = `<option value="${savedModel}" selected>${savedModel}</option>`;
     } else {
-      initialOptionHTML = '<option value="">モデルを読み込み中...</option>';
+      initialOptionHTML = `<option value="">モデルを読み込み中...</option>`;
     }
   }
 
   return `
-  <div id="modal-overlay" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3>${logId ? '酒ログを編集' : '酒ログを追加'}</h3>
-        <button type="button" class="modal-close-btn" id="btn-close-modal">×</button>
-      </div>
-      <div class="modal-body">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-          <!-- 左側：画像アップロード・プレビュー -->
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <div class="image-upload-zone" id="upload-zone">
-              <div class="upload-placeholder" id="upload-placeholder">
-                <span class="upload-icon">📸</span>
-                <p class="upload-text">タップ・ドラッグで画像を複数選択<br><small style="color:var(--text-sub)">(自動圧縮保存)</small></p>
+    <div id="modal-overlay" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>${logId ? '酒ログを編集' : '酒ログを追加'}</h3>
+          <button type="button" class="modal-close-btn" id="btn-close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+            <!-- 左側：画像アップロード・プレビュー -->
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="image-upload-zone" id="upload-zone">
+                <div class="upload-placeholder" id="upload-placeholder">
+                  <span class="upload-icon">📸</span>
+                  <p class="upload-text">タップ・ドラッグで画像を複数選択<br><small style="color:var(--text-sub)">(自動圧縮保存)</small></p>
+                </div>
+                <div id="analyzing-status" class="analyzing-overlay" style="display: none;">
+                  <div class="spinner"></div>
+                  <span>解析中...</span>
+                </div>
               </div>
-              <div id="analyzing-status" class="analyzing-overlay" style="display: none;">
-                <div class="spinner"></div>
-                <span>解析中...</span>
-              </div>
+              <input type="file" id="file-input" style="display: none;" multiple accept="image/*" />
+              <div id="image-preview-list" class="image-preview-grid"></div>
             </div>
-            <input type="file" id="file-input" style="display: none;" multiple accept="image/*" />
-            <div id="image-preview-list" class="image-preview-grid"></div>
-          </div>
 
-          <!-- 右側：入力フォーム -->
-          <div class="modal-form-col">
-            <div class="form-row">
+            <!-- 右側：入力フォーム -->
+            <div class="modal-form-col">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="sake-category">酒の種類 <span class="required">*</span></label>
+                  <select id="sake-category" class="input-dark">
+                    <option value="日本酒">日本酒</option>
+                    <option value="ウイスキー">ウイスキー</option>
+                    <option value="ワイン">ワイン</option>
+                    <option value="ビール">ビール</option>
+                    <option value="焼酎">焼酎</option>
+                    <option value="ジン・スピリッツ">ジン・スピリッツ</option>
+                    <option value="ブランデー">ブランデー</option>
+                    <option value="果実酒・梅酒">果実酒・梅酒</option>
+                    <option value="その他">その他</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="sake-name">銘柄 <span class="required">*</span></label>
+                  <input type="text" id="sake-name" class="input-dark" placeholder="例: 寫樂 / 山崎" />
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="sake-product">商品名</label>
+                  <input type="text" id="sake-product" class="input-dark" placeholder="例: 酒未来 / 12年" />
+                </div>
+                <div class="form-group">
+                  <label for="sake-brewery">酒蔵・メーカー</label>
+                  <input type="text" id="sake-brewery" class="input-dark" placeholder="例: 宮泉銘醸 / サントリー" />
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="sake-region">産地</label>
+                  <input type="text" id="sake-region" class="input-dark" placeholder="例: 福島県 / スコットランド" />
+                </div>
+                <div class="form-group">
+                  <label for="sake-type">特定名称・格付</label>
+                  <input type="text" id="sake-type" class="input-dark" placeholder="例: 純米吟醸 / シングルモルト" />
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="sake-abv">度数 (%)</label>
+                  <input type="number" id="sake-abv" class="input-dark" placeholder="16" step="0.1" />
+                </div>
+                <div class="form-group">
+                  <label for="sake-date">呑んだ日 🍶</label>
+                  <input type="date" id="sake-date" class="input-dark" value="${today}" />
+                </div>
+              </div>
+
               <div class="form-group">
-                <label for="sake-category">酒の種類 <span class="required">*</span></label>
-                <select id="sake-category" class="input-dark">
-                  <option value="日本酒">日本酒</option>
-                  <option value="ウイスキー">ウイスキー</option>
-                  <option value="ワイン">ワイン</option>
-                  <option value="ビール">ビール</option>
-                  <option value="焼酎">焼酎</option>
-                  <option value="ジン・スピリッツ">ジン・スピリッツ</option>
-                  <option value="ブランデー">ブランデー</option>
-                  <option value="果実酒・梅酒">果実酒・梅酒</option>
-                  <option value="その他">その他</option>
+                <label for="sake-rating">評価</label>
+                <select id="sake-rating" class="input-dark">
+                  <option value="5">⭐⭐⭐⭐⭐ 5.0</option>
+                  <option value="4" selected>⭐⭐⭐⭐☆ 4.0</option>
+                  <option value="3">⭐⭐⭐☆☆ 3.0</option>
+                  <option value="2">⭐⭐☆☆☆ 2.0</option>
+                  <option value="1">⭐☆☆☆☆ 1.0</option>
                 </select>
               </div>
+
               <div class="form-group">
-                <label for="sake-name">銘柄 <span class="required">*</span></label>
-                <input type="text" id="sake-name" class="input-dark" placeholder="例: 寫樂 / 山崎" />
+                <label for="sake-tags">タグ (スペース区切り)</label>
+                <input type="text" id="sake-tags" class="input-dark" placeholder="例: フルーティー 家飲み 贈答用" />
+                ${existingTags.length > 0 ? `
+                  <div class="tag-selector-wrapper">
+                    <span class="tag-selector-label">過去のタグから選択:</span>
+                    <div class="tag-chips-container">${tagChipsHTML}</div>
+                  </div>
+                ` : ''}
+              </div>
+
+              <div class="form-group">
+                <label for="sake-notes">メモ・感想（自分用）</label>
+                <textarea id="sake-notes" class="input-dark" rows="2" placeholder="香りの特徴や味わい、合わせ料理など"></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="sake-ai-info" style="color: var(--accent-color); font-weight: bold;">🤖 AIによる情報・補足</label>
+                <textarea id="sake-ai-info" class="input-dark ai-info-input" rows="2" placeholder="AI解析結果やおすすめの飲み方"></textarea>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label for="sake-product">商品名</label>
-                <input type="text" id="sake-product" class="input-dark" placeholder="例: 酒未来 / 12年" />
-              </div>
-              <div class="form-group">
-                <label for="sake-brewery">酒蔵・メーカー</label>
-                <input type="text" id="sake-brewery" class="input-dark" placeholder="例: 宮泉銘醸 / サントリー" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="sake-region">産地</label>
-                <input type="text" id="sake-region" class="input-dark" placeholder="例: 福島県 / スコットランド" />
-              </div>
-              <div class="form-group">
-                <label for="sake-type">特定名称・格付</label>
-                <input type="text" id="sake-type" class="input-dark" placeholder="例: 純米吟醸 / シングルモルト" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="sake-abv">度数 (%)</label>
-                <input type="number" id="sake-abv" class="input-dark" placeholder="16" step="0.1" />
-              </div>
-              <div class="form-group">
-                <label for="sake-date">呑んだ日 🍶</label>
-                <input type="date" id="sake-date" class="input-dark" value="${today}" />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="sake-rating">評価</label>
-              <select id="sake-rating" class="input-dark">
-                <option value="5">⭐⭐⭐⭐⭐ 5.0</option>
-                <option value="4" selected>⭐⭐⭐⭐☆ 4.0</option>
-                <option value="3">⭐⭐⭐☆☆ 3.0</option>
-                <option value="2">⭐⭐☆☆☆ 2.0</option>
-                <option value="1">⭐☆☆☆☆ 1.0</option>
+        <!-- フッター -->
+        <div class="modal-footer" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; justify-content: space-between; padding-top: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 260px;">
+            <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
+              <select id="modal-model-select" class="input-dark model-select" title="使用するAIモデルを選択" style="flex: 1; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
+                ${initialOptionHTML}
               </select>
+              <button type="button" id="btn-reload-modal-models" class="btn-secondary" style="padding: 4px 12px; font-size: 1.2rem; line-height: 1; flex-shrink: 0;" title="モデルリストを更新">↺</button>
             </div>
-
-            <div class="form-group">
-              <label for="sake-tags">タグ (スペース区切り)</label>
-              <input type="text" id="sake-tags" class="input-dark" placeholder="例: フルーティー 家飲み 贈答用" />
-              ${existingTags.length > 0 ? `
-                <div class="tag-selector-wrapper">
-                  <span class="tag-selector-label">過去のタグから選択:</span>
-                  <div class="tag-chips-container">${tagChipsHTML}</div>
-                </div>
-              ` : ''}
-            </div>
-
-            <div class="form-group">
-              <label for="sake-notes">メモ・感想（自分用）</label>
-              <textarea id="sake-notes" class="input-dark" rows="2" placeholder="香りの特徴や味わい、合わせ料理など"></textarea>
-            </div>
-
-            <div class="form-group">
-              <label for="sake-ai-info" style="color: var(--accent-color); font-weight: bold;">🤖 AIによる情報・補足</label>
-              <textarea id="sake-ai-info" class="input-dark ai-info-input" rows="2" placeholder="AI解析結果やおすすめの飲み方"></textarea>
-            </div>
+            <button type="button" id="btn-analyze" class="btn-ai-action" style="width: fit-content;">🤖 AI解析実行</button>
           </div>
-        </div>
-      </div>
-
-      <!-- フッター -->
-      <div class="modal-footer" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; justify-content: space-between; padding-top: 10px;">
-        <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 260px;">
-          <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
-            <select id="modal-model-select" class="input-dark model-select" title="使用するAIモデルを選択" style="flex: 1; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
-              ${initialOptionHTML}
-            </select>
-            <button type="button" id="btn-reload-modal-models" class="btn-secondary" style="padding: 4px 12px; font-size: 1.2rem; line-height: 1; flex-shrink: 0;" title="モデルリストを更新">↺</button>
+          <div style="display: flex; gap: 10px; margin-left: auto; width: 100%; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+            ${logId ? `<button type="button" id="btn-delete-log-editor" data-id="${logId}" class="btn-secondary" style="color: #ff4d4f; border-color: #ff4d4f; font-weight: bold; margin-right: auto; padding: 10px 20px; border-radius: 8px;">🗑️ 削除</button>` : ''}
+            <button type="button" id="btn-cancel-modal" class="btn-sub" style="padding: 10px 20px; border-radius: 8px;">キャンセル</button>
+            <button type="button" id="btn-save-log" class="btn-primary" style="padding: 10px 20px; border-radius: 8px;">保存</button>
           </div>
-          <button type="button" id="btn-analyze" class="btn-ai-action" style="width: fit-content;">🤖 AI解析実行</button>
-        </div>
-        <div style="display: flex; gap: 10px; margin-left: auto; width: 100%; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
-          ${logId ? `<button type="button" id="btn-delete-log-editor" data-id="${logId}" class="btn-secondary" style="color: #ff4d4f; border-color: #ff4d4f; font-weight: bold; margin-right: auto; padding: 10px 20px; border-radius: 8px;">🗑️ 削除</button>` : ''}
-          <button type="button" id="btn-cancel-modal" class="btn-sub" style="padding: 10px 20px; border-radius: 8px;">キャンセル</button>
-          <button type="button" id="btn-save-log" class="btn-primary" style="padding: 10px 20px; border-radius: 8px;">保存</button>
         </div>
       </div>
     </div>
-  </div>
   `;
 }
 
@@ -167,6 +167,7 @@ export function syncEditorFormToCurrentBatchGroup() {
   if (state.currentBatchGroupIndex !== null && state.batchGroups[state.currentBatchGroupIndex]) {
     const group = state.batchGroups[state.currentBatchGroupIndex];
     const getVal = (id) => document.getElementById(id)?.value || '';
+
     group.category = getVal('sake-category');
     group.name = getVal('sake-name');
     group.productName = getVal('sake-product');
@@ -182,6 +183,7 @@ export function syncEditorFormToCurrentBatchGroup() {
 
 export async function openEditorModal(logId = null, initialBatchGroup = null, batchIdx = null) {
   closeEditorModal();
+
   resetEditorState();
   state.currentEditingLogId = logId;
   state.currentBatchGroupIndex = batchIdx !== undefined ? batchIdx : null;
@@ -216,7 +218,11 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
       }
     }
   } else if (initialBatchGroup) {
-    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.value = val || '';
+    };
+
     setVal('sake-category', initialBatchGroup.category || '日本酒');
     setVal('sake-name', initialBatchGroup.name || '');
     setVal('sake-product', initialBatchGroup.productName || '');
@@ -265,7 +271,10 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
 }
 
 export function fillEditorForm(log) {
-  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val || '';
+  };
   setVal('sake-category', log.category || '日本酒');
   setVal('sake-name', log.name);
   setVal('sake-product', log.productName);
@@ -282,13 +291,17 @@ export function fillEditorForm(log) {
 
 export function closeEditorModal() {
   syncEditorFormToCurrentBatchGroup();
+
   const modal = document.getElementById('modal-overlay');
   if (modal) modal.remove();
+  
   resetEditorState();
 
   if (state.returnToBatchOnClose) {
     state.returnToBatchOnClose = false;
-    document.dispatchEvent(new CustomEvent('navigation-request', { detail: { view: 'batchImport', renderBatch: true } }));
+    document.dispatchEvent(new CustomEvent('navigation-request', {
+      detail: { view: 'batchImport', renderBatch: true }
+    }));
   }
 }
 
@@ -311,21 +324,23 @@ export function renderImagePreviewList() {
     btnAnalyze.style.display = (hasApiKey() && state.uploadedImages.length > 0) ? 'inline-flex' : 'none';
   }
 
-  const itemsHTML = state.uploadedImages.map((img, idx) =>
-    `<div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
+  const itemsHTML = state.uploadedImages.map((img, idx) => `
+    <div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
       <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
       <div class="preview-actions">
         <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
       </div>
-    </div>`
-  ).join('');
-
-  const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">
-    <div class="add-more-content">
-      <span class="add-icon">＋</span>
-      <span class="add-text">追加</span>
     </div>
-  </div>`;
+  `).join('');
+
+  const addMoreHTML = `
+    <div class="preview-item add-more-item" id="btn-trigger-upload">
+      <div class="add-more-content">
+        <span class="add-icon">＋</span>
+        <span class="add-text">追加</span>
+      </div>
+    </div>
+  `;
   container.innerHTML = itemsHTML + addMoreHTML;
 }
 
@@ -374,36 +389,21 @@ export function updateFieldRevertUI() {
   });
 }
 
-/**
- * 🌟【完全修復版】画像ファイル選択時の処理
- * 1枚目の画像での EXIF 日時抽出例外による処理中断を防ぐため、完全な try-catch 保護と
- * iPhone (HEIC/HEIF) 等で file.type が空の場合の代替ファイル拡張子チェックを導入。
- */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    
-    // 🌟 改善①: スマホ (HEIC/HEIF) や一部ブラウザで file.type が空文字の場合の代替拡張子判定フォールバック
-    const isImage = (file.type && file.type.startsWith('image/')) || 
-                    /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
-    if (!isImage) continue;
+    if (!file.type.startsWith('image/')) continue;
 
-    // 🌟 改善②: 1枚目の画像に対する EXIF 撮影日時抽出処理を try-catch で厳重保護
     if (i === 0 && state.uploadedImages.length === 0) {
-      try {
-        const extractedDate = await extractPhotoDate(file);
-        if (extractedDate) {
-          const dateInput = document.getElementById('sake-date');
-          if (dateInput) dateInput.value = extractedDate;
-        }
-      } catch (err) {
-        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました (圧縮処理へ続行):', err);
+      const extractedDate = await extractPhotoDate(file);
+      if (extractedDate) {
+        const dateInput = document.getElementById('sake-date');
+        if (dateInput) dateInput.value = extractedDate;
       }
     }
 
-    // 🌟 改善③: 画像の圧縮とプレビュー登録
     try {
       const compressed = await compressImage(file);
       const previewUrl = URL.createObjectURL(compressed.blob);
@@ -415,14 +415,53 @@ export async function handleImageFiles(files) {
         previewUrl
       });
     } catch (e) {
-      console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
+      console.error('画像圧縮に失敗しました:', e);
     }
   }
-
-  // アクティブサムネイルインデックスの初期化を保証
-  if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
-    state.activeThumbnailIndex = 0;
-  }
-
   renderImagePreviewList();
+}
+
+export async function runAIAnalysis(targetImg) {
+  if (!targetImg || !hasApiKey()) return;
+
+  saveCurrentFormBackup();
+
+  const analyzingStatus = document.getElementById('analyzing-status');
+  if (analyzingStatus) analyzingStatus.style.display = 'flex';
+
+  try {
+    const result = await analyzeLabelImage(targetImg.base64, targetImg.mimeType);
+    if (result) {
+      const resolvedName = result.name || result.productName || '';
+      const resolvedProduct = result.productName || '';
+      const resolvedBrewery = result.brewery || '';
+
+      const fieldMapping = {
+        'sake-category': result.category,
+        'sake-name': resolvedName,
+        'sake-product': resolvedProduct,
+        'sake-brewery': resolvedBrewery,
+        'sake-region': result.region,
+        'sake-type': result.type,
+        'sake-abv': result.abv,
+        'sake-ai-info': result.aiInfo // 🌟 AIによる情報・補足 (sake-ai-info) に代入。メモ欄 (sake-notes) は汚さない
+      };
+
+      Object.keys(fieldMapping).forEach(id => {
+        const val = fieldMapping[id];
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null && val !== '') {
+          el.value = val;
+        }
+      });
+
+      updateFieldRevertUI();
+      syncEditorFormToCurrentBatchGroup();
+    }
+  } catch (err) {
+    console.error('AI Analysis Error:', err);
+    alert('AI解析中にエラーが発生しました。APIキーやモデル設定をご確認ください。');
+  } finally {
+    if (analyzingStatus) analyzingStatus.style.display = 'none';
+  }
 }
