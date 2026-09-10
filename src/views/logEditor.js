@@ -385,25 +385,25 @@ export async function handleImageFiles(files) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
+    // 🌟 改善①: スマホ (HEIC/HEIF) や一部ブラウザで file.type が空文字の場合の代替拡張子判定フォールバック
     const isImage = (file.type && file.type.startsWith('image/')) || 
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 🌟 1枚目の画像に対する EXIF 撮影日時抽出処理 (512KBヘッダー対応・非ブロッキング)
+    // 🌟 改善②: 1枚目の画像に対する EXIF 撮影日時抽出処理を try-catch で厳重保護
     if (i === 0 && state.uploadedImages.length === 0) {
-      extractPhotoDate(file).then(extractedDate => {
+      try {
+        const extractedDate = await extractPhotoDate(file);
         if (extractedDate) {
           const dateInput = document.getElementById('sake-date');
-          if (dateInput) {
-            dateInput.value = extractedDate;
-          }
+          if (dateInput) dateInput.value = extractedDate;
         }
-      }).catch(err => {
-        console.warn('EXIF解析非同期スキップ:', err);
-      });
+      } catch (err) {
+        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました (圧縮処理へ続行):', err);
+      }
     }
 
-    // メイン処理: 画像の圧縮とプレビュー登録
+    // 🌟 改善③: 画像の圧縮とプレビュー登録
     try {
       const compressed = await compressImage(file);
       const previewUrl = URL.createObjectURL(compressed.blob);
@@ -415,24 +415,92 @@ export async function handleImageFiles(files) {
         previewUrl
       });
     } catch (e) {
-      console.warn(`画像 [${file.name || i}] 圧縮フォールバック:`, e);
-      try {
-        const previewUrl = URL.createObjectURL(file);
-        state.uploadedImages.push({
-          blob: file,
-          base64: '',
-          mimeType: file.type || 'image/jpeg',
-          previewUrl
-        });
-      } catch (err) {
-        console.error(`画像 [${file.name || i}] プレビューURL生成失敗:`, err);
-      }
+      console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
     }
   }
 
+  // アクティブサムネイルインデックスの初期化を保証
   if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
     state.activeThumbnailIndex = 0;
   }
 
   renderImagePreviewList();
+}
+
+
+export async function runAIAnalysis(imageItem) {
+  if (!imageItem) {
+    alert('解析対象の画像が選択されていません。');
+    return;
+  }
+
+  const btnAnalyze = document.getElementById('btn-analyze');
+  const overlay = document.getElementById('analyzing-status');
+
+  if (btnAnalyze) {
+    btnAnalyze.disabled = true;
+    btnAnalyze.innerHTML = '<span class="sella-spinner"></span>解析中...';
+  }
+  if (overlay) {
+    overlay.style.display = 'flex';
+  }
+
+  try {
+    let base64 = imageItem.base64;
+    let mimeType = imageItem.mimeType || 'image/jpeg';
+
+    if (!base64 && imageItem.blob) {
+      base64 = await blobToBase64(imageItem.blob);
+      imageItem.base64 = base64;
+    }
+
+    if (!base64) {
+      alert('画像データの取得に失敗しました。');
+      return;
+    }
+
+    saveCurrentFormBackup();
+
+    const modelSelect = document.getElementById('modal-model-select');
+    const selectedModel = modelSelect?.value || null;
+
+    const result = await analyzeLabelImage(base64, mimeType, selectedModel);
+
+    if (result) {
+      const setValIfPresent = (id, val) => {
+        if (val !== undefined && val !== null && val !== '') {
+          const el = document.getElementById(id);
+          if (el) el.value = val;
+        }
+      };
+
+      setValIfPresent('sake-category', result.category);
+      setValIfPresent('sake-name', result.name || result.productName);
+      setValIfPresent('sake-product', result.productName);
+      setValIfPresent('sake-brewery', result.brewery);
+      setValIfPresent('sake-region', result.region);
+      setValIfPresent('sake-type', result.type);
+      setValIfPresent('sake-abv', result.abv);
+
+      if (result.aiInfo || result.notes) {
+        const aiEl = document.getElementById('sake-ai-info');
+        if (aiEl) {
+          aiEl.value = result.aiInfo || result.notes || '';
+        }
+      }
+
+      updateFieldRevertUI();
+    }
+  } catch (err) {
+    console.error('AI Label Analysis Error:', err);
+    alert('ラベル画像のAI解析に失敗しました: ' + (err.message || err));
+  } finally {
+    if (btnAnalyze) {
+      btnAnalyze.disabled = false;
+      btnAnalyze.innerHTML = '🤖 AI解析実行';
+    }
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+  }
 }
