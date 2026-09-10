@@ -10,16 +10,20 @@ import { openLightbox, closeLightbox, triggerLightboxNext, triggerLightboxPrev }
 import { state, base64ToBlob, blobToBase64 } from './store/state.js';
 import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth } from './services/googleDrive.js';
 
-// --- CSS動的注入 ---
 function ensureSpinnerStyles() {
   if (document.getElementById('sella-spinner-style')) return;
   const style = document.createElement('style');
   style.id = 'sella-spinner-style';
-  style.textContent = `@keyframes sellaSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .sella-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: sellaSpin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; } .draggable-thumb { cursor: grab; transition: transform 0.15s, opacity 0.15s; touch-action: none; box-sizing: border-box; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; overflow: visible !important; } .draggable-thumb:active { cursor: grabbing; } .batch-group-card.drag-over, #ungrouped-pool-container.drag-over { border-color: var(--accent-color) !important; background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important; }`;
+  style.textContent = `
+    @keyframes sellaSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .sella-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: sellaSpin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+    .draggable-thumb { cursor: grab; transition: transform 0.15s, opacity 0.15s; touch-action: none; box-sizing: border-box; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; overflow: visible !important; }
+    .draggable-thumb:active { cursor: grabbing; }
+    .batch-group-card.drag-over, #ungrouped-pool-container.drag-over { border-color: var(--accent-color) !important; background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important; }
+  `;
   document.head.appendChild(style);
 }
 
-// --- テーマ適用 ---
 export function setTheme(themeName) {
   const validThemes = ['dark', 'light', 'sakura', 'gaming', 'japan-modern'];
   let targetTheme = themeName;
@@ -49,7 +53,6 @@ export async function updateModelDropdown(forceRefresh = false) {
   }
 }
 
-// --- SPAシンプルルーター ---
 const views = {
   dashboard: renderLogListView,
   loglist: renderLogListView,
@@ -83,7 +86,6 @@ export async function navigateTo(viewName) {
       }
       updateModelDropdown();
     }
-
   } catch (err) {
     console.error('View Render Error:', err);
   }
@@ -107,7 +109,6 @@ function closeSidebar() {
   overlay?.classList.remove('active');
 }
 
-// 一括登録データの IndexedDB 自動保存＆自動復旧システム
 export async function syncBatchStateToDB() {
   try {
     await clearAllDrafts();
@@ -176,7 +177,6 @@ export async function syncBatchStateToDB() {
     if (state.isGoogleLoggedIn) {
       syncAllData(true);
     }
-
   } catch (err) {
     console.error('[DraftSync] Autosave failed:', err);
   }
@@ -250,13 +250,11 @@ export async function loadBatchStateFromDB() {
     }
     console.log('[DraftSync] Restore complete.');
     renderBatchGroupsUI();
-
   } catch (err) {
     console.error('[DraftSync] Failed to restore drafts:', err);
   }
 }
 
-// --- アプリケーション起動とグローバルイベント委譲 ---
 function initApp() {
   ensureSpinnerStyles();
   initGoogleAuth();
@@ -318,7 +316,6 @@ document.addEventListener('change', async (e) => {
   }
 });
 
-// ドラッグ＆ドロップ UI
 document.addEventListener('dragover', (e) => {
   e.preventDefault();
   const card = e.target.closest('.batch-group-card');
@@ -375,7 +372,6 @@ document.addEventListener('drop', async (e) => {
   const targetPoolArea = e.target.closest('#ungrouped-pool-container');
 
   let movedImage = null;
-
   if (state.draggedItemInfo.type === 'group') {
     const srcGroup = state.batchGroups[state.draggedItemInfo.gIdx];
     if (srcGroup) {
@@ -417,7 +413,6 @@ document.addEventListener('drop', async (e) => {
   await syncBatchStateToDB();
 });
 
-// クリックイベントのグローバル一括委譲
 document.addEventListener('click', async (e) => {
   if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
     e.stopPropagation();
@@ -427,7 +422,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // APIキーの保存ボタンの処理
   if (e.target && e.target.id === 'btn-save-api-key') {
     const apiKeyEl = document.getElementById('gemini-api-key');
     const apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
@@ -454,7 +448,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // 設定画面のモデルリスト再取得処理
   if (e.target && e.target.id === 'btn-reload-models') {
     const originalText = e.target.innerText;
     e.target.innerText = '取得中...';
@@ -472,7 +465,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // エディタモーダル内のモデルリスト更新 (↺) の処理
   if (e.target && e.target.id === 'btn-reload-modal-models') {
     const modalModelSelect = document.getElementById('modal-model-select');
     if (modalModelSelect) {
@@ -482,7 +474,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // Google ログイン/ログアウト/手動同期処理
   if (e.target && e.target.id === 'btn-google-login') {
     loginGoogle();
     return;
@@ -507,7 +498,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // ライトボックス
   const enlargeTarget = e.target.closest('[data-action="enlarge-image"]') || (e.target.tagName === 'IMG' && !e.target.closest('button, nav, header, aside, .lightbox-overlay, #sidebar') && (e.target.closest('#app') || e.target.closest('#detail-modal-overlay')) ? e.target : null);
   if (enlargeTarget) {
     const contextType = enlargeTarget.dataset.contextType;
@@ -646,7 +636,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // 一括まとめて保存処理
   const saveAllBtn = e.target.closest('#btn-save-all-batches');
   if (saveAllBtn) {
     if (state.batchGroups.length === 0) {
@@ -727,7 +716,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // 一括AI解析実行
   const batchAnalyzeBtn = e.target.closest('.btn-batch-analyze');
   if (batchAnalyzeBtn) {
     e.stopPropagation();
@@ -789,7 +777,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // 分割
   const batchSplitBtn = e.target.closest('.btn-batch-split');
   if (batchSplitBtn) {
     e.stopPropagation();
@@ -808,7 +795,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // 削除
   const batchDeleteGroupBtn = e.target.closest('.btn-batch-delete-group');
   if (batchDeleteGroupBtn) {
     e.stopPropagation();
@@ -823,7 +809,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // エディタ
   const batchOpenEditorBtn = e.target.closest('.btn-batch-open-editor');
   if (batchOpenEditorBtn) {
     e.stopPropagation();
@@ -845,7 +830,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // ログ詳細
   const rowItem = e.target.closest('[data-action="open-detail"]');
   if (rowItem) {
     const id = rowItem.dataset.id;
@@ -858,7 +842,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // スライドショーコントロール
   const detailArrow = e.target.closest('.carousel-btn');
   if (detailArrow && (detailArrow.id === 'btn-detail-prev' || detailArrow.id === 'btn-detail-next')) {
     e.stopPropagation();
@@ -1049,7 +1032,6 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// input/changeイベント
 document.addEventListener('input', async (e) => {
   if (TRACKED_FIELDS.includes(e.target.id)) {
     updateFieldRevertUI();
@@ -1109,12 +1091,24 @@ document.addEventListener('sync-completed', () => {
   if (lbl) {
     lbl.innerText = localStorage.getItem('sella_last_synced_time') || '未同期';
   }
+
+  // 🌟 同期完了時に復元されたテーマおよび API キーを画面へ即時反映！
+  const restoredTheme = localStorage.getItem('sella_theme');
+  if (restoredTheme) {
+    setTheme(restoredTheme);
+  }
+
+  const apiKeyInput = document.getElementById('gemini-api-key');
+  const restoredKey = localStorage.getItem('gemini_api_key');
+  if (apiKeyInput && restoredKey && apiKeyInput.value !== restoredKey) {
+    apiKeyInput.value = restoredKey;
+  }
+
   if (state.currentViewName === 'loglist' || state.currentViewName === 'dashboard' || state.currentViewName === 'log-list') {
     navigateTo('logList');
   }
 });
 
-// PointerEventsシステム (ドラッグ並び替え)
 let pointerStartX = 0;
 let pointerStartY = 0;
 let pointerStartTime = 0;
@@ -1503,7 +1497,6 @@ document.addEventListener('pointerup', async (e) => {
   }
 });
 
-// 全画面表示トグル
 const fullscreenBtn = document.getElementById('btn-fullscreen');
 if (fullscreenBtn) {
   fullscreenBtn.addEventListener('click', () => {
