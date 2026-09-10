@@ -147,9 +147,7 @@ async function poolAll(concurrency, items, taskFn) {
   const results = [];
   const executing = [];
   for (const item of items) {
-    const p = Promise.resolve().then(() => taskFn(item)).catch(err => {
-      console.warn('[GoogleDriveSync] Batch item processing skipped on error:', err);
-    });
+    const p = Promise.resolve().then(() => taskFn(item));
     results.push(p);
     if (concurrency <= items.length) {
       const e = p.finally(() => {
@@ -364,11 +362,10 @@ async function driveFetch(url, options = {}) {
     throw new Error('AUTH_EXPIRED');
   }
 
-  options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
-
-  // 🌟【タイムアウト安全装置】15秒超えで応答がないリクエストを安全に切断し、同期不全・無限待機を防ぐ
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウト安全装置
+
+  options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
   options.signal = controller.signal;
 
   try {
@@ -386,7 +383,7 @@ async function driveFetch(url, options = {}) {
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      console.warn('[GoogleDrive] Network fetch timed out (15s).');
+      console.warn('[GoogleDrive] Fetch request timed out after 15 seconds.');
       throw new Error('NETWORK_TIMEOUT');
     }
     if (err instanceof TypeError || err.message?.includes('fetch')) {
@@ -600,7 +597,32 @@ export async function syncAllData(silent = false) {
     // ==========================================================================
     // 🌟 ゼロナレッジ暗号化 (Sella Settings Sync Protocol V15) 設定同期セクション
     // ==========================================================================
-    const googleUserId = state.googleUserSub || localStorage.getItem('sella_google_sub') || localStorage.getItem('sella_google_user_sub');
+    let googleUserId = state.googleUserSub || localStorage.getItem('sella_google_sub') || localStorage.getItem('sella_google_user_sub');
+
+    if (!googleUserId) {
+      const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
+      if (token) {
+        try {
+          const uRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (uRes.ok) {
+            const uInfo = await uRes.json();
+            if (uInfo.sub) {
+              googleUserId = uInfo.sub;
+              state.googleUserSub = googleUserId;
+              localStorage.setItem('sella_google_user_sub', googleUserId);
+            }
+          }
+        } catch (e) {
+          console.warn('[GoogleDriveSync] Dynamic userinfo fetch skipped:', e);
+        }
+      }
+    }
+
+    if (!googleUserId) {
+      googleUserId = localStorage.getItem('sella_google_user_name') || 'sella_default_user';
+    }
 
     if (googleUserId) {
       console.log('[GoogleDriveSync] Initializing settings sync with Zero-Knowledge encryption...');
