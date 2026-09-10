@@ -431,7 +431,7 @@ function initApp() {
 
   // クリックイベントのグローバル一括委譲
   document.addEventListener('click', async (e) => {
-    if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
+    if (e.target.closest('#btn-toggle-pool-collapse')) {
       e.stopPropagation();
       e.preventDefault();
       state.isPoolCollapsed = !state.isPoolCollapsed;
@@ -440,7 +440,7 @@ function initApp() {
     }
 
     // 🌟 改善: APIキーの保存ボタンの処理を追加
-    if (e.target && e.target.id === 'btn-save-api-key') {
+    if (e.target.closest('#btn-save-api-key')) {
       const apiKeyEl = document.getElementById('gemini-api-key');
       const apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
       if (!apiKey) {
@@ -467,7 +467,7 @@ function initApp() {
     }
 
     // 🌟 改善: 設定画面のモデルリスト再取得処理を追加
-    if (e.target && e.target.id === 'btn-reload-models') {
+    if (e.target.closest('#btn-reload-models')) {
       const originalText = e.target.innerText;
       e.target.innerText = '取得中...';
       e.target.disabled = true;
@@ -485,7 +485,7 @@ function initApp() {
     }
 
     // 🌟 改善: エディタモーダル内のモデルリスト更新 (↺) の処理を追加
-    if (e.target && e.target.id === 'btn-reload-modal-models') {
+    if (e.target.closest('#btn-reload-modal-models')) {
       const modalModelSelect = document.getElementById('modal-model-select');
       if (modalModelSelect) {
         modalModelSelect.innerHTML = '<option value="">モデルを取得中...</option>';
@@ -495,21 +495,21 @@ function initApp() {
     }
 
     // Google ログイン/ログアウト/手動同期処理
-    if (e.target && e.target.id === 'btn-google-login') {
+    if (e.target.closest('#btn-google-login')) {
       loginGoogle();
       return;
     }
-    if (e.target && e.target.id === 'btn-google-logout') {
+    if (e.target.closest('#btn-google-logout')) {
       const choice = confirm("Googleアカウント同期を切断しますか？\n\n[OK]: 共有端末等のため、ローカルブラウザのデータも完全に消去してログアウトする\n[キャンセル]: ローカルにデータは残したまま安全にログアウトする");
       logoutGoogle(choice);
       return;
     }
-    if (e.target && e.target.id === 'btn-trigger-sync') {
+    if (e.target.closest('#btn-trigger-sync')) {
       await syncAllData(false);
       return;
     }
 
-    if (e.target && e.target.id === 'btn-destroy-all-data') {
+    if (e.target.closest('#btn-destroy-all-data')) {
       const input = document.getElementById('destroy-validation-input')?.value.trim();
       if (input === 'データをすべて消去する') {
         if (confirm('本当に実行しますか？この操作によりクラウド・ローカル双方の全ての酒ログと写真が永久に消滅します。')) {
@@ -1001,7 +1001,7 @@ function initApp() {
       return;
     }
 
-    if (e.target && e.target.id === 'btn-save-log') {
+    if (e.target.closest('#btn-save-log')) {
       const name = document.getElementById('sake-name')?.value.trim();
       if (!name) {
         alert('銘柄名を入力してください。');
@@ -1137,23 +1137,6 @@ function initApp() {
     if (lbl) {
       lbl.innerText = localStorage.getItem('sella_last_synced_time') || '未同期';
     }
-
-    // 🌟 同期されたテーマを即座にUI全体へ反映
-    const syncedTheme = localStorage.getItem('sella_theme');
-    if (syncedTheme) {
-      setTheme(syncedTheme);
-    }
-
-    // 🌟 同期されたAPIキー・モデルを設定画面フォームへ反映
-    const apiKeyInput = document.getElementById('gemini-api-key');
-    if (apiKeyInput) {
-      apiKeyInput.value = localStorage.getItem('gemini_api_key') || '';
-    }
-    updateModelDropdown();
-
-    // 🌟 モーダルが開いている場合はAI解析ボタンの表示状態を再判定
-    renderImagePreviewList();
-
     if (state.currentViewName === 'loglist' || state.currentViewName === 'dashboard' || state.currentViewName === 'log-list') {
       navigateTo('logList');
     }
