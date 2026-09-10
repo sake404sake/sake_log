@@ -914,3 +914,12 @@ export async function destroyAllSellaData() {
   alert('すべての酒ログデータ、画像、およびクラウドバックアップを完全に消去しました。システムを初期状態から再起動します。');
   window.location.reload();
 }
+
+
+export async function refreshGoogleTokenIfNeeded() {
+  if (isTokenExpired()) {
+    console.warn('[GoogleDrive] Token is expired or invalid.');
+    return false;
+  }
+  return true;
+}
