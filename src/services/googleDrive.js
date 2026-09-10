@@ -365,7 +365,9 @@ async function driveFetch(url, options = {}) {
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
-  options.signal = controller.signal;
+  if (!options.signal) {
+    options.signal = controller.signal;
+  }
 
   try {
     const response = await fetch(url, options);
@@ -380,12 +382,8 @@ async function driveFetch(url, options = {}) {
     return response;
   } catch (err) {
     clearTimeout(timeoutId);
-    if (err.name === 'AbortError') {
-      console.warn('[GoogleDrive] Request timed out after 15s');
-      throw new Error('TIMEOUT_ERROR');
-    }
-    if (err instanceof TypeError || err.message?.includes('fetch')) {
-      console.warn('[GoogleDrive] Network error detected. App is likely offline. Login state is preserved.');
+    if (err.name === 'AbortError' || err instanceof TypeError || err.message?.includes('fetch') || err.message?.includes('aborted')) {
+      console.warn('[GoogleDrive] Network error or timeout detected. Login state preserved.');
       throw new Error('OFFLINE_NETWORK_ERROR');
     }
     throw err;
