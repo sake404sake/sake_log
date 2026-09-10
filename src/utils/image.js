@@ -2,7 +2,7 @@
 
 /**
  * 画像ファイルから撮影日時 (EXIF / メタデータ) を高精度に抽出する関数
- * - 1MB (1,048,576 バイト) ヘッダーバース
+ * - 1MB (1,048,576 バイト) ヘッダーパース
  * - 高速 ASCII レグラースキャン + TIFF/EXIF パースの二重化構造
  * - 抽出失敗時は file.lastModified へ安全にフォールバック
  */
@@ -269,6 +269,7 @@ export function groupImagesByTime(imageItems, maxTimeGapMs = 3 * 60 * 1000, maxG
       }
     }
   }
+
   if (currentGroup.length > 0) {
     initialGroups.push(currentGroup);
   }
