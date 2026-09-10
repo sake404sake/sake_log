@@ -4,17 +4,18 @@ import { openDB, getAllLogs, saveLog, permanentlyDeleteLog } from '../store/db.j
 
 // GISのクライアントスクリプトとDrive APIのURL定義
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=drive&version=v3';
+// Google Drive AppDataスコープと、ユーザーの表示名・アバター用のprofileスコープを統合
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 
 // ==========================================================================
-// 🌟 Google Cloud OAuthクライアントID
+// Google Cloud OAuthクライアントID
 // ==========================================================================
 export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
 let tokenClient = null;
 
 // ==========================================================================
-// 🌟 Sella Settings Sync Protocol (V15 Specification) ゼロナレッジ暗号モジュール
+// Sella Settings Sync Protocol (V15 Specification) ゼロナレッジ暗号モジュール
 // ==========================================================================
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
@@ -39,7 +40,7 @@ async function deriveKeyFromGoogleId(googleUserId) {
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
-    false,
+    false, // 鍵のエクスポートを禁止（インメモリ保護）
     ['encrypt', 'decrypt']
   );
 }
@@ -113,6 +114,9 @@ const EXCLUDED_LOCAL_KEYS = [
   'gemini_selected_model'
 ];
 
+/**
+ * localStorageから前方互換性のあるカスタム設定を抽出シリアライズ
+ */
 function serializeCustomSettings() {
   const custom = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -124,6 +128,9 @@ function serializeCustomSettings() {
   return custom;
 }
 
+/**
+ * カスタム設定オブジェクトをlocalStorageへ書き戻し
+ */
 function deserializeCustomSettings(customObj) {
   if (!customObj) return;
   Object.keys(customObj).forEach(key => {
@@ -133,6 +140,9 @@ function deserializeCustomSettings(customObj) {
   });
 }
 
+/**
+ * Google Identity Services のクライアントライブラリを動的ロード
+ */
 export function loadGoogleSDK() {
   return new Promise((resolve) => {
     if (window.google?.accounts?.oauth2) {
@@ -148,6 +158,9 @@ export function loadGoogleSDK() {
   });
 }
 
+/**
+ * Google OAuth の初期化
+ */
 export async function initGoogleAuth() {
   await loadGoogleSDK();
   const clientId = GOOGLE_CLIENT_ID;
@@ -156,11 +169,12 @@ export async function initGoogleAuth() {
     return;
   }
 
+  // 起動時にログイン状態とユーザープロファイルキャッシュを復元
   if (localStorage.getItem('sella_google_logged_in') === 'true') {
     state.isGoogleLoggedIn = true;
     state.googleUserName = localStorage.getItem('sella_google_user_name') || 'Googleユーザー';
     state.googleUserAvatar = localStorage.getItem('sella_google_user_avatar') || '';
-    state.googleUserSub = localStorage.getItem('sella_google_user_sub') || localStorage.getItem('sella_google_sub') || '';
+    state.googleUserSub = localStorage.getItem('sella_google_user_sub') || ''; // subの復元
   }
 
   if (!window.google?.accounts?.oauth2) {
@@ -179,6 +193,7 @@ export async function initGoogleAuth() {
       localStorage.setItem('sella_google_token', response.access_token);
       localStorage.setItem('sella_google_token_acquired_at', Date.now().toString());
 
+      // Google API から実際の名前とプロフィールアバター画像を取得する
       try {
         const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
           headers: { 'Authorization': `Bearer ${response.access_token}` }
@@ -192,7 +207,6 @@ export async function initGoogleAuth() {
           if (userInfo.sub) {
             state.googleUserSub = userInfo.sub;
             localStorage.setItem('sella_google_user_sub', userInfo.sub);
-            localStorage.setItem('sella_google_sub', userInfo.sub);
           }
         }
       } catch (err) {
@@ -204,12 +218,16 @@ export async function initGoogleAuth() {
       localStorage.setItem('sella_google_logged_in', 'true');
       
       console.log('[GoogleDrive] Auth Success. Token acquired.');
+      
       document.dispatchEvent(new CustomEvent('google-login-success'));
       await syncAllData(true);
     },
   });
 }
 
+/**
+ * ログイン画面を呼び出し
+ */
 export function loginGoogle() {
   const triggerAuth = () => {
     if (!tokenClient) {
@@ -226,6 +244,9 @@ export function loginGoogle() {
   }
 }
 
+/**
+ * ログアウトを実行
+ */
 export function logoutGoogle(clearLocal = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (token) {
@@ -246,7 +267,6 @@ export function logoutGoogle(clearLocal = false) {
   localStorage.removeItem('sella_google_user_name');
   localStorage.removeItem('sella_google_user_avatar');
   localStorage.removeItem('sella_google_user_sub');
-  localStorage.removeItem('sella_google_sub');
   localStorage.removeItem('sella_settings_updated_at');
   localStorage.removeItem('sella_last_sync_theme');
   localStorage.removeItem('sella_last_sync_apikey');
@@ -266,6 +286,9 @@ export function logoutGoogle(clearLocal = false) {
   }
 }
 
+/**
+ * クライアントサイドでの事前トークン有効期限（1時間）チェック
+ */
 export function isTokenExpired() {
   const acquiredAt = localStorage.getItem('sella_google_token_acquired_at');
   if (!acquiredAt) return true;
@@ -275,6 +298,9 @@ export function isTokenExpired() {
   return timePassed >= oneHourMs;
 }
 
+/**
+ * トークン期限切れ（401）が確定した際の後処理
+ */
 function handleTokenExpired() {
   state.isGoogleLoggedIn = false;
   state.googleAccessToken = null;
@@ -283,12 +309,16 @@ function handleTokenExpired() {
   localStorage.removeItem('sella_google_logged_in');
   
   document.dispatchEvent(new CustomEvent('google-logout-success'));
+  
   state.isSyncing = false;
   document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: false } }));
   
   alert('Googleアカウントのセッション有効期限が切れました。安全な同期のため、お手数ですが再度ログインを行ってください。');
 }
 
+/**
+ * Google Drive API 通信ヘルパー (認証ヘッダー付与)
+ */
 async function driveFetch(url, options = {}) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) {
@@ -305,11 +335,13 @@ async function driveFetch(url, options = {}) {
 
   try {
     const response = await fetch(url, options);
+    
     if (response.status === 401) {
       console.error('[GoogleDrive] Unauthorized (401). Invalid token session.');
       handleTokenExpired();
       throw new Error('AUTH_EXPIRED');
     }
+    
     return response;
   } catch (err) {
     if (err instanceof TypeError || err.message?.includes('fetch')) {
@@ -320,6 +352,9 @@ async function driveFetch(url, options = {}) {
   }
 }
 
+/**
+ * AppData内のファイル一覧を取得
+ */
 async function listCloudFiles() {
   const url = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,mimeType)';
   const res = await driveFetch(url);
@@ -331,30 +366,26 @@ async function listCloudFiles() {
   return data.files || [];
 }
 
+/**
+ * クラウドにJSONファイルを新規アップロード / 上書き保存する
+ */
 async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
   const metadata = { name: fileName };
   
-  // 🌟 Google Drive API v3 仕様: 新規作成(POST)時のみ parents を指定
+  // 🌟 Google Drive API v3 仕様対応: 新規保存（POST）時のみ parents を設定
   if (!existingFileId) {
     metadata.parents = ['appDataFolder'];
   }
 
   const boundary = 'sella_multipart_boundary';
-  const delimiter = `
---${boundary}
-`;
-  const close_delim = `
---${boundary}--`;
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const close_delim = `\r\n--${boundary}--`;
 
   const multipartBody = delimiter + 
-    'Content-Type: application/json; charset=UTF-8
-
-' + 
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' + 
     JSON.stringify(metadata) + 
     delimiter + 
-    'Content-Type: application/json
-
-' + 
+    'Content-Type: application/json\r\n\r\n' + 
     JSON.stringify(dataObj) + 
     close_delim;
 
@@ -379,6 +410,9 @@ async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
   return await res.json();
 }
 
+/**
+ * クラウドのJSONファイルをダウンロード
+ */
 async function downloadJsonFile(fileId) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   const res = await driveFetch(url);
@@ -389,26 +423,22 @@ async function downloadJsonFile(fileId) {
   return await res.json();
 }
 
+/**
+ * クラウドにバイナリ画像Blobをアップロードする
+ */
 async function uploadImageFile(imgId, blob) {
   const fileName = `sella_img_${imgId}.bin`;
   const metadata = { name: fileName, parents: ['appDataFolder'] };
   const boundary = 'sella_img_multipart_boundary';
-  const delimiter = `
---${boundary}
-`;
-  const close_delim = `
---${boundary}--`;
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const close_delim = `\r\n--${boundary}--`;
 
   const arrayBuffer = await blob.arrayBuffer();
   const headersPart = delimiter + 
-    'Content-Type: application/json; charset=UTF-8
-
-' + 
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' + 
     JSON.stringify(metadata) + 
     delimiter + 
-    `Content-Type: ${blob.type || 'image/jpeg'}
-
-`;
+    `Content-Type: ${blob.type || 'image/jpeg'}\r\n\r\n`;
   const footerPart = close_delim;
 
   const bodyBlob = new Blob([
@@ -427,6 +457,9 @@ async function uploadImageFile(imgId, blob) {
   return await res.json();
 }
 
+/**
+ * クラウドからバイナリ画像ファイルをダウンロードしてIndexedDBに同期
+ */
 async function downloadImageFile(fileId, imgId) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   const res = await driveFetch(url);
@@ -446,6 +479,9 @@ async function downloadImageFile(fileId, imgId) {
   });
 }
 
+/**
+ * クラウド上のファイルを物理削除
+ */
 async function deleteCloudFile(fileId) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}`;
   const res = await driveFetch(url, { method: 'DELETE' });
@@ -457,6 +493,7 @@ async function deleteCloudFile(fileId) {
 
 /**
  * ★★★ 双方向マージ・クラウド同期エンジン ★★★
+ * @param {boolean} silent - アラート等の表示を省略するか
  */
 export async function syncAllData(silent = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
@@ -475,23 +512,21 @@ export async function syncAllData(silent = false) {
     const currentBgImage = localStorage.getItem('sella_bg_image') || '';
     const currentCustom = serializeCustomSettings();
 
-    const lastSavedTheme = localStorage.getItem('sella_last_sync_theme');
-    const lastSavedApiKey = localStorage.getItem('sella_last_sync_apikey');
-    const lastSavedModel = localStorage.getItem('sella_last_sync_model');
-    const lastSavedBgImage = localStorage.getItem('sella_last_sync_bgimage');
-    const lastSavedCustomStr = localStorage.getItem('sella_last_sync_custom');
+    const lastSavedTheme = localStorage.getItem('sella_last_sync_theme') || '';
+    const lastSavedApiKey = localStorage.getItem('sella_last_sync_apikey') || '';
+    const lastSavedModel = localStorage.getItem('sella_last_sync_model') || '';
+    const lastSavedBgImage = localStorage.getItem('sella_last_sync_bgimage') || '';
+    const lastSavedCustomStr = localStorage.getItem('sella_last_sync_custom') || '{}';
 
     let localSettingsUpdatedAt = localStorage.getItem('sella_settings_updated_at');
 
-    const hasSyncCache = lastSavedTheme !== null || lastSavedApiKey !== null;
-    const isCustomChanged = lastSavedCustomStr !== null && JSON.stringify(currentCustom) !== lastSavedCustomStr;
+    const isCustomChanged = JSON.stringify(currentCustom) !== lastSavedCustomStr;
 
-    if (hasSyncCache && (
-        currentTheme !== lastSavedTheme || 
+    if (currentTheme !== lastSavedTheme || 
         currentApiKey !== lastSavedApiKey || 
         currentModel !== lastSavedModel ||
         currentBgImage !== lastSavedBgImage ||
-        isCustomChanged)) {
+        isCustomChanged) {
       
       localSettingsUpdatedAt = new Date().toISOString();
       localStorage.setItem('sella_settings_updated_at', localSettingsUpdatedAt);
@@ -512,27 +547,9 @@ export async function syncAllData(silent = false) {
     // ==========================================================================
     // 🌟 ゼロナレッジ暗号化 (Sella Settings Sync Protocol V15) 設定同期セクション
     // ==========================================================================
-    let googleUserId = state.googleUserSub || localStorage.getItem('sella_google_user_sub') || localStorage.getItem('sella_google_sub');
-    if (!googleUserId && token) {
-      try {
-        const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { 'Authorization': 'Bearer ' + token }
-        });
-        if (profileRes.ok) {
-          const userInfo = await profileRes.json();
-          if (userInfo.sub) {
-            googleUserId = userInfo.sub;
-            state.googleUserSub = userInfo.sub;
-            localStorage.setItem('sella_google_user_sub', userInfo.sub);
-            localStorage.setItem('sella_google_sub', userInfo.sub);
-          }
-        }
-      } catch (err) {
-        console.warn('[GoogleDriveSync] Auto-fetch userinfo sub warning:', err);
-      }
-    }
+    const googleUserId = state.googleUserSub || localStorage.getItem('sella_google_sub') || localStorage.getItem('sella_google_user_sub');
 
-    if (true) {
+    if (googleUserId) {
       console.log('[GoogleDriveSync] Initializing settings sync with Zero-Knowledge encryption...');
 
       let cloudSettings = null;
@@ -550,32 +567,14 @@ export async function syncAllData(silent = false) {
         const localTime = localSettingsUpdatedAt ? new Date(localSettingsUpdatedAt).getTime() : 0;
         const cloudTime = new Date(cloudSettings.updatedAt || 0).getTime();
 
-        // 🌟 バグ修正の最重要ポイント:
-        // 新規端末(localSettingsUpdatedAtが未保持)の場合、あるいはクラウドの方が新しい場合、
-        // またはローカルのAPIキーが空でクラウドにキーが存在する場合は「100%クラウドを優先して引き込む」！
-        const isLocalKeyEmptyButCloudHas = !currentApiKey && cloudSettings.encryptedApiKey;
-
-        if (cloudTime > localTime || !localSettingsUpdatedAt || isLocalKeyEmptyButCloudHas) {
-          console.log('[GoogleDriveSync] Cloud settings are newer or local is uninitialized. Restoring cloud settings to local...');
+        if (cloudTime > localTime || !localSettingsUpdatedAt) {
+          console.log('[GoogleDriveSync] Cloud settings are newer or local is fresh. Overwriting local settings.');
           
-          if (cloudSettings.theme) {
-            localStorage.setItem('sella_theme', cloudSettings.theme);
-            document.documentElement.setAttribute('data-theme', cloudSettings.theme);
-            const themeSelect = document.getElementById('theme-select');
-            if (themeSelect) themeSelect.value = cloudSettings.theme;
-          }
-          if (cloudSettings.selectedModel) {
-            localStorage.setItem('gemini_selected_model', cloudSettings.selectedModel);
-          }
-          if (cloudSettings.backgroundImage !== undefined) {
-            localStorage.setItem('sella_bg_image', cloudSettings.backgroundImage || '');
-          }
-          if (cloudSettings.customSettings) {
-            deserializeCustomSettings(cloudSettings.customSettings);
-          }
-          if (cloudSettings.updatedAt) {
-            localStorage.setItem('sella_settings_updated_at', cloudSettings.updatedAt);
-          }
+          localStorage.setItem('sella_theme', cloudSettings.theme || 'dark');
+          localStorage.setItem('gemini_selected_model', cloudSettings.selectedModel || 'models/gemini-2.5-flash');
+          localStorage.setItem('sella_bg_image', cloudSettings.backgroundImage || '');
+          deserializeCustomSettings(cloudSettings.customSettings);
+          localStorage.setItem('sella_settings_updated_at', cloudSettings.updatedAt);
 
           let decryptedKey = '';
           if (cloudSettings.encryptedApiKey && cloudSettings.encryptIv) {
@@ -587,18 +586,21 @@ export async function syncAllData(silent = false) {
             }
           }
 
-          // キャッシュ同期
           localStorage.setItem('sella_last_sync_theme', cloudSettings.theme || 'dark');
-          localStorage.setItem('sella_last_sync_apikey', decryptedKey || currentApiKey || '');
+          localStorage.setItem('sella_last_sync_apikey', decryptedKey || '');
           localStorage.setItem('sella_last_sync_model', cloudSettings.selectedModel || 'models/gemini-2.5-flash');
           localStorage.setItem('sella_last_sync_bgimage', cloudSettings.backgroundImage || '');
           localStorage.setItem('sella_last_sync_custom', JSON.stringify(cloudSettings.customSettings || {}));
 
+          document.documentElement.setAttribute('data-theme', cloudSettings.theme || 'dark');
+          const themeSelect = document.getElementById('theme-select');
+          if (themeSelect) {
+            themeSelect.value = cloudSettings.theme || 'dark';
+          }
         } else if (localTime > cloudTime) {
           shouldUploadConfig = true;
         }
       } else {
-        // クラウドに設定ファイルが存在しない場合のみアップロード
         shouldUploadConfig = true;
       }
 
@@ -716,16 +718,8 @@ export async function syncAllData(silent = false) {
       }
     });
 
-    const uploadTargets = [];
     for (const imgId of requiredImageIds) {
       if (localImageIdsSet.has(imgId) && !cloudImageFilesMap.has(imgId)) {
-        uploadTargets.push(imgId);
-      }
-    }
-
-    if (uploadTargets.length > 0) {
-      console.log(`[GoogleDriveSync] Uploading ${uploadTargets.length} images...`);
-      await Promise.all(uploadTargets.map(async (imgId) => {
         const blobRecord = await new Promise((res) => {
           const tx = db.transaction(['images'], 'readonly');
           const req = tx.objectStore('images').get(imgId);
@@ -735,36 +729,20 @@ export async function syncAllData(silent = false) {
         if (blobRecord && blobRecord.blob) {
           await uploadImageFile(imgId, blobRecord.blob);
         }
-      }));
+      }
     }
 
-    const downloadTargets = [];
     for (const imgId of requiredImageIds) {
       if (!localImageIdsSet.has(imgId) && cloudImageFilesMap.has(imgId)) {
-        downloadTargets.push(imgId);
-      }
-    }
-
-    if (downloadTargets.length > 0) {
-      console.log(`[GoogleDriveSync] Downloading ${downloadTargets.length} images...`);
-      await Promise.all(downloadTargets.map(async (imgId) => {
         const cloudFile = cloudImageFilesMap.get(imgId);
         await downloadImageFile(cloudFile.id, imgId);
-      }));
-    }
-
-    const deleteTargets = [];
-    for (const [imgId, cloudFile] of cloudImageFilesMap.entries()) {
-      if (!requiredImageIds.has(imgId)) {
-        deleteTargets.push(cloudFile);
       }
     }
 
-    if (deleteTargets.length > 0) {
-      console.log(`[GoogleDriveSync] Purging ${deleteTargets.length} unused cloud images...`);
-      await Promise.all(deleteTargets.map(async (cloudFile) => {
+    for (const [imgId, cloudFile] of cloudImageFilesMap.entries()) {
+      if (!requiredImageIds.has(imgId)) {
         await deleteCloudFile(cloudFile.id);
-      }));
+      }
     }
 
     const updatedIndex = {
@@ -808,9 +786,7 @@ export async function syncAllData(silent = false) {
       }
     } else if (err.message !== 'AUTH_EXPIRED') {
       if (!silent) {
-        alert(`データの同期中にエラーが発生しました。
-
-詳細エラー: ${err.message}`);
+        alert(`データの同期中にエラーが発生しました。\n\n詳細エラー: ${err.message}\n\n※Google Cloud Consoleで「Google Drive API」が有効になっていないか、テストユーザー制限、スコープ不足の可能性があります。`);
       }
     }
   } finally {
@@ -819,6 +795,9 @@ export async function syncAllData(silent = false) {
   }
 }
 
+/**
+ * Googleアカウントおよびローカル上のすべてのデータを「完全消去・初期化」する
+ */
 export async function destroyAllSellaData() {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
 
