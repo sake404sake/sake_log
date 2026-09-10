@@ -1,11 +1,9 @@
 /* ==========================================================================
-   1. テーマ定義 (CSS Variables)
-   ========================================================================== */
-:root,
-html[data-theme="dark"] {
+1. テーマ定義 (CSS Variables)
+========================================================================== */
+:root, html[data-theme="dark"] {
   --sidebar-width: 240px;
   --right-panel-width: 320px;
-
   /* 🌙 ダーク（デフォルト） */
   --bg-color: #121316;
   --panel-bg: #18191d;
@@ -22,7 +20,6 @@ html[data-theme="dark"] {
 html[data-theme="light"] {
   --sidebar-width: 240px;
   --right-panel-width: 320px;
-
   --bg-color: #f3f4f6;
   --panel-bg: #ffffff;
   --card-bg: #ffffff;
@@ -38,7 +35,6 @@ html[data-theme="light"] {
 html[data-theme="sakura"] {
   --sidebar-width: 240px;
   --right-panel-width: 320px;
-
   --bg-color: #fcf4f6;
   --panel-bg: #ffffff;
   --card-bg: #fff0f3;
@@ -54,7 +50,6 @@ html[data-theme="sakura"] {
 html[data-theme="gaming"] {
   --sidebar-width: 240px;
   --right-panel-width: 320px;
-
   --bg-color: #0d0e15;
   --panel-bg: #131520;
   --card-bg: #1a1d2e;
@@ -70,7 +65,6 @@ html[data-theme="gaming"] {
 html[data-theme="japan-modern"] {
   --sidebar-width: 240px;
   --right-panel-width: 320px;
-
   --bg-color: #161a1d;
   --panel-bg: #1f2428;
   --card-bg: #2a3036;
@@ -83,8 +77,8 @@ html[data-theme="japan-modern"] {
 }
 
 /* ==========================================================================
-   2. リセット & 基本スタイル
-   ========================================================================== */
+2. リセット & 基本スタイル
+========================================================================== */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -128,8 +122,8 @@ a:hover {
 }
 
 /* ==========================================================================
-   3. サイドバー & ヘッダー
-   ========================================================================== */
+3. サイドバー & ヘッダー
+========================================================================== */
 .sidebar {
   position: fixed;
   top: 0;
@@ -302,8 +296,8 @@ a:hover {
 }
 
 /* ==========================================================================
-   4. 共通フォーム・ボタン・設定画面
-   ========================================================================== */
+4. 共通フォーム・ボタン・設定画面
+========================================================================== */
 .input-dark {
   width: 100%;
   background-color: var(--bg-color);
@@ -342,12 +336,7 @@ a:hover {
   background-color: var(--accent-hover);
 }
 
-.btn-secondary,
-.settings-card button,
-.input-group button,
-#btn-save-api-key,
-#btn-fetch-models,
-.btn-fetch-models {
+.btn-secondary, .settings-card button, .input-group button, #btn-save-api-key, #btn-fetch-models, .btn-fetch-models {
   white-space: nowrap !important;
   flex-shrink: 0 !important;
 }
@@ -391,9 +380,7 @@ a:hover {
   overflow-wrap: break-word;
 }
 
-.card-title-bulk + .card-desc,
-.bulk-analyze-desc,
-.card-desc.bulk-desc {
+.card-title-bulk + .card-desc, .bulk-analyze-desc, .card-desc.bulk-desc {
   display: block !important;
   margin-top: 6px;
   clear: both;
@@ -406,8 +393,8 @@ a:hover {
 }
 
 /* ==========================================================================
-   5. 酒ログカード & グリッド (および カテゴリ・リスト表示)
-   ========================================================================== */
+5. 酒ログカード & グリッド (および カテゴリ・リスト表示)
+========================================================================== */
 .log-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -718,10 +705,9 @@ a:hover {
   font-size: 0.8rem;
 }
 
-
 /* ==========================================================================
-   6. モーダル (ポップアップ) & 閲覧表示
-   ========================================================================== */
+6. モーダル (ポップアップ) & 閲覧表示
+========================================================================== */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -761,8 +747,7 @@ a:hover {
   color: var(--text-main);
 }
 
-.modal-close-btn,
-.btn-close {
+.modal-close-btn, .btn-close {
   background: transparent;
   border: none;
   color: var(--text-sub);
@@ -780,8 +765,7 @@ a:hover {
   flex-shrink: 0;
 }
 
-.modal-close-btn:hover,
-.btn-close:hover {
+.modal-close-btn:hover, .btn-close:hover {
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
 }
@@ -796,11 +780,7 @@ a:hover {
   -webkit-overflow-scrolling: touch;
 }
 
-.modal-body .image-preview-wrapper,
-.modal-body [class*="carousel"],
-.modal-body [class*="detail-image"],
-.modal-body [class*="detail-main"],
-.modal-body [class*="gallery-container"] {
+.modal-body .image-preview-wrapper, .modal-body [class*="carousel"], .modal-body [class*="detail-image"], .modal-body [class*="detail-main"], .modal-body [class*="gallery-container"] {
   width: 100% !important;
   height: 220px !important;
   min-height: 220px !important;
@@ -815,11 +795,7 @@ a:hover {
   border: 1px solid var(--border-color) !important;
 }
 
-.modal-body .image-preview-wrapper img,
-.modal-body [class*="carousel"] img,
-.modal-body [class*="detail-image"] img,
-.modal-body [class*="detail-main"] img,
-.modal-body [class*="gallery"] img {
+.modal-body .image-preview-wrapper img, .modal-body [class*="carousel"] img, .modal-body [class*="detail-image"] img, .modal-body [class*="detail-main"] img, .modal-body [class*="gallery"] img {
   width: 100% !important;
   height: 100% !important;
   max-height: 220px !important;
@@ -927,8 +903,7 @@ a:hover {
   line-height: 1.3;
 }
 
-#image-preview-list,
-.image-preview-grid {
+#image-preview-list, .image-preview-grid {
   display: flex !important;
   flex-wrap: wrap !important;
   gap: 8px !important;
@@ -971,12 +946,12 @@ a:hover {
   gap: 2px;
   opacity: 0;
   transition: opacity 0.2s;
-  pointer-events: none; /* 💡 修正: 非表示時はクリックを透過させる */
+  pointer-events: none;
 }
 
 .preview-item:hover .preview-actions {
   opacity: 1;
-  pointer-events: auto; /* 💡 修正: ホバー時はクリックを有効化する */
+  pointer-events: auto;
 }
 
 .preview-actions button {
@@ -1057,8 +1032,8 @@ a:hover {
 }
 
 /* ==========================================================================
-   7. 画像拡大（ライトボックス）& インタラクティブUI
-   ========================================================================== */
+7. 画像拡大（ライトボックス）& インタラクティブUI
+========================================================================== */
 .lightbox-overlay {
   display: none;
   position: fixed;
@@ -1174,8 +1149,7 @@ a:hover {
 }
 
 /* モーダルフッター（PC表示用デフォルト） */
-.modal-footer,
-.editor-actions {
+.modal-footer, .editor-actions {
   padding: 12px 16px;
   border-top: 1px solid var(--border-color);
   display: flex;
@@ -1188,8 +1162,7 @@ a:hover {
   flex-wrap: wrap;
 }
 
-.footer-left,
-.footer-right {
+.footer-left, .footer-right {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1293,11 +1266,10 @@ a:hover {
     object-fit: cover !important;
   }
 
-  /* フォームの行を1列に変更 */
   .form-row {
     grid-template-columns: 1fr !important;
   }
-  
+
   .modal-card {
     max-width: 95vw !important;
     margin: 0 auto;
@@ -1312,37 +1284,33 @@ a:hover {
     box-sizing: border-box !important;
   }
 
-  .modal-footer,
-  .editor-actions {
+  .modal-footer, .editor-actions {
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 8px !important;
     padding: 10px 12px !important;
   }
-  
-  .footer-left, 
-  .footer-right {
+
+  .footer-left, .footer-right {
     width: 100% !important;
     display: flex !important;
     flex-direction: row !important;
     justify-content: space-between !important;
     gap: 8px !important;
   }
-  
-  .footer-left > *, 
-  .footer-right > * {
+
+  .footer-left > *, .footer-right > * {
     flex: 1 !important;
     text-align: center !important;
     box-sizing: border-box !important;
   }
-  
+
   .model-select {
     width: 100% !important;
     flex: 1 !important;
   }
 
-  .modal-footer button,
-  .editor-actions button {
+  .modal-footer button, .editor-actions button {
     max-width: 100% !important;
     white-space: normal !important;
   }
@@ -1354,8 +1322,8 @@ a:hover {
 }
 
 /* ==========================================================================
-   8. PC表示用メディアクエリ (1024px以上)
-   ========================================================================== */
+8. PC表示用メディアクエリ (1024px以上)
+========================================================================== */
 @media (min-width: 1024px) {
   .app-container {
     grid-template-columns: var(--sidebar-width) 1fr var(--right-panel-width);
@@ -1366,8 +1334,7 @@ a:hover {
     transform: none !important;
   }
 
-  .drawer-overlay, 
-  .mobile-header {
+  .drawer-overlay, .mobile-header {
     display: none !important;
   }
 
@@ -1404,10 +1371,7 @@ a:hover {
     font-size: 0.9rem;
   }
 
-  .right-panel .widget-card,
-  .right-panel .plugin-btn,
-  .right-panel .card-desc,
-  .right-panel p {
+  .right-panel .widget-card, .right-panel .plugin-btn, .right-panel .card-desc, .right-panel p {
     word-break: keep-all;
     overflow-wrap: break-word;
     line-height: 1.4;
@@ -1462,4 +1426,48 @@ a:hover {
     cursor: pointer;
     text-align: left;
   }
+}
+
+/* ==========================================================================
+9. 明るいテーマ（ライト・桜吹雪）向けのダッシュボードリスト視認性向上カスタマイズ
+========================================================================== */
+
+/* ☀️ ライトテーマ (Light) */
+html[data-theme="light"] .brand-group-card {
+  background: #ffffff !important;
+  border: 1px solid var(--border-color, #d1d5db) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+html[data-theme="light"] .brand-header {
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+html[data-theme="light"] .log-row-item {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+html[data-theme="light"] .log-row-item:hover {
+  background: #f1f5f9 !important;
+}
+
+/* 🌸 桜吹雪テーマ (Sakura) */
+html[data-theme="sakura"] .brand-group-card {
+  background: #ffffff !important;
+  border: 1px solid var(--border-color, #f3c2ce) !important;
+  box-shadow: 0 2px 8px rgba(216, 74, 117, 0.06) !important;
+}
+
+html[data-theme="sakura"] .brand-header {
+  border-bottom: 1px solid #fce7f3 !important;
+}
+
+html[data-theme="sakura"] .log-row-item {
+  background: #fff5f7 !important;
+  border: 1px solid #fbcfe8 !important;
+}
+
+html[data-theme="sakura"] .log-row-item:hover {
+  background: #fce7f3 !important;
 }
