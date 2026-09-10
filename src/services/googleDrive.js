@@ -355,24 +355,22 @@ async function driveFetch(url, options = {}) {
     throw new Error('Not authenticated with Google');
   }
 
-  // 1. クライアント側で事前に1時間を超えているか判定
   if (isTokenExpired()) {
     console.warn('[GoogleDrive] Token detected as expired before fetch request.');
     handleTokenExpired();
     throw new Error('AUTH_EXPIRED');
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウト安全装置
-
   options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウト
   options.signal = controller.signal;
 
   try {
     const response = await fetch(url, options);
     clearTimeout(timeoutId);
     
-    // 2. サーバー側から401（未認可）が返ってきた場合
     if (response.status === 401) {
       console.error('[GoogleDrive] Unauthorized (401). Invalid token session.');
       handleTokenExpired();
@@ -383,11 +381,11 @@ async function driveFetch(url, options = {}) {
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      console.warn('[GoogleDrive] Fetch request timed out after 15 seconds.');
-      throw new Error('NETWORK_TIMEOUT');
+      console.warn('[GoogleDrive] Request timed out (15s).');
+      throw new Error('OFFLINE_NETWORK_ERROR');
     }
     if (err instanceof TypeError || err.message?.includes('fetch')) {
-      console.warn('[GoogleDrive] Network error detected. App is likely offline. Login state is preserved.');
+      console.warn('[GoogleDrive] Network error detected. App is likely offline.');
       throw new Error('OFFLINE_NETWORK_ERROR');
     }
     throw err;
@@ -597,32 +595,7 @@ export async function syncAllData(silent = false) {
     // ==========================================================================
     // 🌟 ゼロナレッジ暗号化 (Sella Settings Sync Protocol V15) 設定同期セクション
     // ==========================================================================
-    let googleUserId = state.googleUserSub || localStorage.getItem('sella_google_sub') || localStorage.getItem('sella_google_user_sub');
-
-    if (!googleUserId) {
-      const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
-      if (token) {
-        try {
-          const uRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (uRes.ok) {
-            const uInfo = await uRes.json();
-            if (uInfo.sub) {
-              googleUserId = uInfo.sub;
-              state.googleUserSub = googleUserId;
-              localStorage.setItem('sella_google_user_sub', googleUserId);
-            }
-          }
-        } catch (e) {
-          console.warn('[GoogleDriveSync] Dynamic userinfo fetch skipped:', e);
-        }
-      }
-    }
-
-    if (!googleUserId) {
-      googleUserId = localStorage.getItem('sella_google_user_name') || 'sella_default_user';
-    }
+    const googleUserId = state.googleUserSub || localStorage.getItem('sella_google_sub') || localStorage.getItem('sella_google_user_sub');
 
     if (googleUserId) {
       console.log('[GoogleDriveSync] Initializing settings sync with Zero-Knowledge encryption...');
