@@ -428,69 +428,41 @@ export async function handleImageFiles(files) {
 }
 
 
-export async function runAIAnalysis(imageItem) {
-  if (!imageItem) {
-    alert('解析する画像を選択してください。');
+/**
+ * 選択中の画像に対して Gemini AI 解析を実行し、フォームに自動反映する
+ */
+export async function runAIAnalysis(targetImg) {
+  if (!targetImg) {
+    alert('解析対象の画像が選択されていません。');
     return;
   }
   if (!hasApiKey()) {
-    alert('APIキーが設定されていません。設定画面でAPIキーを登録してください。');
+    alert('Gemini APIキーが設定されていません。設定画面で登録してください。');
     return;
   }
-
   const btnAnalyze = document.getElementById('btn-analyze');
-  const overlay = document.getElementById('analyzing-status');
   const originalText = btnAnalyze ? btnAnalyze.innerHTML : '';
-
   if (btnAnalyze) {
     btnAnalyze.disabled = true;
-    btnAnalyze.innerHTML = '<span class="spinner"></span> 解析中...';
+    btnAnalyze.innerHTML = '<span class="sella-spinner"></span> 解析中...';
   }
-  if (overlay) overlay.style.display = 'flex';
-
-  saveCurrentFormBackup();
-
   try {
-    let base64 = imageItem.base64;
-    let mimeType = imageItem.mimeType || 'image/jpeg';
-
-    if (!base64 && imageItem.blob) {
-      base64 = await blobToBase64(imageItem.blob);
-      imageItem.base64 = base64;
-    }
-
-    if (!base64) {
-      throw new Error('画像のデータが存在しません。');
-    }
-
-    const selectedModel = document.getElementById('modal-model-select')?.value || null;
-    const result = await analyzeLabelImage(base64, mimeType, selectedModel);
-
+    const base64Data = targetImg.base64 || (targetImg.blob ? await blobToBase64(targetImg.blob) : '');
+    const mimeType = targetImg.mimeType || 'image/jpeg';
+    const result = await analyzeLabelImage(base64Data, mimeType);
     if (result) {
-      const setFieldIfVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el && val) el.value = val;
-      };
-
-      if (result.category) setFieldIfVal('sake-category', result.category);
-      if (result.name || result.productName) setFieldIfVal('sake-name', result.name || result.productName);
-      if (result.productName) setFieldIfVal('sake-product', result.productName);
-      if (result.brewery) setFieldIfVal('sake-brewery', result.brewery);
-      if (result.region) setFieldIfVal('sake-region', result.region);
-      if (result.type) setFieldIfVal('sake-type', result.type);
-      if (result.abv) setFieldIfVal('sake-abv', result.abv);
-      if (result.aiInfo) setFieldIfVal('sake-ai-info', result.aiInfo);
-
-      updateFieldRevertUI();
+      fillEditorForm(result);
+      alert('AI解析が完了しました。フォームへ自動反映しました。');
+    } else {
+      alert('AI解析結果を取得できませんでした。');
     }
   } catch (err) {
-    console.error('AI解析エラー:', err);
+    console.error('AI Analysis Error:', err);
     alert('AI解析中にエラーが発生しました: ' + (err.message || err));
   } finally {
     if (btnAnalyze) {
       btnAnalyze.disabled = false;
       btnAnalyze.innerHTML = originalText;
     }
-    if (overlay) overlay.style.display = 'none';
   }
 }
