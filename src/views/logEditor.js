@@ -250,9 +250,15 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
           previewUrl = URL.createObjectURL(blob);
           item.previewUrl = previewUrl;
         }
+        let base64 = item.base64 || '';
+        if (!base64 && blob) {
+          try {
+            base64 = await blobToBase64(blob);
+          } catch (err) {}
+        }
         state.uploadedImages.push({
           blob: blob,
-          base64: item.base64,
+          base64: base64,
           mimeType: item.mimeType || 'image/jpeg',
           previewUrl: previewUrl
         });
@@ -484,6 +490,14 @@ export async function handleImageFiles(files) {
       } catch (err) {
         console.error(`画像 [${file.name || i}] のURL生成に失敗:`, err);
         continue;
+      }
+    }
+
+    if (!base64 && blob) {
+      try {
+        base64 = await blobToBase64(blob);
+      } catch (err) {
+        console.warn('blobToBase64 fallback failed:', err);
       }
     }
 
