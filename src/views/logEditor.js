@@ -311,9 +311,11 @@ export function renderImagePreviewList() {
     btnAnalyze.style.display = (hasApiKey() && state.uploadedImages.length > 0) ? 'inline-flex' : 'none';
   }
 
+  const svgPlaceholder = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><rect width='80' height='80' fill='%232d3748'/><text x='50%' y='50%' fill='%23a0aec0' font-size='12' text-anchor='middle' dy='.3em'>📸 画像</text></svg>";
+
   const itemsHTML = state.uploadedImages.map((img, idx) =>
     `<div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
-      <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
+      <img src="${img.previewUrl || svgPlaceholder}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" onerror="this.onerror=null; this.src='${svgPlaceholder}';" />
       <div class="preview-actions">
         <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
       </div>
@@ -374,56 +376,6 @@ export function updateFieldRevertUI() {
   });
 }
 
-/**
- * 🤖 AI解析実行関数 (1枚の画像を対象にGeminiラベル解析を行い、フォームに即時反映)
- */
-export async function runAIAnalysis(targetImg) {
-  if (!targetImg || !targetImg.base64) {
-    alert('解析対象の画像が見つかりません。');
-    return;
-  }
-  if (!hasApiKey()) {
-    alert('APIキーが設定されていません。設定画面から登録してください。');
-    return;
-  }
-
-  const analyzingStatus = document.getElementById('analyzing-status');
-  const btnAnalyze = document.getElementById('btn-analyze');
-  
-  if (analyzingStatus) analyzingStatus.style.display = 'flex';
-  if (btnAnalyze) btnAnalyze.disabled = true;
-
-  try {
-    saveCurrentFormBackup();
-    const result = await analyzeLabelImage(targetImg.base64, targetImg.mimeType || 'image/jpeg');
-    if (result) {
-      const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el && val !== undefined && val !== null) el.value = val;
-      };
-      if (result.category) setVal('sake-category', result.category);
-      if (result.name) setVal('sake-name', result.name);
-      if (result.productName) setVal('sake-product', result.productName);
-      if (result.brewery) setVal('sake-brewery', result.brewery);
-      if (result.region) setVal('sake-region', result.region);
-      if (result.type) setVal('sake-type', result.type);
-      if (result.abv) setVal('sake-abv', result.abv);
-      if (result.aiInfo) setVal('sake-ai-info', result.aiInfo);
-
-      updateFieldRevertUI();
-    }
-  } catch (err) {
-    console.error('AI解析エラー:', err);
-    alert('AI解析中にエラーが発生しました。');
-  } finally {
-    if (analyzingStatus) analyzingStatus.style.display = 'none';
-    if (btnAnalyze) btnAnalyze.disabled = false;
-  }
-}
-
-/**
- * 🌟【完全堅牢版】画像ファイル選択時の処理
- */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
 
@@ -431,10 +383,9 @@ export async function handleImageFiles(files) {
     const file = files[i];
     
     const isImage = (file.type && file.type.startsWith('image/')) || 
-                    /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
+                    /\.(heic|heif|png|jpe?g|webp|gif|bmp)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 🌟 1枚目の画像からEXIF撮影日時を即時抽出し「呑んだ日」に代入
     if (i === 0 && state.uploadedImages.length === 0) {
       try {
         const extractedDate = await extractPhotoDate(file);
@@ -447,38 +398,109 @@ export async function handleImageFiles(files) {
       }
     }
 
-    // 🌟 画像の圧縮とプレビュー登録 (Canvas圧縮失敗時は即座にオリジナルFileでフォールバック)
     try {
       const compressed = await compressImage(file);
-      const previewUrl = URL.createObjectURL(compressed.blob);
+      const blob = compressed.blob || file;
+      const previewUrl = URL.createObjectURL(blob);
 
       state.uploadedImages.push({
-        blob: compressed.blob,
-        base64: compressed.base64,
-        mimeType: compressed.mimeType,
+        blob: blob,
+        base64: compressed.base64 || '',
+        mimeType: compressed.mimeType || file.type || 'image/jpeg',
         previewUrl
       });
     } catch (e) {
-      console.warn(`画像 [${file.name || i}] のCanvas圧縮に例外発生、オリジナルFileでフォールバックします:`, e);
+      console.error(`画像 [${file.name || i}] の処理失敗:`, e);
       try {
         const previewUrl = URL.createObjectURL(file);
-        const base64 = await blobToBase64(file);
         state.uploadedImages.push({
           blob: file,
-          base64: base64,
+          base64: '',
           mimeType: file.type || 'image/jpeg',
-          previewUrl: previewUrl
+          previewUrl
         });
-      } catch (fallbackErr) {
-        console.error('プレビューフォールバック生成失敗:', fallbackErr);
+      } catch (err2) {
+        console.error('プレビュー作成エラー:', err2);
       }
     }
   }
 
-  // アクティブサムネイルインデックスの初期化を保証
   if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
     state.activeThumbnailIndex = 0;
   }
 
   renderImagePreviewList();
+}
+
+/**
+ * 🌟 AI解析実行処理 (main.jsからインポートされる必須関数)
+ */
+export async function runAIAnalysis(targetImg) {
+  if (!targetImg) {
+    alert('解析する画像を選択してください。');
+    return;
+  }
+
+  if (!hasApiKey()) {
+    alert('APIキーが設定されていません。設定画面から登録してください。');
+    return;
+  }
+
+  let base64 = targetImg.base64;
+  let mimeType = targetImg.mimeType || 'image/jpeg';
+
+  if (!base64 && targetImg.blob) {
+    try {
+      base64 = await blobToBase64(targetImg.blob);
+    } catch (e) {
+      console.error('Base64変換エラー:', e);
+    }
+  }
+
+  if (!base64) {
+    alert('画像の解析用データの準備に失敗しました。');
+    return;
+  }
+
+  const btnAnalyze = document.getElementById('btn-analyze');
+  const analyzingStatus = document.getElementById('analyzing-status');
+  const originalText = btnAnalyze ? btnAnalyze.innerHTML : '';
+
+  if (btnAnalyze) {
+    btnAnalyze.innerHTML = '<span class="sella-spinner"></span>解析中...';
+    btnAnalyze.disabled = true;
+  }
+  if (analyzingStatus) analyzingStatus.style.display = 'flex';
+
+  try {
+    const result = await analyzeLabelImage(base64, mimeType);
+    if (result) {
+      saveCurrentFormBackup();
+
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val) el.value = val;
+      };
+
+      setVal('sake-category', result.category || '日本酒');
+      setVal('sake-name', result.name || result.productName || '');
+      setVal('sake-product', result.productName || '');
+      setVal('sake-brewery', result.brewery || '');
+      setVal('sake-region', result.region || '');
+      setVal('sake-type', result.type || '');
+      setVal('sake-abv', result.abv || '');
+      setVal('sake-ai-info', result.aiInfo || '');
+
+      updateFieldRevertUI();
+    }
+  } catch (err) {
+    console.error('AI Analysis Error:', err);
+    alert('AI解析中にエラーが発生しました。');
+  } finally {
+    if (btnAnalyze) {
+      btnAnalyze.innerHTML = originalText;
+      btnAnalyze.disabled = false;
+    }
+    if (analyzingStatus) analyzingStatus.style.display = 'none';
+  }
 }
