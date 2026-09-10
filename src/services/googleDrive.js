@@ -361,10 +361,10 @@ async function driveFetch(url, options = {}) {
     throw new Error('AUTH_EXPIRED');
   }
 
-  options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
-
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒タイムアウト
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
   options.signal = controller.signal;
 
   try {
@@ -381,11 +381,11 @@ async function driveFetch(url, options = {}) {
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      console.warn('[GoogleDrive] Request timed out (15s).');
-      throw new Error('OFFLINE_NETWORK_ERROR');
+      console.warn('[GoogleDrive] Request timed out after 15s');
+      throw new Error('TIMEOUT_ERROR');
     }
     if (err instanceof TypeError || err.message?.includes('fetch')) {
-      console.warn('[GoogleDrive] Network error detected. App is likely offline.');
+      console.warn('[GoogleDrive] Network error detected. App is likely offline. Login state is preserved.');
       throw new Error('OFFLINE_NETWORK_ERROR');
     }
     throw err;
