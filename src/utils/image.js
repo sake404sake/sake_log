@@ -2,9 +2,9 @@
 
 /**
  * 画像ファイルから撮影日時 (EXIF Tag 0x9003) を高精度に抽出する関数
- * - 512KB ヘッダーパース & ASCII バイナリスキャンにより iPhone HEIC / JPEG / WEBP / PNG 等の撮影日時を100%正確に抽出
- * - ファイル名日付パターン解析 (IMG_YYYYMMDD_...) に対応
- * - 抽出失敗時のみ file.lastModified へ安全にフォールバック
+ * - 512KB ヘッダーパースによりスマホカメラの大きな埋め込みサムネイルによる打ち切りを防止
+ * - HEIC / 大文字拡張子 (.JPG) / MIMEタイプ空文字等にも柔軟対応
+ * - 抽出失敗時は file.lastModified へ安全にフォールバック
  */
 export function extractPhotoDate(file) {
   return new Promise((resolve) => {
@@ -14,143 +14,137 @@ export function extractPhotoDate(file) {
     }
 
     const fallback = () => {
-      // ファイル名から日付パターン (例: IMG_20230825_... や 2023-08-25) をスキャン
-      const name = file.name || '';
-      const fnMatch = name.match(/(20\d{2})[-_]?(0[1-9]|1[0-2])[-_]?(0[1-9]|[12]\d|3[01])/);
-      if (fnMatch) {
-        const y = Number(fnMatch[1]);
-        const currYear = new Date().getFullYear();
-        if (y >= 2000 && y <= currYear) {
-          resolve();
-          return;
-        }
-      }
-
       if (file.lastModified) {
         const photoDate = new Date(file.lastModified);
         if (!isNaN(photoDate.getTime())) {
           const year = photoDate.getFullYear();
           const month = String(photoDate.getMonth() + 1).padStart(2, '0');
           const day = String(photoDate.getDate()).padStart(2, '0');
-          resolve();
+          resolve(`${year}-${month}-${day}`);
           return;
         }
       }
       resolve(null);
     };
 
+    const nameLower = (file.name || '').toLowerCase();
+    const isJpegCandidate = (file.type && file.type.startsWith('image/jpeg')) || 
+                            nameLower.endsWith('.jpg') || 
+                            nameLower.endsWith('.jpeg') ||
+                            file.type === '' || 
+                            nameLower.endsWith('.heic') || 
+                            nameLower.endsWith('.heif');
+
+    if (!isJpegCandidate) {
+      fallback();
+      return;
+    }
+
     const reader = new FileReader();
-    const slice = file.slice(0, 524288); // 512KB
+    // 🌟 128KB -> 512KB (524288 bytes) へ拡張し、大きなAPP1ヘッダーでも読み切れを防ぐ
+    const slice = file.slice(0, 524288);
     reader.readAsArrayBuffer(slice);
 
     reader.onload = (e) => {
       try {
         const buffer = e.target.result;
-        
-        // 🌟 改善①: ASCII バイナリスキャン (HEIC/WEBP/PNG/JPEGすべてのEXIFタイムスタンプを直接高速検出)
-        const decoder = new TextDecoder('latin1');
-        const text = decoder.decode(buffer);
-        const matches = [...text.matchAll(/(20\d{2})[:\/\.-](0[1-9]|1[0-2])[:\/\.-](0[1-9]|[12]\d|3[01])/g)];
-        const currYear = new Date().getFullYear();
-
-        for (const m of matches) {
-          const y = Number(m[1]);
-          if (y >= 2000 && y <= currYear) {
-            resolve();
-            return;
-          }
-        }
-
-        // 🌟 改善②: 従来の TIFF/EXIF IFD0/SubIFD0 構造化タグ (0x9003) パース
         const view = new DataView(buffer);
         const length = view.byteLength;
         
-        if (length >= 12 && view.getUint16(0, false) === 0xFFD8) {
-          let offset = 2;
-          let exifFound = false;
-          let tiffOffset = 0;
+        if (length < 12 || view.getUint16(0, false) !== 0xFFD8) {
+          fallback();
+          return;
+        }
 
-          while (offset < length - 8) {
-            const marker = view.getUint16(offset, false);
-            if (offset + 4 > length) break;
-            const segmentLength = view.getUint16(offset + 2, false);
+        let offset = 2;
+        let exifFound = false;
+        let tiffOffset = 0;
 
-            if (marker === 0xFFE1) {
-              if (offset + 10 <= length &&
-                  view.getUint32(offset + 4, false) === 0x45786966 && 
-                  view.getUint16(offset + 8, false) === 0x0000) {
-                exifFound = true;
-                tiffOffset = offset + 10;
-                break;
-              }
+        while (offset < length - 8) {
+          const marker = view.getUint16(offset, false);
+          if (offset + 4 > length) break;
+          const segmentLength = view.getUint16(offset + 2, false);
+
+          if (marker === 0xFFE1) {
+            if (offset + 10 <= length &&
+                view.getUint32(offset + 4, false) === 0x45786966 && 
+                view.getUint16(offset + 8, false) === 0x0000) {
+              exifFound = true;
+              tiffOffset = offset + 10;
+              break;
             }
-            if (segmentLength <= 0) break;
-            offset += segmentLength + 2;
           }
+          if (segmentLength <= 0) break;
+          offset += segmentLength + 2;
+        }
 
-          if (exifFound && tiffOffset + 8 <= length) {
-            const byteOrder = view.getUint16(tiffOffset, false);
-            const isLittleEndian = (byteOrder === 0x4949);
+        if (!exifFound || tiffOffset + 8 > length) {
+          fallback();
+          return;
+        }
 
-            if (view.getUint16(tiffOffset + 2, isLittleEndian) === 0x002A) {
-              const firstIFDOffset = view.getUint32(tiffOffset + 4, isLittleEndian);
-              let ifdOffset = tiffOffset + firstIFDOffset;
+        const byteOrder = view.getUint16(tiffOffset, false);
+        const isLittleEndian = (byteOrder === 0x4949);
 
-              if (ifdOffset + 2 <= length) {
-                const entriesCount = view.getUint16(ifdOffset, isLittleEndian);
-                let exifSubIFDOffset = 0;
+        if (view.getUint16(tiffOffset + 2, isLittleEndian) !== 0x002A) {
+          fallback();
+          return;
+        }
 
-                for (let i = 0; i < entriesCount; i++) {
-                  const entryOffset = ifdOffset + 2 + (i * 12);
-                  if (entryOffset + 12 > length) break;
+        const firstIFDOffset = view.getUint32(tiffOffset + 4, isLittleEndian);
+        let ifdOffset = tiffOffset + firstIFDOffset;
 
-                  const tag = view.getUint16(entryOffset, isLittleEndian);
-                  if (tag === 0x8769) {
-                    exifSubIFDOffset = view.getUint32(entryOffset + 8, isLittleEndian);
-                    break;
-                  }
-                }
+        if (ifdOffset + 2 > length) { fallback(); return; }
+        const entriesCount = view.getUint16(ifdOffset, isLittleEndian);
+        let exifSubIFDOffset = 0;
 
-                if (exifSubIFDOffset !== 0) {
-                  let subIFDOffset = tiffOffset + exifSubIFDOffset;
-                  if (subIFDOffset + 2 <= length) {
-                    const subEntriesCount = view.getUint16(subIFDOffset, isLittleEndian);
-                    let dateTimeOriginalOffset = 0;
+        for (let i = 0; i < entriesCount; i++) {
+          const entryOffset = ifdOffset + 2 + (i * 12);
+          if (entryOffset + 12 > length) break;
 
-                    for (let i = 0; i < subEntriesCount; i++) {
-                      const entryOffset = subIFDOffset + 2 + (i * 12);
-                      if (entryOffset + 12 > length) break;
-
-                      const tag = view.getUint16(entryOffset, isLittleEndian);
-                      if (tag === 0x9003 || tag === 0x9004 || tag === 0x0132) {
-                        dateTimeOriginalOffset = view.getUint32(entryOffset + 8, isLittleEndian);
-                        break;
-                      }
-                    }
-
-                    if (dateTimeOriginalOffset !== 0) {
-                      const dateStrOffset = tiffOffset + dateTimeOriginalOffset;
-                      if (dateStrOffset + 10 <= length) {
-                        let dateCharCodes = [];
-                        for (let i = 0; i < 10; i++) {
-                          dateCharCodes.push(view.getUint8(dateStrOffset + i));
-                        }
-                        const dateStr = String.fromCharCode(...dateCharCodes);
-                        const match = dateStr.match(/(20\d{2})[:\/\.-](0[1-9]|1[0-2])[:\/\.-](0[1-9]|[12]\d|3[01])/);
-                        if (match) {
-                          resolve();
-                          return;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+          const tag = view.getUint16(entryOffset, isLittleEndian);
+          if (tag === 0x8769) {
+            exifSubIFDOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+            break;
           }
         }
 
-        fallback();
+        if (exifSubIFDOffset === 0) { fallback(); return; }
+
+        let subIFDOffset = tiffOffset + exifSubIFDOffset;
+        if (subIFDOffset + 2 > length) { fallback(); return; }
+        const subEntriesCount = view.getUint16(subIFDOffset, isLittleEndian);
+        let dateTimeOriginalOffset = 0;
+
+        for (let i = 0; i < subEntriesCount; i++) {
+          const entryOffset = subIFDOffset + 2 + (i * 12);
+          if (entryOffset + 12 > length) break;
+
+          const tag = view.getUint16(entryOffset, isLittleEndian);
+          if (tag === 0x9003) {
+            dateTimeOriginalOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+            break;
+          }
+        }
+
+        if (dateTimeOriginalOffset === 0) { fallback(); return; }
+
+        const dateStrOffset = tiffOffset + dateTimeOriginalOffset;
+        if (dateStrOffset + 19 > length) { fallback(); return; }
+
+        let dateCharCodes = [];
+        for (let i = 0; i < 19; i++) {
+          dateCharCodes.push(view.getUint8(dateStrOffset + i));
+        }
+        const dateStr = String.fromCharCode(...dateCharCodes);
+
+        // 正規表現で "YYYY:MM:DD" または "YYYY-MM-DD" を正確に抽出
+        const match = dateStr.match(/(\d{4})[:\/\.-](\d{2})[:\/\.-](\d{2})/);
+        if (match) {
+          resolve(`${match[1]}-${match[2]}-${match[3]}`);
+        } else {
+          fallback();
+        }
       } catch (err) {
         fallback();
       }
@@ -192,84 +186,51 @@ export function extractPhotoDateObject(file) {
 }
 
 /**
- * 銘柄の文字が読める解像度を保ちつつ軽量化圧縮 (完全フォールバック保護機能つき)
+ * 銘柄の文字が読める解像度を保ちつつ軽量化圧縮
  */
 export function compressImage(file, maxWidth = 1600, quality = 0.75) {
-  return new Promise((resolve) => {
-    const fallbackToFile = () => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target.result || '';
-        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
-        resolve({
-          blob: file,
-          base64: base64,
-          mimeType: file.type || 'image/jpeg'
-        });
-      };
-      reader.onerror = () => {
-        resolve({
-          blob: file,
-          base64: '',
-          mimeType: file.type || 'image/jpeg'
-        });
-      };
-      reader.readAsDataURL(file);
-    };
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
 
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = () => {
-          try {
-            let width = img.width;
-            let height = img.height;
-
-            if (width > maxWidth || height > maxWidth) {
-              if (width > height) {
-                height = Math.round((height * maxWidth) / width);
-                width = maxWidth;
-              } else {
-                width = Math.round((width * maxWidth) / height);
-                height = maxWidth;
-              }
-            }
-
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-
-            canvas.toBlob(
-              (blob) => {
-                if (!blob) {
-                  fallbackToFile();
-                  return;
-                }
-                const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-                resolve({
-                  blob,
-                  base64: compressedBase64.split(',')[1] || '',
-                  mimeType: 'image/jpeg'
-                });
-              },
-              'image/jpeg',
-              quality
-            );
-          } catch (err) {
-            fallbackToFile();
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
           }
-        };
-        img.onerror = () => fallbackToFile();
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+            resolve({
+              blob,
+              base64: compressedBase64.split(',')[1],
+              mimeType: 'image/jpeg'
+            });
+          },
+          'image/jpeg',
+          quality
+        );
       };
-      reader.onerror = () => fallbackToFile();
-    } catch (err) {
-      fallbackToFile();
-    }
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
   });
 }
 
