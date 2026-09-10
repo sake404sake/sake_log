@@ -147,7 +147,9 @@ async function poolAll(concurrency, items, taskFn) {
   const results = [];
   const executing = [];
   for (const item of items) {
-    const p = Promise.resolve().then(() => taskFn(item));
+    const p = Promise.resolve().then(() => taskFn(item)).catch(err => {
+      console.warn('[GoogleDriveSync] Batch item processing skipped on error:', err);
+    });
     results.push(p);
     if (concurrency <= items.length) {
       const e = p.finally(() => {
@@ -350,52 +352,45 @@ function handleTokenExpired() {
  * Google Drive API 通信ヘルパー (認証ヘッダー付与)
  */
 async function driveFetch(url, options = {}) {
-  let token = state.googleAccessToken || localStorage.getItem('sella_google_token');
-
-  if (isTokenExpired()) {
-    console.log('[GoogleDrive] Token expired. Attempting silent refresh...');
-    await refreshTokenSilently();
-    token = state.googleAccessToken || localStorage.getItem('sella_google_token');
-  }
-
+  const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) {
     throw new Error('Not authenticated with Google');
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  // 1. クライアント側で事前に1時間を超えているか判定
+  if (isTokenExpired()) {
+    console.warn('[GoogleDrive] Token detected as expired before fetch request.');
+    handleTokenExpired();
+    throw new Error('AUTH_EXPIRED');
+  }
 
   options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+
+  // 🌟【タイムアウト安全装置】15秒超えで応答がないリクエストを安全に切断し、同期不全・無限待機を防ぐ
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   options.signal = controller.signal;
 
   try {
     const response = await fetch(url, options);
     clearTimeout(timeoutId);
     
+    // 2. サーバー側から401（未認可）が返ってきた場合
     if (response.status === 401) {
-      console.warn('[GoogleDrive] 401 Unauthorized. Attempting silent refresh...');
-      await refreshTokenSilently();
-      const newToken = state.googleAccessToken || localStorage.getItem('sella_google_token');
-      if (newToken && newToken !== token) {
-        const c2 = new AbortController();
-        const t2 = setTimeout(() => c2.abort(), 15000);
-        options.headers['Authorization'] = `Bearer ${newToken}`;
-        options.signal = c2.signal;
-        const res2 = await fetch(url, options);
-        clearTimeout(t2);
-        return res2;
-      }
+      console.error('[GoogleDrive] Unauthorized (401). Invalid token session.');
+      handleTokenExpired();
+      throw new Error('AUTH_EXPIRED');
     }
-
+    
     return response;
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {
-      console.warn('[GoogleDrive] Request timed out after 15s');
-      throw new Error('TIMEOUT_ERROR');
+      console.warn('[GoogleDrive] Network fetch timed out (15s).');
+      throw new Error('NETWORK_TIMEOUT');
     }
     if (err instanceof TypeError || err.message?.includes('fetch')) {
-      console.warn('[GoogleDrive] Network offline. Preserving login state.');
+      console.warn('[GoogleDrive] Network error detected. App is likely offline. Login state is preserved.');
       throw new Error('OFFLINE_NETWORK_ERROR');
     }
     throw err;
