@@ -439,10 +439,7 @@ export async function runAIAnalysis(targetImg) {
 }
 
 /**
- * 🌟【完全堅牢版】画像ファイル選択時の処理
- * - 1枚目含むすべての画像で圧縮失敗時に元ファイルへのフォールバック（blob = file）を保証
- * - 画像配列への追加を最優先で行い、1枚目のプレビュー表示を100%確保
- * - 新規ログ追加時のみ、1枚目画像から非同期でEXIF撮影日時を自動適用（フォームの初期値「今日」を上書き）
+ * 画像ファイル選択時の処理
  */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
@@ -450,17 +447,29 @@ export async function handleImageFiles(files) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
-    // 1. 画像フォーマット確認
     const isImage = (file.type && file.type.startsWith('image/')) || 
                     /\.(heic|heif|png|jpe?g|webp|gif|bmp|tiff?)$/i.test(file.name || '');
     if (!isImage) continue;
+
+    // 🌟 1枚目写真の撮影日時抽出を最優先で直ちに非同期実行
+    if (i === 0 && !state.currentEditingLogId && state.uploadedImages.length === 0) {
+      extractPhotoDate(file).then(extractedDate => {
+        if (extractedDate) {
+          const dateInput = document.getElementById('sake-date');
+          if (dateInput) {
+            dateInput.value = extractedDate;
+          }
+        }
+      }).catch(err => {
+        console.warn('1枚目写真のEXIF解析スキップ:', err);
+      });
+    }
 
     let blob = null;
     let base64 = '';
     let mimeType = file.type || 'image/jpeg';
     let previewUrl = '';
 
-    // 2. 圧縮とプレビュー生成（失敗時も元のfileオブジェクトで100%追加）
     try {
       const compressed = await compressImage(file);
       blob = compressed.blob || file;
@@ -478,30 +487,14 @@ export async function handleImageFiles(files) {
       }
     }
 
-    // 3. 配列へ追加（これにより1枚目のプレビューは確実に描画される）
     state.uploadedImages.push({
       blob,
       base64,
       mimeType,
       previewUrl
     });
-
-    // 4. 1枚目写真の撮影日時抽出（新規作成時のみ、EXIFの日付で「今日」の初期値を自動上書き）
-    if (i === 0 && !state.currentEditingLogId && state.uploadedImages.length === 1) {
-      extractPhotoDate(file).then(extractedDate => {
-        if (extractedDate) {
-          const dateInput = document.getElementById('sake-date');
-          if (dateInput) {
-            dateInput.value = extractedDate;
-          }
-        }
-      }).catch(err => {
-        console.warn('1枚目写真のEXIF解析スキップ:', err);
-      });
-    }
   }
 
-  // アクティブサムネイルインデックスの初期化を保証
   if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
     state.activeThumbnailIndex = 0;
   }
