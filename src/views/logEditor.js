@@ -224,7 +224,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
     setVal('sake-region', initialBatchGroup.region || '');
     setVal('sake-type', initialBatchGroup.type || '');
     setVal('sake-abv', initialBatchGroup.abv || '');
-    if (initialBatchGroup && initialBatchGroup[0] && initialBatchGroup[0].date) {
+    if (initialBatchGroup[0] && initialBatchGroup[0].date) {
       const d = initialBatchGroup[0].date instanceof Date ? initialBatchGroup[0].date : new Date(initialBatchGroup[0].date);
       setVal('sake-date', !isNaN(d) ? d.toISOString().split('T')[0] : '');
     }
@@ -374,74 +374,10 @@ export function updateFieldRevertUI() {
   });
 }
 
-export async function runAIAnalysis(targetImg) {
-  if (!targetImg) {
-    alert('解析する画像を選択してください。');
-    return;
-  }
-  
-  if (!hasApiKey()) {
-    alert('APIキーが設定されていません。設定画面でキーを登録してください。');
-    return;
-  }
-
-  const btnAnalyze = document.getElementById('btn-analyze');
-  const originalText = btnAnalyze ? btnAnalyze.innerHTML : '🤖 AI解析実行';
-  if (btnAnalyze) {
-    btnAnalyze.disabled = true;
-    btnAnalyze.innerHTML = '<span class="sella-spinner"></span>解析中...';
-  }
-
-  try {
-    let base64Data = targetImg.base64;
-    let mimeType = targetImg.mimeType || 'image/jpeg';
-    if (!base64Data && targetImg.blob) {
-      base64Data = await blobToBase64(targetImg.blob);
-    }
-
-    if (!base64Data) {
-      alert('画像の読み込みに失敗しました。');
-      return;
-    }
-
-    if (Object.keys(state.backupFormData).length === 0) {
-      saveCurrentFormBackup();
-    }
-
-    const result = await analyzeLabelImage(base64Data, mimeType);
-
-    if (result) {
-      const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el && val !== undefined && val !== null) el.value = val;
-      };
-
-      if (result.category) setVal('sake-category', result.category);
-      if (result.name) setVal('sake-name', result.name);
-      if (result.productName) setVal('sake-product', result.productName);
-      if (result.brewery) setVal('sake-brewery', result.brewery);
-      if (result.region) setVal('sake-region', result.region);
-      if (result.type) setVal('sake-type', result.type);
-      if (result.abv) setVal('sake-abv', result.abv);
-      if (result.aiInfo) setVal('sake-ai-info', result.aiInfo);
-
-      updateFieldRevertUI();
-    }
-  } catch (err) {
-    console.error('AI解析エラー:', err);
-    alert('AI解析中にエラーが発生しました。');
-  } finally {
-    if (btnAnalyze) {
-      btnAnalyze.disabled = false;
-      btnAnalyze.innerHTML = originalText;
-    }
-  }
-}
-
 /**
  * 🌟【完全修復版】画像ファイル選択時の処理
- * 選択されたすべての画像ファイルを1枚も漏らさず確実に配列に追加。
- * EXIF処理は画像の圧縮・追加完了後にバックグラウンドで安全に実行。
+ * 1枚目の画像での EXIF 日時抽出例外による処理中断を防ぐため、完全な try-catch 保護と
+ * iPhone (HEIC/HEIF) 等で file.type が空の場合の代替ファイル拡張子チェックを導入。
  */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
@@ -453,47 +389,44 @@ export async function handleImageFiles(files) {
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    let blob = null;
-    let base64 = '';
-    let mimeType = file.type || 'image/jpeg';
-    let previewUrl = '';
-
-    try {
-      const compressed = await compressImage(file);
-      blob = compressed.blob || file;
-      base64 = compressed.base64 || '';
-      mimeType = compressed.mimeType || mimeType;
-      previewUrl = URL.createObjectURL(blob);
-    } catch (e) {
-      console.warn(`画像 [${file.name || i}] 圧縮フォールバック:`, e);
-      blob = file;
-      try {
-        previewUrl = URL.createObjectURL(file);
-      } catch (err) {
-        console.error(`画像 [${file.name || i}] URL生成エラー:`, err);
-        continue;
-      }
-    }
-
-    state.uploadedImages.push({
-      blob,
-      base64,
-      mimeType,
-      previewUrl
-    });
-
-    // 1枚目の写真の日付抽出は、画像が安全に配列に追加された後に非同期実行
-    if (i === 0 && (state.uploadedImages.length === 1 || !document.getElementById('sake-date')?.value)) {
+    // 🌟 1枚目の画像に対する EXIF 撮影日時抽出処理 (512KBヘッダー対応・非ブロッキング)
+    if (i === 0 && state.uploadedImages.length === 0) {
       extractPhotoDate(file).then(extractedDate => {
         if (extractedDate) {
           const dateInput = document.getElementById('sake-date');
-          if (dateInput && !dateInput.value) {
+          if (dateInput) {
             dateInput.value = extractedDate;
           }
         }
       }).catch(err => {
         console.warn('EXIF解析非同期スキップ:', err);
       });
+    }
+
+    // メイン処理: 画像の圧縮とプレビュー登録
+    try {
+      const compressed = await compressImage(file);
+      const previewUrl = URL.createObjectURL(compressed.blob);
+
+      state.uploadedImages.push({
+        blob: compressed.blob,
+        base64: compressed.base64,
+        mimeType: compressed.mimeType,
+        previewUrl
+      });
+    } catch (e) {
+      console.warn(`画像 [${file.name || i}] 圧縮フォールバック:`, e);
+      try {
+        const previewUrl = URL.createObjectURL(file);
+        state.uploadedImages.push({
+          blob: file,
+          base64: '',
+          mimeType: file.type || 'image/jpeg',
+          previewUrl
+        });
+      } catch (err) {
+        console.error(`画像 [${file.name || i}] プレビューURL生成失敗:`, err);
+      }
     }
   }
 
