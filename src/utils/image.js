@@ -1,8 +1,8 @@
 // src/utils/image.js
 
 /**
- * 画像ファイルから撮影日時 (EXIF Tag 0x9003) を高精度に抽出する関数
- * - 512KB ヘッダーパースによりスマホカメラの大きな埋め込みサムネイルによる打ち切りを防止
+ * 画像ファイルから撮影日時 (EXIF Tag 0x9003 / 0x0132 / 0x9004) を高精度に抽出する関数
+ * - 1MB (1,048,576 バイト) ヘッダーパースによりスマホカメラの大きな埋め込みサムネイルによる打ち切りを完全防止
  * - HEIC / 大文字拡張子 (.JPG) / MIMEタイプ空文字等にも柔軟対応
  * - 抽出失敗時は file.lastModified へ安全にフォールバック
  */
@@ -41,8 +41,8 @@ export function extractPhotoDate(file) {
     }
 
     const reader = new FileReader();
-    // 🌟 128KB -> 512KB (524288 bytes) へ拡張し、大きなAPP1ヘッダーでも読み切れを防ぐ
-    const slice = file.slice(0, 524288);
+    // 🌟 1024KB (1,048,576 bytes) ヘッダー読み込みで大きなAPP1ヘッダーでも読み切りを確実に防止
+    const slice = file.slice(0, 1048576);
     reader.readAsArrayBuffer(slice);
 
     reader.onload = (e) => {
@@ -97,6 +97,7 @@ export function extractPhotoDate(file) {
         if (ifdOffset + 2 > length) { fallback(); return; }
         const entriesCount = view.getUint16(ifdOffset, isLittleEndian);
         let exifSubIFDOffset = 0;
+        let mainDateTimeOffset = 0;
 
         for (let i = 0; i < entriesCount; i++) {
           const entryOffset = ifdOffset + 2 + (i * 12);
@@ -105,31 +106,37 @@ export function extractPhotoDate(file) {
           const tag = view.getUint16(entryOffset, isLittleEndian);
           if (tag === 0x8769) {
             exifSubIFDOffset = view.getUint32(entryOffset + 8, isLittleEndian);
-            break;
+          } else if (tag === 0x0132) {
+            mainDateTimeOffset = view.getUint32(entryOffset + 8, isLittleEndian);
           }
         }
 
-        if (exifSubIFDOffset === 0) { fallback(); return; }
+        let dateTimeOffset = 0;
 
-        let subIFDOffset = tiffOffset + exifSubIFDOffset;
-        if (subIFDOffset + 2 > length) { fallback(); return; }
-        const subEntriesCount = view.getUint16(subIFDOffset, isLittleEndian);
-        let dateTimeOriginalOffset = 0;
+        if (exifSubIFDOffset > 0) {
+          let subIFDOffset = tiffOffset + exifSubIFDOffset;
+          if (subIFDOffset + 2 <= length) {
+            const subEntriesCount = view.getUint16(subIFDOffset, isLittleEndian);
+            for (let i = 0; i < subEntriesCount; i++) {
+              const entryOffset = subIFDOffset + 2 + (i * 12);
+              if (entryOffset + 12 > length) break;
 
-        for (let i = 0; i < subEntriesCount; i++) {
-          const entryOffset = subIFDOffset + 2 + (i * 12);
-          if (entryOffset + 12 > length) break;
-
-          const tag = view.getUint16(entryOffset, isLittleEndian);
-          if (tag === 0x9003) {
-            dateTimeOriginalOffset = view.getUint32(entryOffset + 8, isLittleEndian);
-            break;
+              const tag = view.getUint16(entryOffset, isLittleEndian);
+              if (tag === 0x9003 || tag === 0x9004) { // DateTimeOriginal or DateTimeDigitized
+                dateTimeOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+                if (tag === 0x9003) break; // 0x9003 最優先
+              }
+            }
           }
         }
 
-        if (dateTimeOriginalOffset === 0) { fallback(); return; }
+        if (dateTimeOffset === 0) {
+          dateTimeOffset = mainDateTimeOffset;
+        }
 
-        const dateStrOffset = tiffOffset + dateTimeOriginalOffset;
+        if (dateTimeOffset === 0) { fallback(); return; }
+
+        const dateStrOffset = tiffOffset + dateTimeOffset;
         if (dateStrOffset + 19 > length) { fallback(); return; }
 
         let dateCharCodes = [];
@@ -138,7 +145,6 @@ export function extractPhotoDate(file) {
         }
         const dateStr = String.fromCharCode(...dateCharCodes);
 
-        // 正規表現で "YYYY:MM:DD" または "YYYY-MM-DD" を正確に抽出
         const match = dateStr.match(/(\d{4})[:\/\.-](\d{2})[:\/\.-](\d{2})/);
         if (match) {
           resolve(`${match[1]}-${match[2]}-${match[3]}`);
@@ -190,6 +196,11 @@ export function extractPhotoDateObject(file) {
  */
 export function compressImage(file, maxWidth = 1600, quality = 0.75) {
   return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error('No file provided'));
+      return;
+    }
+
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (e) => {
@@ -217,12 +228,20 @@ export function compressImage(file, maxWidth = 1600, quality = 0.75) {
 
         canvas.toBlob(
           (blob) => {
-            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-            resolve({
-              blob,
-              base64: compressedBase64.split(',')[1],
-              mimeType: 'image/jpeg'
-            });
+            if (blob) {
+              const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+              resolve({
+                blob,
+                base64: compressedBase64.split(',')[1],
+                mimeType: 'image/jpeg'
+              });
+            } else {
+              resolve({
+                blob: file,
+                base64: (e.target.result || '').split(',')[1] || '',
+                mimeType: file.type || 'image/jpeg'
+              });
+            }
           },
           'image/jpeg',
           quality
