@@ -224,7 +224,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
     setVal('sake-region', initialBatchGroup.region || '');
     setVal('sake-type', initialBatchGroup.type || '');
     setVal('sake-abv', initialBatchGroup.abv || '');
-    if (initialBatchGroup[0] && initialBatchGroup[0].date) {
+    if (initialBatchGroup && initialBatchGroup[0] && initialBatchGroup[0].date) {
       const d = initialBatchGroup[0].date instanceof Date ? initialBatchGroup[0].date : new Date(initialBatchGroup[0].date);
       setVal('sake-date', !isNaN(d) ? d.toISOString().split('T')[0] : '');
     }
@@ -374,10 +374,75 @@ export function updateFieldRevertUI() {
   });
 }
 
+export async function runAIAnalysis(targetImg) {
+  if (!targetImg) {
+    alert('解析する画像を選択してください。');
+    return;
+  }
+
+  if (!hasApiKey()) {
+    alert('APIキーが設定されていません。設定画面でキーを登録してください。');
+    return;
+  }
+
+  const btnAnalyze = document.getElementById('btn-analyze');
+  const originalText = btnAnalyze ? btnAnalyze.innerHTML : '🤖 AI解析実行';
+  if (btnAnalyze) {
+    btnAnalyze.disabled = true;
+    btnAnalyze.innerHTML = '<span class="sella-spinner"></span>解析中...';
+  }
+
+  try {
+    let base64Data = targetImg.base64;
+    let mimeType = targetImg.mimeType || 'image/jpeg';
+    if (!base64Data && targetImg.blob) {
+      base64Data = await blobToBase64(targetImg.blob);
+    }
+
+    if (!base64Data) {
+      alert('画像の読み込みに失敗しました。');
+      return;
+    }
+
+    if (Object.keys(state.backupFormData).length === 0) {
+      saveCurrentFormBackup();
+    }
+
+    const result = await analyzeLabelImage(base64Data, mimeType);
+
+    if (result) {
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val !== undefined && val !== null) el.value = val;
+      };
+
+      if (result.category) setVal('sake-category', result.category);
+      if (result.name) setVal('sake-name', result.name);
+      if (result.productName) setVal('sake-product', result.productName);
+      if (result.brewery) setVal('sake-brewery', result.brewery);
+      if (result.region) setVal('sake-region', result.region);
+      if (result.type) setVal('sake-type', result.type);
+      if (result.abv) setVal('sake-abv', result.abv);
+      if (result.aiInfo) setVal('sake-ai-info', result.aiInfo);
+
+      updateFieldRevertUI();
+    }
+  } catch (err) {
+    console.error('AI解析エラー:', err);
+    alert('AI解析中にエラーが発生しました。');
+  } finally {
+    if (btnAnalyze) {
+      btnAnalyze.disabled = false;
+      btnAnalyze.innerHTML = originalText;
+    }
+  }
+}
+
 /**
- * 🌟【完全修復版】画像ファイル選択時の処理
- * 1枚目の画像での EXIF 日時抽出例外による処理中断を防ぐため、完全な try-catch 保護と
- * iPhone (HEIC/HEIF) 等で file.type が空の場合の代替ファイル拡張子チェックを導入。
+ * 🌟【完全堅牢版】画像ファイル選択時の処理
+ * - 1枚目含むすべての画像で圧縮失敗時に元ファイルへのフォールバック（blob = file）を保証
+ * - 画像配列への追加を最優先で行い、1枚目のプレビュー表示を100%確保
+ * - 新規ログ追加時のみ、1枚目画像から非同期でEXIF撮影日時を自動適用（フォームの初期値「今日」を上書き）
  */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
@@ -385,37 +450,54 @@ export async function handleImageFiles(files) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
-    // 🌟 改善①: スマホ (HEIC/HEIF) や一部ブラウザで file.type が空文字の場合の代替拡張子判定フォールバック
+    // 1. 画像フォーマット確認
     const isImage = (file.type && file.type.startsWith('image/')) || 
-                    /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
+                    /\.(heic|heif|png|jpe?g|webp|gif|bmp|tiff?)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 🌟 改善②: 1枚目の画像に対する EXIF 撮影日時抽出処理を try-catch で厳重保護
-    if (i === 0 && state.uploadedImages.length === 0) {
+    let blob = null;
+    let base64 = '';
+    let mimeType = file.type || 'image/jpeg';
+    let previewUrl = '';
+
+    // 2. 圧縮とプレビュー生成（失敗時も元のfileオブジェクトで100%追加）
+    try {
+      const compressed = await compressImage(file);
+      blob = compressed.blob || file;
+      base64 = compressed.base64 || '';
+      mimeType = compressed.mimeType || mimeType;
+      previewUrl = URL.createObjectURL(blob);
+    } catch (e) {
+      console.warn(`画像 [${file.name || i}] の圧縮処理をスキップしフォールバック採用:`, e);
+      blob = file;
       try {
-        const extractedDate = await extractPhotoDate(file);
-        if (extractedDate) {
-          const dateInput = document.getElementById('sake-date');
-          if (dateInput) dateInput.value = extractedDate;
-        }
+        previewUrl = URL.createObjectURL(file);
       } catch (err) {
-        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました (圧縮処理へ続行):', err);
+        console.error(`画像 [${file.name || i}] のURL生成に失敗:`, err);
+        continue;
       }
     }
 
-    // 🌟 改善③: 画像の圧縮とプレビュー登録
-    try {
-      const compressed = await compressImage(file);
-      const previewUrl = URL.createObjectURL(compressed.blob);
+    // 3. 配列へ追加（これにより1枚目のプレビューは確実に描画される）
+    state.uploadedImages.push({
+      blob,
+      base64,
+      mimeType,
+      previewUrl
+    });
 
-      state.uploadedImages.push({
-        blob: compressed.blob,
-        base64: compressed.base64,
-        mimeType: compressed.mimeType,
-        previewUrl
+    // 4. 1枚目写真の撮影日時抽出（新規作成時のみ、EXIFの日付で「今日」の初期値を自動上書き）
+    if (i === 0 && !state.currentEditingLogId && state.uploadedImages.length === 1) {
+      extractPhotoDate(file).then(extractedDate => {
+        if (extractedDate) {
+          const dateInput = document.getElementById('sake-date');
+          if (dateInput) {
+            dateInput.value = extractedDate;
+          }
+        }
+      }).catch(err => {
+        console.warn('1枚目写真のEXIF解析スキップ:', err);
       });
-    } catch (e) {
-      console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
     }
   }
 
@@ -425,82 +507,4 @@ export async function handleImageFiles(files) {
   }
 
   renderImagePreviewList();
-}
-
-
-export async function runAIAnalysis(imageItem) {
-  if (!imageItem) {
-    alert('解析対象の画像が選択されていません。');
-    return;
-  }
-
-  const btnAnalyze = document.getElementById('btn-analyze');
-  const overlay = document.getElementById('analyzing-status');
-
-  if (btnAnalyze) {
-    btnAnalyze.disabled = true;
-    btnAnalyze.innerHTML = '<span class="sella-spinner"></span>解析中...';
-  }
-  if (overlay) {
-    overlay.style.display = 'flex';
-  }
-
-  try {
-    let base64 = imageItem.base64;
-    let mimeType = imageItem.mimeType || 'image/jpeg';
-
-    if (!base64 && imageItem.blob) {
-      base64 = await blobToBase64(imageItem.blob);
-      imageItem.base64 = base64;
-    }
-
-    if (!base64) {
-      alert('画像データの取得に失敗しました。');
-      return;
-    }
-
-    saveCurrentFormBackup();
-
-    const modelSelect = document.getElementById('modal-model-select');
-    const selectedModel = modelSelect?.value || null;
-
-    const result = await analyzeLabelImage(base64, mimeType, selectedModel);
-
-    if (result) {
-      const setValIfPresent = (id, val) => {
-        if (val !== undefined && val !== null && val !== '') {
-          const el = document.getElementById(id);
-          if (el) el.value = val;
-        }
-      };
-
-      setValIfPresent('sake-category', result.category);
-      setValIfPresent('sake-name', result.name || result.productName);
-      setValIfPresent('sake-product', result.productName);
-      setValIfPresent('sake-brewery', result.brewery);
-      setValIfPresent('sake-region', result.region);
-      setValIfPresent('sake-type', result.type);
-      setValIfPresent('sake-abv', result.abv);
-
-      if (result.aiInfo || result.notes) {
-        const aiEl = document.getElementById('sake-ai-info');
-        if (aiEl) {
-          aiEl.value = result.aiInfo || result.notes || '';
-        }
-      }
-
-      updateFieldRevertUI();
-    }
-  } catch (err) {
-    console.error('AI Label Analysis Error:', err);
-    alert('ラベル画像のAI解析に失敗しました: ' + (err.message || err));
-  } finally {
-    if (btnAnalyze) {
-      btnAnalyze.disabled = false;
-      btnAnalyze.innerHTML = '🤖 AI解析実行';
-    }
-    if (overlay) {
-      overlay.style.display = 'none';
-    }
-  }
 }
