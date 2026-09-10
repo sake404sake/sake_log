@@ -364,10 +364,8 @@ async function driveFetch(url, options = {}) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
-  if (!options.signal) {
-    options.signal = controller.signal;
-  }
+  options.headers = { ...options.headers, 'Authorization':  };
+  options.signal = controller.signal;
 
   try {
     const response = await fetch(url, options);
@@ -382,8 +380,12 @@ async function driveFetch(url, options = {}) {
     return response;
   } catch (err) {
     clearTimeout(timeoutId);
-    if (err.name === 'AbortError' || err instanceof TypeError || err.message?.includes('fetch') || err.message?.includes('aborted')) {
-      console.warn('[GoogleDrive] Network error or timeout detected. Login state preserved.');
+    if (err.name === 'AbortError') {
+      console.warn('[GoogleDrive] Fetch request timed out after 15 seconds.');
+      throw new Error('TIMEOUT_ERROR');
+    }
+    if (err instanceof TypeError || err.message?.includes('fetch')) {
+      console.warn('[GoogleDrive] Network error detected. Login state preserved.');
       throw new Error('OFFLINE_NETWORK_ERROR');
     }
     throw err;
@@ -547,30 +549,50 @@ export async function syncAllData(silent = false) {
   try {
     console.log('[GoogleDriveSync] Starting sync session...');
 
-    // 🌟 タイムスタンプの自己防衛判定
+    // Userinfo auto-recovery for missing sub
+    let googleUserId = state.googleUserSub || localStorage.getItem('sella_google_sub') || localStorage.getItem('sella_google_user_sub');
+    if (!googleUserId && token) {
+      try {
+        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { 'Authorization':  }
+        });
+        if (userInfoRes.ok) {
+          const userInfo = await userInfoRes.json();
+          if (userInfo && userInfo.sub) {
+            googleUserId = userInfo.sub;
+            state.googleUserSub = userInfo.sub;
+            localStorage.setItem('sella_google_user_sub', userInfo.sub);
+          }
+        }
+      } catch (subErr) {
+        console.warn('[GoogleDriveSync] Failed to fetch userinfo sub:', subErr);
+      }
+    }
+
     const currentTheme = localStorage.getItem('sella_theme') || 'dark';
     const currentApiKey = localStorage.getItem('gemini_api_key') || '';
     const currentModel = localStorage.getItem('gemini_selected_model') || 'models/gemini-2.5-flash';
     const currentBgImage = localStorage.getItem('sella_bg_image') || '';
     const currentCustom = serializeCustomSettings();
 
-    const lastSavedTheme = localStorage.getItem('sella_last_sync_theme') || '';
-    const lastSavedApiKey = localStorage.getItem('sella_last_sync_apikey') || '';
-    const lastSavedModel = localStorage.getItem('sella_last_sync_model') || '';
-    const lastSavedBgImage = localStorage.getItem('sella_last_sync_bgimage') || '';
+    const lastSavedTheme = localStorage.getItem('sella_last_sync_theme');
+    const lastSavedApiKey = localStorage.getItem('sella_last_sync_apikey');
+    const lastSavedModel = localStorage.getItem('sella_last_sync_model');
+    const lastSavedBgImage = localStorage.getItem('sella_last_sync_bgimage');
     const lastSavedCustomStr = localStorage.getItem('sella_last_sync_custom') || '{}';
 
+    const hasEverSyncedLocally = lastSavedTheme !== null;
     let localSettingsUpdatedAt = localStorage.getItem('sella_settings_updated_at');
 
     const isCustomChanged = JSON.stringify(currentCustom) !== lastSavedCustomStr;
 
-    if (currentTheme !== lastSavedTheme || 
-        currentApiKey !== lastSavedApiKey || 
-        currentModel !== lastSavedModel ||
-        currentBgImage !== lastSavedBgImage ||
-        isCustomChanged) {
+    if (hasEverSyncedLocally && 
+        (currentTheme !== (lastSavedTheme || '') || 
+         currentApiKey !== (lastSavedApiKey || '') || 
+         currentModel !== (lastSavedModel || '') ||
+         currentBgImage !== (lastSavedBgImage || '') ||
+         isCustomChanged)) {
       
-      // ユーザーが前回同期以降に設定を変更した
       localSettingsUpdatedAt = new Date().toISOString();
       localStorage.setItem('sella_settings_updated_at', localSettingsUpdatedAt);
       
@@ -579,84 +601,76 @@ export async function syncAllData(silent = false) {
       localStorage.setItem('sella_last_sync_model', currentModel);
       localStorage.setItem('sella_last_sync_bgimage', currentBgImage);
       localStorage.setItem('sella_last_sync_custom', JSON.stringify(currentCustom));
-    } else if (!localSettingsUpdatedAt) {
-      localSettingsUpdatedAt = new Date().toISOString();
-      localStorage.setItem('sella_settings_updated_at', localSettingsUpdatedAt);
     }
 
-    // 1. クラウド上のファイル一覧を取得
+    // 1. Cloud file list
     const cloudFiles = await listCloudFiles();
     const indexFile = cloudFiles.find(f => f.name === 'sella_index.json');
-    const configFile = cloudFiles.find(f => f.name === 'sella_config.json'); // 🌟 Sella Settings Sync Protocol専用設定ファイル
+    const configFile = cloudFiles.find(f => f.name === 'sella_config.json');
     const cloudImageFiles = cloudFiles.filter(f => f.name.startsWith('sella_img_'));
 
-    // ==========================================================================
-    // 🌟 ゼロナレッジ暗号化 (Sella Settings Sync Protocol V15) 設定同期セクション
-    // ==========================================================================
-    const googleUserId = state.googleUserSub || localStorage.getItem('sella_google_sub') || localStorage.getItem('sella_google_user_sub');
-
+    // 2. Settings sync (sella_config.json)
     if (googleUserId) {
       console.log('[GoogleDriveSync] Initializing settings sync with Zero-Knowledge encryption...');
 
-      // クラウド設定ファイルのフェッチとパース
       let cloudSettings = null;
       if (configFile) {
         try {
           cloudSettings = await downloadJsonFile(configFile.id);
         } catch (err) {
-          console.error('[GoogleDriveSync] Failed to parse sella_config.json, recreating...', err);
+          console.error('[GoogleDriveSync] Failed to parse sella_config.json:', err);
         }
       }
 
-      // 双方向マージ (LWW方式)
       let shouldUploadConfig = false;
       
       if (cloudSettings) {
-        const localTime = new Date(localSettingsUpdatedAt || 0).getTime();
-        const cloudTime = new Date(cloudSettings.updatedAt || 0).getTime();
+        const localTime = localSettingsUpdatedAt ? new Date(localSettingsUpdatedAt).getTime() : 0;
+        const cloudTime = cloudSettings.updatedAt ? new Date(cloudSettings.updatedAt).getTime() : 0;
 
-        if (cloudTime > localTime) {
-          console.log('[GoogleDriveSync] Cloud settings are newer. Overwriting local settings.');
+        if (cloudTime >= localTime || !hasEverSyncedLocally) {
+          console.log('[GoogleDriveSync] Downloading and applying cloud settings...');
           
-          // クラウドが新しい場合はローカルに引き込み復号
           localStorage.setItem('sella_theme', cloudSettings.theme || 'dark');
           localStorage.setItem('gemini_selected_model', cloudSettings.selectedModel || 'models/gemini-2.5-flash');
           localStorage.setItem('sella_bg_image', cloudSettings.backgroundImage || '');
           deserializeCustomSettings(cloudSettings.customSettings);
-          localStorage.setItem('sella_settings_updated_at', cloudSettings.updatedAt);
+          localStorage.setItem('sella_settings_updated_at', cloudSettings.updatedAt || new Date().toISOString());
 
           let decryptedKey = '';
           if (cloudSettings.encryptedApiKey && cloudSettings.encryptIv) {
-            decryptedKey = await decryptApiKey(cloudSettings.encryptedApiKey, cloudSettings.encryptIv, googleUserId);
-            if (decryptedKey) {
-              localStorage.setItem('gemini_api_key', decryptedKey);
+            try {
+              decryptedKey = await decryptApiKey(cloudSettings.encryptedApiKey, cloudSettings.encryptIv, googleUserId);
+              if (decryptedKey) {
+                localStorage.setItem('gemini_api_key', decryptedKey);
+              }
+            } catch (decErr) {
+              console.error('[GoogleDriveSync] Decrypt API Key failed:', decErr);
             }
           }
 
-          // キャッシュ同期
           localStorage.setItem('sella_last_sync_theme', cloudSettings.theme || 'dark');
           localStorage.setItem('sella_last_sync_apikey', decryptedKey || '');
           localStorage.setItem('sella_last_sync_model', cloudSettings.selectedModel || 'models/gemini-2.5-flash');
           localStorage.setItem('sella_last_sync_bgimage', cloudSettings.backgroundImage || '');
           localStorage.setItem('sella_last_sync_custom', JSON.stringify(cloudSettings.customSettings || {}));
 
-          // 即時適用
           document.documentElement.setAttribute('data-theme', cloudSettings.theme || 'dark');
           const themeSelect = document.getElementById('theme-select');
-          if (themeSelect) {
-            themeSelect.value = cloudSettings.theme || 'dark';
-          }
-        } else if (localTime > cloudTime) {
+          if (themeSelect) themeSelect.value = cloudSettings.theme || 'dark';
+
+          const apiKeyInput = document.getElementById('gemini-api-key');
+          if (apiKeyInput && decryptedKey) apiKeyInput.value = decryptedKey;
+
+        } else {
           shouldUploadConfig = true;
         }
       } else {
-        // クラウドに設定ファイルが存在しない場合
         shouldUploadConfig = true;
       }
 
-      // ローカルが新しい場合は暗号化してアップロード
       if (shouldUploadConfig) {
-        console.log('[GoogleDriveSync] Local settings are newer. Encrypting and uploading...');
+        console.log('[GoogleDriveSync] Local settings are newer or cloud config absent. Uploading...');
         const encrypted = await encryptApiKey(currentApiKey, googleUserId);
         
         const configPayload = {
