@@ -429,71 +429,68 @@ export async function handleImageFiles(files) {
 
 
 export async function runAIAnalysis(imageItem) {
+  if (!imageItem) {
+    alert('解析する画像を選択してください。');
+    return;
+  }
   if (!hasApiKey()) {
-    alert('APIキーが設定されていません。設定画面から登録してください。');
+    alert('APIキーが設定されていません。設定画面でAPIキーを登録してください。');
     return;
   }
 
   const btnAnalyze = document.getElementById('btn-analyze');
-  const analyzingOverlay = document.getElementById('analyzing-status');
+  const overlay = document.getElementById('analyzing-status');
+  const originalText = btnAnalyze ? btnAnalyze.innerHTML : '';
 
-  if (btnAnalyze) btnAnalyze.disabled = true;
-  if (analyzingOverlay) analyzingOverlay.style.display = 'flex';
+  if (btnAnalyze) {
+    btnAnalyze.disabled = true;
+    btnAnalyze.innerHTML = '<span class="spinner"></span> 解析中...';
+  }
+  if (overlay) overlay.style.display = 'flex';
+
+  saveCurrentFormBackup();
 
   try {
-    let targetImage = imageItem || (state.uploadedImages && state.uploadedImages[state.activeThumbnailIndex]);
-    if (!targetImage && state.uploadedImages && state.uploadedImages.length > 0) {
-      targetImage = state.uploadedImages[0];
-    }
+    let base64 = imageItem.base64;
+    let mimeType = imageItem.mimeType || 'image/jpeg';
 
-    if (!targetImage) {
-      alert('解析する画像が選択されていません。');
-      return;
-    }
-
-    let base64 = targetImage.base64;
-    let mimeType = targetImage.mimeType || 'image/jpeg';
-
-    if (!base64 && targetImage.blob) {
-      base64 = await blobToBase64(targetImage.blob);
+    if (!base64 && imageItem.blob) {
+      base64 = await blobToBase64(imageItem.blob);
+      imageItem.base64 = base64;
     }
 
     if (!base64) {
-      alert('画像データの読み込みに失敗しました。');
-      return;
+      throw new Error('画像のデータが存在しません。');
     }
 
-    const selectedModelEl = document.getElementById('modal-model-select');
-    const modelToUse = selectedModelEl ? selectedModelEl.value : null;
-
-    const result = await analyzeLabelImage(base64, mimeType, modelToUse);
+    const selectedModel = document.getElementById('modal-model-select')?.value || null;
+    const result = await analyzeLabelImage(base64, mimeType, selectedModel);
 
     if (result) {
-      saveCurrentFormBackup();
-
-      const setVal = (id, val) => {
+      const setFieldIfVal = (id, val) => {
         const el = document.getElementById(id);
         if (el && val) el.value = val;
       };
 
-      setVal('sake-category', result.category || '日本酒');
-      setVal('sake-name', result.name || result.productName);
-      setVal('sake-product', result.productName);
-      setVal('sake-brewery', result.brewery);
-      setVal('sake-region', result.region);
-      setVal('sake-type', result.type);
-      setVal('sake-abv', result.abv);
-      setVal('sake-ai-info', result.aiInfo);
+      if (result.category) setFieldIfVal('sake-category', result.category);
+      if (result.name || result.productName) setFieldIfVal('sake-name', result.name || result.productName);
+      if (result.productName) setFieldIfVal('sake-product', result.productName);
+      if (result.brewery) setFieldIfVal('sake-brewery', result.brewery);
+      if (result.region) setFieldIfVal('sake-region', result.region);
+      if (result.type) setFieldIfVal('sake-type', result.type);
+      if (result.abv) setFieldIfVal('sake-abv', result.abv);
+      if (result.aiInfo) setFieldIfVal('sake-ai-info', result.aiInfo);
 
       updateFieldRevertUI();
-    } else {
-      alert('AI解析結果を取得できませんでした。別のモデルでお試しください。');
     }
   } catch (err) {
-    console.error('AI Analysis Error:', err);
-    alert();
+    console.error('AI解析エラー:', err);
+    alert('AI解析中にエラーが発生しました: ' + (err.message || err));
   } finally {
-    if (btnAnalyze) btnAnalyze.disabled = false;
-    if (analyzingOverlay) analyzingOverlay.style.display = 'none';
+    if (btnAnalyze) {
+      btnAnalyze.disabled = false;
+      btnAnalyze.innerHTML = originalText;
+    }
+    if (overlay) overlay.style.display = 'none';
   }
 }
