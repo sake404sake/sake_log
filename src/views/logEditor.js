@@ -224,7 +224,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
     setVal('sake-region', initialBatchGroup.region || '');
     setVal('sake-type', initialBatchGroup.type || '');
     setVal('sake-abv', initialBatchGroup.abv || '');
-    if (initialBatchGroup && initialBatchGroup[0] && initialBatchGroup[0].date) {
+    if (initialBatchGroup[0] && initialBatchGroup[0].date) {
       const d = initialBatchGroup[0].date instanceof Date ? initialBatchGroup[0].date : new Date(initialBatchGroup[0].date);
       setVal('sake-date', !isNaN(d) ? d.toISOString().split('T')[0] : '');
     }
@@ -250,15 +250,9 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
           previewUrl = URL.createObjectURL(blob);
           item.previewUrl = previewUrl;
         }
-        let base64 = item.base64 || '';
-        if (!base64 && blob) {
-          try {
-            base64 = await blobToBase64(blob);
-          } catch (err) {}
-        }
         state.uploadedImages.push({
           blob: blob,
-          base64: base64,
+          base64: item.base64,
           mimeType: item.mimeType || 'image/jpeg',
           previewUrl: previewUrl
         });
@@ -380,48 +374,33 @@ export function updateFieldRevertUI() {
   });
 }
 
+/**
+ * 🤖 AI解析実行関数 (1枚の画像を対象にGeminiラベル解析を行い、フォームに即時反映)
+ */
 export async function runAIAnalysis(targetImg) {
-  if (!targetImg) {
-    alert('解析する画像を選択してください。');
+  if (!targetImg || !targetImg.base64) {
+    alert('解析対象の画像が見つかりません。');
     return;
   }
-
   if (!hasApiKey()) {
-    alert('APIキーが設定されていません。設定画面でキーを登録してください。');
+    alert('APIキーが設定されていません。設定画面から登録してください。');
     return;
   }
 
+  const analyzingStatus = document.getElementById('analyzing-status');
   const btnAnalyze = document.getElementById('btn-analyze');
-  const originalText = btnAnalyze ? btnAnalyze.innerHTML : '🤖 AI解析実行';
-  if (btnAnalyze) {
-    btnAnalyze.disabled = true;
-    btnAnalyze.innerHTML = '<span class="sella-spinner"></span>解析中...';
-  }
+  
+  if (analyzingStatus) analyzingStatus.style.display = 'flex';
+  if (btnAnalyze) btnAnalyze.disabled = true;
 
   try {
-    let base64Data = targetImg.base64;
-    let mimeType = targetImg.mimeType || 'image/jpeg';
-    if (!base64Data && targetImg.blob) {
-      base64Data = await blobToBase64(targetImg.blob);
-    }
-
-    if (!base64Data) {
-      alert('画像の読み込みに失敗しました。');
-      return;
-    }
-
-    if (Object.keys(state.backupFormData).length === 0) {
-      saveCurrentFormBackup();
-    }
-
-    const result = await analyzeLabelImage(base64Data, mimeType);
-
+    saveCurrentFormBackup();
+    const result = await analyzeLabelImage(targetImg.base64, targetImg.mimeType || 'image/jpeg');
     if (result) {
       const setVal = (id, val) => {
         const el = document.getElementById(id);
         if (el && val !== undefined && val !== null) el.value = val;
       };
-
       if (result.category) setVal('sake-category', result.category);
       if (result.name) setVal('sake-name', result.name);
       if (result.productName) setVal('sake-product', result.productName);
@@ -437,15 +416,13 @@ export async function runAIAnalysis(targetImg) {
     console.error('AI解析エラー:', err);
     alert('AI解析中にエラーが発生しました。');
   } finally {
-    if (btnAnalyze) {
-      btnAnalyze.disabled = false;
-      btnAnalyze.innerHTML = originalText;
-    }
+    if (analyzingStatus) analyzingStatus.style.display = 'none';
+    if (btnAnalyze) btnAnalyze.disabled = false;
   }
 }
 
 /**
- * 画像ファイル選択時の処理
+ * 🌟【完全堅牢版】画像ファイル選択時の処理
  */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
@@ -454,61 +431,51 @@ export async function handleImageFiles(files) {
     const file = files[i];
     
     const isImage = (file.type && file.type.startsWith('image/')) || 
-                    /\.(heic|heif|png|jpe?g|webp|gif|bmp|tiff?)$/i.test(file.name || '');
+                    /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 🌟 1枚目写真の撮影日時抽出を最優先で直ちに非同期実行
-    if (i === 0 && !state.currentEditingLogId && state.uploadedImages.length === 0) {
-      extractPhotoDate(file).then(extractedDate => {
+    // 🌟 1枚目の画像からEXIF撮影日時を即時抽出し「呑んだ日」に代入
+    if (i === 0 && state.uploadedImages.length === 0) {
+      try {
+        const extractedDate = await extractPhotoDate(file);
         if (extractedDate) {
           const dateInput = document.getElementById('sake-date');
-          if (dateInput) {
-            dateInput.value = extractedDate;
-          }
+          if (dateInput) dateInput.value = extractedDate;
         }
-      }).catch(err => {
-        console.warn('1枚目写真のEXIF解析スキップ:', err);
-      });
+      } catch (err) {
+        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました:', err);
+      }
     }
 
-    let blob = null;
-    let base64 = '';
-    let mimeType = file.type || 'image/jpeg';
-    let previewUrl = '';
-
+    // 🌟 画像の圧縮とプレビュー登録 (Canvas圧縮失敗時は即座にオリジナルFileでフォールバック)
     try {
       const compressed = await compressImage(file);
-      blob = compressed.blob || file;
-      base64 = compressed.base64 || '';
-      mimeType = compressed.mimeType || mimeType;
-      previewUrl = URL.createObjectURL(blob);
+      const previewUrl = URL.createObjectURL(compressed.blob);
+
+      state.uploadedImages.push({
+        blob: compressed.blob,
+        base64: compressed.base64,
+        mimeType: compressed.mimeType,
+        previewUrl
+      });
     } catch (e) {
-      console.warn(`画像 [${file.name || i}] の圧縮処理をスキップしフォールバック採用:`, e);
-      blob = file;
+      console.warn(`画像 [${file.name || i}] のCanvas圧縮に例外発生、オリジナルFileでフォールバックします:`, e);
       try {
-        previewUrl = URL.createObjectURL(file);
-      } catch (err) {
-        console.error(`画像 [${file.name || i}] のURL生成に失敗:`, err);
-        continue;
+        const previewUrl = URL.createObjectURL(file);
+        const base64 = await blobToBase64(file);
+        state.uploadedImages.push({
+          blob: file,
+          base64: base64,
+          mimeType: file.type || 'image/jpeg',
+          previewUrl: previewUrl
+        });
+      } catch (fallbackErr) {
+        console.error('プレビューフォールバック生成失敗:', fallbackErr);
       }
     }
-
-    if (!base64 && blob) {
-      try {
-        base64 = await blobToBase64(blob);
-      } catch (err) {
-        console.warn('blobToBase64 fallback failed:', err);
-      }
-    }
-
-    state.uploadedImages.push({
-      blob,
-      base64,
-      mimeType,
-      previewUrl
-    });
   }
 
+  // アクティブサムネイルインデックスの初期化を保証
   if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
     state.activeThumbnailIndex = 0;
   }
