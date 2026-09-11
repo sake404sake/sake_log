@@ -30,6 +30,21 @@ export function renderBatchImportView() {
   `;
 }
 
+function getSafeThumbSrc(item) {
+  if (!item) return '';
+  if (item.previewUrl) return item.previewUrl;
+  if (item.blob) {
+    try {
+      item.previewUrl = URL.createObjectURL(item.blob);
+      return item.previewUrl;
+    } catch (e) {}
+  }
+  if (item.base64) {
+    return `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+  }
+  return '';
+}
+
 export function renderBatchGroupsUI() {
   const previewSection = document.getElementById('batch-preview-section');
   if (!previewSection) return;
@@ -55,11 +70,12 @@ export function renderBatchGroupsUI() {
     const thumbs = state.isPoolCollapsed ? '' : `
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
         ${state.ungroupedImages.map((item, idx) => {
-          const imgSrc = item.previewUrl || (item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '');
+          const src = getSafeThumbSrc(item);
+          const base64Src = item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '';
           return `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
                style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
-            <img src="${imgSrc}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+            <img src="${src}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="if (this.dataset.fallback !== 'true' && '${base64Src}') { this.dataset.fallback = 'true'; this.src = '${base64Src}'; } else { this.style.opacity = '0.3'; }" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
                     style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
           </div>
@@ -89,11 +105,12 @@ export function renderBatchGroupsUI() {
     const dateStr = mainImg && mainImg.date ? formatDateToLocalYYYYMMDD(mainImg.date) : '日時不明';
 
     const thumbsHTML = group.map((item, iIdx) => {
-      const imgSrc = item.previewUrl || (item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '');
+      const src = getSafeThumbSrc(item);
+      const base64Src = item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '';
       return `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
            style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
-        <img src="${imgSrc}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+        <img src="${src}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="if (this.dataset.fallback !== 'true' && '${base64Src}') { this.dataset.fallback = 'true'; this.src = '${base64Src}'; } else { this.style.opacity = '0.3'; }" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
                 style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
@@ -151,6 +168,9 @@ export function renderBatchGroupsUI() {
   `;
 }
 
+/**
+ * 🌟【完全修復・並列高速処理版】一括画像投入・自動グルーピング処理
+ */
 export async function processFilesForBatch(files, append = true) {
   if (!files || files.length === 0) return;
 
@@ -169,7 +189,7 @@ export async function processFilesForBatch(files, append = true) {
 
   const imageFiles = Array.from(files).filter(file => {
     return (file.type && file.type.startsWith('image/')) ||
-           /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
+           /\\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
   });
 
   if (imageFiles.length === 0) {
@@ -178,12 +198,16 @@ export async function processFilesForBatch(files, append = true) {
     return;
   }
 
+  // Promise.all により全画像を並列処理
   const processPromises = imageFiles.map(async (file) => {
     try {
-      const [compressed, date] = await Promise.all([
+      const [compressedResult, dateResult] = await Promise.allSettled([
         compressImage(file),
         extractPhotoDateObject(file)
       ]);
+
+      const compressed = compressedResult.status === 'fulfilled' ? compressedResult.value : { blob: file, base64: '', mimeType: file.type || 'image/jpeg' };
+      const date = dateResult.status === 'fulfilled' ? dateResult.value : (file.lastModified ? new Date(file.lastModified) : null);
 
       const blob = compressed.blob || file;
       const previewUrl = URL.createObjectURL(blob);
