@@ -270,8 +270,8 @@ function renderAiChatControls() {
   if (!getApiKey()) {
     controls.innerHTML = `
       <div class="ai-unavailable-box">
-        <strong>AI機能を利用するにはAPIキーが必要です</strong>
-        <span>Gemini APIキーを設定すると、酒ログについて質問できます。</span>
+        <strong>AI機能の利用にはAPIキーが必要です</strong>
+        <span>Gemini APIキーの設定後、質問可能になります。</span>
         <button type="button" id="btn-open-api-settings" class="btn-secondary">APIキーの設定へ</button>
       </div>`;
     return;
