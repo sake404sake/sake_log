@@ -16,8 +16,7 @@ import { formatDateToLocalYYYYMMDD } from './utils/image.js';
 function moveArrayItem(items, sourceIndex, targetIndex) {
   if (sourceIndex === targetIndex || !items[sourceIndex]) return;
   const [movedItem] = items.splice(sourceIndex, 1);
-  const insertionIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
-  items.splice(Math.max(0, insertionIndex), 0, movedItem);
+  items.splice(Math.min(items.length, Math.max(0, targetIndex)), 0, movedItem);
 }
 
 function ensureSpinnerStyles() {
@@ -670,6 +669,7 @@ function initApp() {
   // HTML5 Native Drag & Drop
   let activeFileDropTarget = null;
   let activeDragOverCard = null;
+  let activeDragOverPool = null;
   let activeReorderTarget = null;
 
   document.addEventListener('dragover', (e) => {
@@ -689,6 +689,13 @@ function initApp() {
       activeDragOverCard?.classList.remove('drag-over');
       activeDragOverCard = card;
       activeDragOverCard?.classList.add('drag-over');
+    }
+
+    const pool = e.target.closest('#ungrouped-pool-container');
+    if (activeDragOverPool !== pool) {
+      activeDragOverPool?.classList.remove('drag-over');
+      activeDragOverPool = pool;
+      activeDragOverPool?.classList.add('drag-over');
     }
 
     const targetThumb = e.target.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
@@ -716,6 +723,11 @@ function initApp() {
       card.classList.remove('drag-over');
       if (activeDragOverCard === card) activeDragOverCard = null;
     }
+    const pool = e.target.closest('#ungrouped-pool-container');
+    if (pool && !pool.contains(e.relatedTarget)) {
+      pool.classList.remove('drag-over');
+      if (activeDragOverPool === pool) activeDragOverPool = null;
+    }
   });
 
   document.addEventListener('dragstart', (e) => {
@@ -740,9 +752,11 @@ function initApp() {
     state.draggedItemInfo = null;
     activeFileDropTarget?.classList.remove('file-drop-active');
     activeDragOverCard?.classList.remove('drag-over');
+    activeDragOverPool?.classList.remove('drag-over');
     activeReorderTarget?.classList.remove('reorder-target');
     activeFileDropTarget = null;
     activeDragOverCard = null;
+    activeDragOverPool = null;
     activeReorderTarget = null;
   });
 
@@ -750,9 +764,11 @@ function initApp() {
     e.preventDefault();
     activeFileDropTarget?.classList.remove('file-drop-active');
     activeDragOverCard?.classList.remove('drag-over');
+    activeDragOverPool?.classList.remove('drag-over');
     activeReorderTarget?.classList.remove('reorder-target');
     activeFileDropTarget = null;
     activeDragOverCard = null;
+    activeDragOverPool = null;
     activeReorderTarget = null;
 
     const droppedFiles = e.dataTransfer?.files;
@@ -766,15 +782,24 @@ function initApp() {
       return;
     }
 
-    if (!state.draggedItemInfo) return;
+    let dragInfo = state.draggedItemInfo;
+    if (!dragInfo) {
+      try {
+        const serializedDragInfo = e.dataTransfer?.getData('text/plain');
+        dragInfo = serializedDragInfo ? JSON.parse(serializedDragInfo) : null;
+      } catch (err) {
+        dragInfo = null;
+      }
+    }
+    if (!dragInfo) return;
 
     // 1. 単体登録エディタ内のドロップ並び替え
-    if (state.draggedItemInfo.type === 'editor') {
+    if (dragInfo.type === 'editor') {
       const targetThumb = e.target.closest('#image-preview-list .preview-item');
       if (targetThumb) {
         const targetImg = targetThumb.querySelector('img');
         const targetIdx = targetImg ? Number(targetImg.dataset.idx) : Number(targetThumb.dataset.idx);
-        const srcIdx = state.draggedItemInfo.idx;
+        const srcIdx = dragInfo.idx;
         if (!isNaN(srcIdx) && !isNaN(targetIdx) && srcIdx !== targetIdx && state.uploadedImages[srcIdx]) {
           moveArrayItem(state.uploadedImages, srcIdx, targetIdx);
           state.activeThumbnailIndex = 0;
@@ -789,83 +814,53 @@ function initApp() {
     const targetGroupCard = e.target.closest('.batch-group-card');
     const targetPoolArea = e.target.closest('#ungrouped-pool-container');
     const targetThumb = e.target.closest('.draggable-thumb');
+    const sourceItems = dragInfo.type === 'group'
+      ? state.batchGroups[dragInfo.gIdx]
+      : state.ungroupedImages;
 
-    if (state.draggedItemInfo.type === 'group' && targetGroupCard && targetThumb) {
-      const sourceGroupIndex = state.draggedItemInfo.gIdx;
-      const sourceItemIndex = state.draggedItemInfo.iIdx;
-      const targetGroupIndex = Number(targetGroupCard.dataset.gidx);
-      const targetItemIndex = Number(targetThumb.dataset.iidx);
-      if (sourceGroupIndex === targetGroupIndex && sourceItemIndex !== targetItemIndex) {
-        const group = state.batchGroups[sourceGroupIndex];
-        if (group) {
-          moveArrayItem(group, sourceItemIndex, targetItemIndex);
-          state.draggedItemInfo = null;
-          renderBatchGroupsUI();
-          await syncBatchStateToDB();
-        }
-        return;
-      }
-    }
-
-    if (state.draggedItemInfo.type === 'group' && targetGroupCard) {
-      const sourceGroupIndex = state.draggedItemInfo.gIdx;
-      const sourceItemIndex = state.draggedItemInfo.iIdx;
-      const targetGroupIndex = Number(targetGroupCard.dataset.gidx);
-      const sourceGroup = state.batchGroups[sourceGroupIndex];
-      const targetGroup = state.batchGroups[targetGroupIndex];
-
-      if (sourceGroup && targetGroup && sourceGroup !== targetGroup) {
-        const movedImage = sourceGroup.splice(sourceItemIndex, 1)[0];
-        if (movedImage) {
-          targetGroup.push(movedImage);
-          if (sourceGroup.length === 0) {
-            state.batchGroups.splice(sourceGroupIndex, 1);
-          }
-          state.draggedItemInfo = null;
-          renderBatchGroupsUI();
-          await syncBatchStateToDB();
-        }
-        state.draggedItemInfo = null;
-        return;
-      }
-    }
-
-    let movedImage = null;
-
-    if (state.draggedItemInfo.type === 'group') {
-      const srcGroup = state.batchGroups[state.draggedItemInfo.gIdx];
-      if (srcGroup) {
-        movedImage = srcGroup.splice(state.draggedItemInfo.iIdx, 1)[0];
-        if (srcGroup.length === 0) {
-          state.batchGroups.splice(state.draggedItemInfo.gIdx, 1);
-        }
-      }
-    } else if (state.draggedItemInfo.type === 'pool') {
-      movedImage = state.ungroupedImages.splice(state.draggedItemInfo.idx, 1)[0];
-    }
-
-    if (!movedImage) {
+    if (!sourceItems || !sourceItems[dragInfo.type === 'group' ? dragInfo.iIdx : dragInfo.idx]) {
       state.draggedItemInfo = null;
       return;
     }
 
+    let targetItems = null;
+    let targetIndex = null;
     if (targetGroupCard) {
-      const targetGIdx = Number(targetGroupCard.dataset.gidx);
-      if (!isNaN(targetGIdx) && state.batchGroups[targetGIdx]) {
-        const targetGroup = state.batchGroups[targetGIdx];
-        if (targetThumb && targetThumb.dataset.gidx !== undefined && Number(targetThumb.dataset.gidx) === targetGIdx) {
-          const targetIIdx = Number(targetThumb.dataset.iidx);
-          targetGroup.splice(targetIIdx, 0, movedImage);
-        } else {
-          targetGroup.push(movedImage);
-        }
-      } else {
-        state.batchGroups.push([movedImage]);
+      const targetGroupIndex = Number(targetGroupCard.dataset.gidx);
+      targetItems = state.batchGroups[targetGroupIndex] || null;
+      if (targetThumb?.dataset.gidx !== undefined && Number(targetThumb.dataset.gidx) === targetGroupIndex) {
+        targetIndex = Number(targetThumb.dataset.iidx);
       }
     } else if (targetPoolArea) {
-      state.ungroupedImages.push(movedImage);
+      targetItems = state.ungroupedImages;
+      if (targetThumb?.dataset.sourceType === 'pool') {
+        targetIndex = Number(targetThumb.dataset.idx);
+      }
+    }
+
+    if (!targetItems) {
+      state.draggedItemInfo = null;
+      return;
+    }
+
+    const sourceIndex = dragInfo.type === 'group' ? dragInfo.iIdx : dragInfo.idx;
+    if (sourceItems === targetItems) {
+      if (targetIndex === null) targetIndex = targetItems.length;
+      if (targetIndex !== null && !isNaN(targetIndex) && sourceIndex !== targetIndex) {
+        moveArrayItem(sourceItems, sourceIndex, targetIndex);
+      }
     } else {
-      state.batchGroups.push([movedImage]);
+      const [movedImage] = sourceItems.splice(sourceIndex, 1);
+      if (movedImage) {
+        const insertionIndex = targetIndex === null || isNaN(targetIndex)
+          ? targetItems.length
+          : Math.min(targetItems.length, Math.max(0, targetIndex));
+        targetItems.splice(insertionIndex, 0, movedImage);
+        if (dragInfo.type === 'group' && sourceItems.length === 0) {
+          const sourceGroupIndex = state.batchGroups.indexOf(sourceItems);
+          if (sourceGroupIndex >= 0) state.batchGroups.splice(sourceGroupIndex, 1);
+        }
+      }
     }
 
     state.draggedItemInfo = null;
@@ -879,12 +874,15 @@ function initApp() {
   let activeThumb = null;
   let isPointerMoving = false;
   let activePointerTarget = null;
+  let activePointerPool = null;
+  let activePointerCard = null;
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     if (e.target.closest('button, input, select, textarea, .lightbox-close')) return;
 
     const thumb = e.target.closest('.preview-item, .draggable-thumb');
+    if (e.pointerType === 'mouse' && thumb?.draggable) return;
     if (thumb && !e.target.closest('#lightbox-modal')) {
       activeThumb = thumb;
       pointerStartX = e.clientX;
@@ -908,8 +906,21 @@ function initApp() {
       activeThumb.style.zIndex = '999';
 
       activeThumb.style.pointerEvents = 'none';
-      const targetThumb = document.elementFromPoint(e.clientX, e.clientY)?.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
+      const droppedTarget = document.elementFromPoint(e.clientX, e.clientY);
+      const targetThumb = droppedTarget?.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
+      const targetPool = droppedTarget?.closest('#ungrouped-pool-container');
+      const targetCard = droppedTarget?.closest('.batch-group-card');
       activeThumb.style.pointerEvents = '';
+      if (activePointerPool !== targetPool) {
+        activePointerPool?.classList.remove('drag-over');
+        activePointerPool = targetPool;
+        activePointerPool?.classList.add('drag-over');
+      }
+      if (activePointerCard !== targetCard) {
+        activePointerCard?.classList.remove('drag-over');
+        activePointerCard = targetCard;
+        activePointerCard?.classList.add('drag-over');
+      }
       const nextPointerTarget = targetThumb && targetThumb !== activeThumb ? targetThumb : null;
       if (activePointerTarget !== nextPointerTarget) {
         activePointerTarget?.classList.remove('reorder-target');
@@ -923,6 +934,9 @@ function initApp() {
     if (!activeThumb) return;
     const thumb = activeThumb;
     activeThumb = null;
+    const lastPointerTarget = activePointerTarget;
+    const lastPointerPool = activePointerPool;
+    const lastPointerCard = activePointerCard;
 
     try {
       if (thumb.hasPointerCapture(e.pointerId)) {
@@ -935,12 +949,16 @@ function initApp() {
     thumb.style.zIndex = '';
     activePointerTarget?.classList.remove('reorder-target');
     activePointerTarget = null;
+    activePointerPool?.classList.remove('drag-over');
+    activePointerPool = null;
+    activePointerCard?.classList.remove('drag-over');
+    activePointerCard = null;
 
     if (!isPointerMoving) return;
 
-    // 指を離した位置にあるドロップ要素を取得
+    // 指を離した位置にあるドロップ要素を取得。取得できない場合は最後の検出先を使う。
     thumb.style.pointerEvents = 'none';
-    const droppedEl = document.elementFromPoint(e.clientX, e.clientY);
+    const droppedEl = document.elementFromPoint(e.clientX, e.clientY) || lastPointerTarget || lastPointerPool || lastPointerCard;
     thumb.style.pointerEvents = '';
 
     if (!droppedEl) return;
@@ -965,55 +983,45 @@ function initApp() {
     }
 
     // 2. 一括インポート画面でのタッチ移動
-    const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
-    const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
-
+    const dragInfo = thumb.dataset.sourceType === 'group'
+      ? { type: 'group', gIdx: Number(thumb.dataset.gidx), iIdx: Number(thumb.dataset.iidx) }
+      : { type: 'pool', idx: Number(thumb.dataset.idx) };
+    const sourceItems = dragInfo.type === 'group' ? state.batchGroups[dragInfo.gIdx] : state.ungroupedImages;
     const targetCard = droppedEl.closest('.batch-group-card');
     const targetPool = droppedEl.closest('#ungrouped-pool-container');
+    const targetThumb = droppedEl.closest('.draggable-thumb');
+    let targetItems = null;
+    let targetIndex = null;
 
     if (targetCard) {
       const targetGIdx = Number(targetCard.dataset.gidx);
-      if (!isNaN(targetGIdx) && state.batchGroups[targetGIdx]) {
-        if (isPool) {
-          const idx = Number(thumb.dataset.idx);
-          if (!isNaN(idx) && state.ungroupedImages[idx]) {
-            const [movedItem] = state.ungroupedImages.splice(idx, 1);
-            state.batchGroups[targetGIdx].push(movedItem);
-            renderBatchGroupsUI();
-            await syncBatchStateToDB();
-          }
-        } else if (isBatch) {
-          const srcGIdx = Number(thumb.dataset.gidx);
-          const srcIIdx = Number(thumb.dataset.iidx);
-          const targetThumb = droppedEl.closest('.draggable-thumb');
-          const targetIIdx = targetThumb ? Number(targetThumb.dataset.iidx) : NaN;
-          if (srcGIdx === targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && !isNaN(targetIIdx) && srcIIdx !== targetIIdx && state.batchGroups[srcGIdx]) {
-            moveArrayItem(state.batchGroups[srcGIdx], srcIIdx, targetIIdx);
-            renderBatchGroupsUI();
-            await syncBatchStateToDB();
-          } else if (srcGIdx !== targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx]) {
-            const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
-            state.batchGroups[targetGIdx].push(movedItem);
-            if (state.batchGroups[srcGIdx].length === 0) {
-              state.batchGroups.splice(srcGIdx, 1);
-            }
-            renderBatchGroupsUI();
-            await syncBatchStateToDB();
-          }
+      targetItems = state.batchGroups[targetGIdx] || null;
+      if (targetThumb?.dataset.gidx !== undefined && Number(targetThumb.dataset.gidx) === targetGIdx) {
+        targetIndex = Number(targetThumb.dataset.iidx);
+      }
+    } else if (targetPool) {
+      targetItems = state.ungroupedImages;
+      if (targetThumb?.dataset.sourceType === 'pool') targetIndex = Number(targetThumb.dataset.idx);
+    }
+
+    const sourceIndex = dragInfo.type === 'group' ? dragInfo.iIdx : dragInfo.idx;
+    if (sourceItems && sourceItems[sourceIndex] && targetItems) {
+      if (sourceItems === targetItems) {
+        if (targetIndex === null) targetIndex = targetItems.length;
+        if (!isNaN(targetIndex) && sourceIndex !== targetIndex) moveArrayItem(sourceItems, sourceIndex, targetIndex);
+      } else {
+        const [movedItem] = sourceItems.splice(sourceIndex, 1);
+        const insertionIndex = targetIndex === null || isNaN(targetIndex)
+          ? targetItems.length
+          : Math.min(targetItems.length, Math.max(0, targetIndex));
+        targetItems.splice(insertionIndex, 0, movedItem);
+        if (dragInfo.type === 'group' && sourceItems.length === 0) {
+          const sourceGroupIndex = state.batchGroups.indexOf(sourceItems);
+          if (sourceGroupIndex >= 0) state.batchGroups.splice(sourceGroupIndex, 1);
         }
       }
-    } else if (targetPool && isBatch) {
-      const srcGIdx = Number(thumb.dataset.gidx);
-      const srcIIdx = Number(thumb.dataset.iidx);
-      if (!isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx]) {
-        const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
-        state.ungroupedImages.push(movedItem);
-        if (state.batchGroups[srcGIdx].length === 0) {
-          state.batchGroups.splice(srcGIdx, 1);
-        }
-        renderBatchGroupsUI();
-        await syncBatchStateToDB();
-      }
+      renderBatchGroupsUI();
+      await syncBatchStateToDB();
     }
   });
 
@@ -1610,7 +1618,7 @@ function initApp() {
     }
 
     // スライドショーコントロール
-    const detailArrow = e.target.closest('.carousel-btn');
+    const detailArrow = e.target.closest('.sella-btn-prev, .sella-btn-next');
     if (detailArrow && (detailArrow.id === 'btn-detail-prev' || detailArrow.id === 'btn-detail-next')) {
       e.stopPropagation();
       e.preventDefault();

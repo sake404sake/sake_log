@@ -1321,6 +1321,21 @@ a:hover {
   position: relative;
 }
 
+#ungrouped-pool-container.drag-over::after {
+  content: 'ここに移動';
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 30;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--accent-color);
+  color: #08110d;
+  font-size: 11px;
+  font-weight: bold;
+  pointer-events: none;
+}
+
 .log-row-item:hover {
   background: rgba(255, 255, 255, 0.08);
 }
@@ -1634,8 +1649,26 @@ a:hover {
 .preview-item.reorder-target,
 .draggable-thumb.reorder-target {
   border-color: var(--accent-color) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 35%, transparent), 0 0 14px color-mix(in srgb, var(--accent-color) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--card-bg)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 55%, transparent), 0 0 18px color-mix(in srgb, var(--accent-color) 45%, transparent) !important;
   transform: scale(1.06);
+}
+
+.preview-item.reorder-target::after,
+.draggable-thumb.reorder-target::after {
+  content: 'ここに移動';
+  position: absolute;
+  inset: auto 2px 2px;
+  z-index: 20;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--accent-color);
+  color: #08110d;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1.2;
+  text-align: center;
+  pointer-events: none;
 }
 
 .preview-item img {
