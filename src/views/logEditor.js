@@ -225,10 +225,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
     setVal('sake-type', initialBatchGroup.type || '');
     setVal('sake-abv', initialBatchGroup.abv || '');
     if (initialBatchGroup[0] && initialBatchGroup[0].date) {
-      const formattedDate = formatDateToLocalYYYYMMDD(initialBatchGroup[0].date);
-      if (formattedDate) {
-        setVal('sake-date', formattedDate);
-      }
+      setVal('sake-date', formatDateToLocalYYYYMMDD(initialBatchGroup[0].date));
     }
     setVal('sake-notes', initialBatchGroup.notes || '');
     setVal('sake-ai-info', initialBatchGroup.aiInfo || '');
@@ -248,15 +245,14 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
           item.blob = blob;
         }
         let previewUrl = item.previewUrl;
-        if (!previewUrl && blob) {
-          previewUrl = URL.createObjectURL(blob);
-          item.previewUrl = previewUrl;
+        if (!previewUrl && blob instanceof Blob) {
+          try { previewUrl = URL.createObjectURL(blob); item.previewUrl = previewUrl; } catch (e) {}
         }
         state.uploadedImages.push({
           blob: blob,
-          base64: item.base64,
+          base64: item.base64 || '',
           mimeType: item.mimeType || 'image/jpeg',
-          previewUrl: previewUrl
+          previewUrl: previewUrl || ''
         });
       } catch (e) {
         console.error('バッチ画像ロードエラー:', e);
@@ -315,28 +311,30 @@ export function renderImagePreviewList() {
 
   const itemsHTML = state.uploadedImages.map((img, idx) => {
     let src = img.previewUrl;
-    if (!src && img.blob) {
+    if (!src && img.blob instanceof Blob) {
       try { src = URL.createObjectURL(img.blob); img.previewUrl = src; } catch (e) {}
     }
     if (!src && img.base64) {
       src = `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`;
     }
-    const base64DataUri = img.base64 ? `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}` : '';
-
-    return `<div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
-      <img src="${src || ''}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" onerror="if (this.dataset.fallback !== 'true' && '${base64DataUri}') { this.dataset.fallback = 'true'; this.src = '${base64DataUri}'; } else { this.style.opacity = '0.3'; }" />
-      <div class="preview-actions">
-        <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
+    return `
+      <div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
+        <img src="${src || ''}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none; width: 100%; height: 100%; object-fit: cover;" onerror="if(this.dataset.triedBase64 !== 'true' && '${img.base64 || ''}') { this.dataset.triedBase64='true'; this.src='data:${img.mimeType || 'image/jpeg'};base64,${img.base64 || ''}'; } else { this.onerror=null; this.style.display='none'; }" />
+        <div class="preview-actions">
+          <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
+        </div>
       </div>
-    </div>`;
+    `;
   }).join('');
 
-  const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">
-    <div class="add-more-content">
-      <span class="add-icon">＋</span>
-      <span class="add-text">追加</span>
+  const addMoreHTML = `
+    <div class="preview-item add-more-item" id="btn-trigger-upload">
+      <div class="add-more-content">
+        <span class="add-icon">＋</span>
+        <span class="add-text">追加</span>
+      </div>
     </div>
-  </div>`;
+  `;
 
   container.innerHTML = itemsHTML + addMoreHTML;
 }
@@ -464,16 +462,17 @@ export async function handleImageFiles(files) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
-    // HEIC/HEIF・一部ブラウザ対応の代替拡張子チェック
     const isImage = (file.type && file.type.startsWith('image/')) || 
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 1. 画像の圧縮とプレビュー登録 (ブロックなし・確実に優先実行)
     try {
       const compressed = await compressImage(file);
       const blob = compressed.blob || file;
-      const previewUrl = URL.createObjectURL(blob);
+      let previewUrl = '';
+      try { previewUrl = URL.createObjectURL(blob); } catch (e) {
+        try { previewUrl = URL.createObjectURL(file); } catch (e2) {}
+      }
 
       state.uploadedImages.push({
         blob,
@@ -483,31 +482,24 @@ export async function handleImageFiles(files) {
       });
     } catch (e) {
       console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
-      try {
-        const previewUrl = URL.createObjectURL(file);
-        const base64 = await blobToBase64(file).catch(() => '');
-        state.uploadedImages.push({
-          blob: file,
-          base64: base64,
-          mimeType: file.type || 'image/jpeg',
-          previewUrl
-        });
-      } catch (err2) {
-        console.error('フォールバック登録エラー:', err2);
-      }
+      let previewUrl = '';
+      try { previewUrl = URL.createObjectURL(file); } catch (e2) {}
+      state.uploadedImages.push({
+        blob: file,
+        base64: '',
+        mimeType: file.type || 'image/jpeg',
+        previewUrl
+      });
     }
 
-    // 2. 1枚目の写真の場合のみ、EXIF 撮影日時抽出をバックグラウンド（非ブロック）で実行
     if (i === 0 && isFirstBatch) {
       extractPhotoDate(file).then(extractedDate => {
         if (extractedDate) {
           const dateInput = document.getElementById('sake-date');
-          if (dateInput) {
-            dateInput.value = extractedDate;
-          }
+          if (dateInput) dateInput.value = extractedDate;
         }
       }).catch(err => {
-        console.warn('撮影日時抽出エラー:', err);
+        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました (非同期続行):', err);
       });
     }
   }
