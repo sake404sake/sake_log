@@ -319,11 +319,13 @@ export function renderImagePreviewList() {
     if (!src && img.base64) {
       src = `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`;
     }
-    return `
-      <div class="preview-item ${idx === 0 ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: visible; user-select: none; touch-action: none;">
-        <img src="${src || ''}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
-        <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
-      </div>`;
+    const isMain = idx === (state.activeThumbnailIndex || 0);
+
+    return `<div class="preview-item ${isMain ? 'is-thumb' : ''}" draggable="true" data-source-type="editor" data-idx="${idx}" style="position: relative; overflow: visible; user-select: none; touch-action: none; border: ${isMain ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'};">
+      <img src="${src || ''}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="this.onerror=null; this.style.display='none';" />
+      ${isMain ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
+      <button type="button" class="btn-img-del" data-idx="${idx}" title="削除" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+    </div>`;
   }).join('');
 
   const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">

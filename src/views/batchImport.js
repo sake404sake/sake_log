@@ -2,6 +2,22 @@
 import { state } from '../store/state.js';
 import { compressImage, groupImagesByTime, extractPhotoDateObject } from '../utils/image.js';
 
+function getSafeImgSrc(item) {
+  if (!item) return '';
+  if (item.previewUrl) return item.previewUrl;
+  if (item.blob) {
+    try {
+      const url = URL.createObjectURL(item.blob);
+      item.previewUrl = url;
+      return url;
+    } catch (e) {}
+  }
+  if (item.base64) {
+    return `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+  }
+  return '';
+}
+
 export function renderBatchImportView() {
   return `
     <div class="batch-import-container">
@@ -54,33 +70,25 @@ export function renderBatchGroupsUI() {
   if (state.ungroupedImages.length > 0) {
     const thumbs = state.isPoolCollapsed ? '' : `
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
-        ${state.ungroupedImages.map((item, idx) => {
-          let src = item.previewUrl;
-          if (!src && item.blob) {
-            try { src = URL.createObjectURL(item.blob); item.previewUrl = src; } catch(e){}
-          }
-          if (!src && item.base64) {
-            src = `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
-          }
-          return `
-            <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
-                 style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
-              <img src="${src || ''}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
-              <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除">✕</button>
-            </div>
-          `;
-        }).join('')}
+        ${state.ungroupedImages.map((item, idx) => `
+          <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
+               style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
+            <img src="${getSafeImgSrc(item)}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="this.onerror=null; this.style.display='none';" />
+            <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
+                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+          </div>
+        `).join('')}
       </div>
     `;
 
     ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 80px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 8px;">
+      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 12px; right: 12px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px); box-sizing: border-box;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
             <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px;">${state.isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
-            <span style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">📂 未所属の画像プール (${state.ungroupedImages.length}枚)</span>
+            <span style="font-weight: bold; color: var(--text-main); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📂 未所属の画像プール (${state.ungroupedImages.length}枚)</span>
           </div>
-          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">✨ これらからグループを作成</button>
+          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px; white-space: nowrap;">✨ これらからグループを作成</button>
         </div>
         ${thumbs}
       </div>
@@ -93,23 +101,15 @@ export function renderBatchGroupsUI() {
     const mainImg = group[0];
     const dateStr = mainImg && mainImg.date ? new Date(mainImg.date).toLocaleString() : '日時不明';
 
-    const thumbsHTML = group.map((item, iIdx) => {
-      let src = item.previewUrl;
-      if (!src && item.blob) {
-        try { src = URL.createObjectURL(item.blob); item.previewUrl = src; } catch(e){}
-      }
-      if (!src && item.base64) {
-        src = `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
-      }
-      return `
-        <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
-             style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
-          <img src="${src || ''}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
-          ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
-          <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す">✕</button>
-        </div>
-      `;
-    }).join('');
+    const thumbsHTML = group.map((item, iIdx) => `
+      <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
+           style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
+        <img src="${getSafeImgSrc(item)}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="this.onerror=null; this.style.display='none';" />
+        ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
+        <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
+                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+      </div>
+    `).join('');
 
     return `
       <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box;" data-gidx="${gIdx}">
@@ -178,18 +178,16 @@ export async function processFilesForBatch(files, append = true) {
   const failedFiles = [];
 
   for (const file of files) {
-    const isImage = file.type.startsWith('image/') || /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name);
+    const isImage = (file.type && file.type.startsWith('image/')) || 
+                    /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
     try {
       const compressed = await compressImage(file);
       let date = await extractPhotoDateObject(file);
-
       if (!date && file.lastModified) {
         const d = new Date(file.lastModified);
-        if (!isNaN(d.getTime())) {
-          date = d;
-        }
+        if (!isNaN(d.getTime())) date = d;
       }
 
       items.push({
@@ -221,11 +219,17 @@ export async function processFilesForBatch(files, append = true) {
       }
 
       if (failedFiles.length > 0) {
-        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました：\n\n・ ` + failedFiles.join('\n・ '));
+        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました：
+
+・ ` + failedFiles.join('
+・ '));
       }
     } else {
       if (failedFiles.length > 0) {
-        alert(`画像の読み込みに失敗しました。：\n\n・ ` + failedFiles.join('\n・ '));
+        alert(`画像の読み込みに失敗しました：
+
+・ ` + failedFiles.join('
+・ '));
       } else {
         alert('有効な画像ファイルが見つかりませんでした。');
       }
