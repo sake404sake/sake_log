@@ -1794,25 +1794,195 @@ a:hover {
 
 .lightbox-content {
   position: relative;
-  max-width: 92vw;
-  max-height: 90vh;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .lightbox-content img {
-  max-width: 92vw;
-  max-height: 90vh;
+  width: auto !important;
+  height: auto !important;
+  max-width: calc(100vw - 160px) !important;
+  max-height: calc(100vh - 180px) !important;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8);
 }
 
-.lightbox-close {
-  position: absolute;
-  top: -44px;
+.lightbox-arrow-btn {
+  position: fixed;
+  top: 50%;
+  z-index: 10002;
+  width: 42px;
+  height: 64px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.58);
+  color: #fff;
+  font-size: 2.2rem;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.lightbox-arrow-btn.prev {
+  left: 16px;
+}
+
+.lightbox-arrow-btn.next {
+  right: 16px;
+}
+
+@media (min-width: 700px) {
+  .lightbox-arrow-btn.prev {
+    left: 24px;
+  }
+
+  .lightbox-arrow-btn.next {
+    right: 24px;
+  }
+}
+
+.lightbox-controls {
+  position: fixed;
+  left: 0;
   right: 0;
+  bottom: 18px;
+  z-index: 10001;
+  width: fit-content !important;
+  max-width: min(92vw, 480px) !important;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(18, 19, 22, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.lightbox-controls .lightbox-ctrl-btn {
+  min-height: 38px !important;
+  padding: 8px 14px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+  font-size: 0.82rem !important;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: none !important;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.lightbox-controls .lightbox-ctrl-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: var(--accent-color) !important;
+  transform: translateY(-1px);
+}
+
+.lightbox-controls .lightbox-ctrl-btn:disabled {
+  opacity: 0.9;
+  cursor: default;
+}
+
+.lightbox-controls .btn-main-set,
+.lightbox-controls .btn-batch-main-set {
+  background: rgba(16, 185, 129, 0.82) !important;
+  border-color: #34d399 !important;
+  color: #fff !important;
+}
+
+.lightbox-controls .btn-delete-img,
+.lightbox-controls .btn-pool-delete-img {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border-color: rgba(248, 113, 113, 0.7) !important;
+  color: #fecaca !important;
+}
+
+.lightbox-controls .btn-delete-img:hover:not(:disabled),
+.lightbox-controls .btn-pool-delete-img:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.28) !important;
+  border-color: #f87171 !important;
+}
+
+.lightbox-pool-primary-actions,
+.lightbox-pool-danger-actions {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.lightbox-pool-primary-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.lightbox-pool-danger-actions {
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.lightbox-pool-danger-actions .btn-pool-delete-img {
+  min-width: 140px;
+  font-size: 0.74rem !important;
+  opacity: 0.78;
+}
+
+.lightbox-pool-danger-overlay {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 10001;
+  width: auto;
+  padding: 0;
+  border-top: 0;
+  justify-content: flex-start;
+}
+
+.lightbox-pool-danger-overlay .btn-pool-delete-img {
+  min-height: 38px !important;
+  min-width: 0;
+  padding: 7px 10px !important;
+  border: 1px solid rgba(248, 113, 113, 0.45) !important;
+  border-radius: 8px !important;
+  background: rgba(127, 29, 29, 0.72) !important;
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  color: rgba(254, 202, 202, 0.9) !important;
+  font-size: 0.7rem !important;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+@media (max-width: 520px) {
+  .lightbox-pool-danger-actions {
+    justify-content: center;
+  }
+
+  .lightbox-pool-danger-overlay {
+    left: 12px;
+    bottom: 12px;
+    justify-content: flex-start;
+  }
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
   background: rgba(255, 255, 255, 0.2);
   border: none;
   color: #fff;

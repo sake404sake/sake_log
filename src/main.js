@@ -130,7 +130,7 @@ function getCalendarDateKey(value) {
   return isNaN(date.getTime()) ? '' : formatDateToLocalYYYYMMDD(date);
 }
 
-function getJapaneseHolidayName(date) {
+function getJapaneseHolidayName(date, includeCitizenHoliday = true) {
   const year = date.getFullYear();
   const month = date.getMonth() + 1;
   const day = date.getDate();
@@ -165,10 +165,10 @@ function getJapaneseHolidayName(date) {
   if (equinoxDay === day) return month === 3 ? '春分の日' : '秋分の日';
 
   // 祝日と祝日に挟まれた平日は「国民の休日」
-  if (date.getDay() !== 0 && date.getDay() !== 6) {
+  if (includeCitizenHoliday && date.getDay() !== 0 && date.getDay() !== 6) {
     const previousDay = new Date(year, month - 1, day - 1);
     const nextDay = new Date(year, month - 1, day + 1);
-    if (getJapaneseHolidayName(previousDay) && getJapaneseHolidayName(nextDay)) {
+    if (getJapaneseHolidayName(previousDay, false) && getJapaneseHolidayName(nextDay, false)) {
       return '国民の休日';
     }
   }
@@ -671,6 +671,9 @@ function initApp() {
   let activeDragOverCard = null;
   let activeDragOverPool = null;
   let activeReorderTarget = null;
+  let nativeDropHandled = false;
+  let nativeDragSource = null;
+  let nativeDropTarget = null;
 
   document.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -698,13 +701,14 @@ function initApp() {
       activeDragOverPool?.classList.add('drag-over');
     }
 
-    const targetThumb = e.target.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
+    const targetThumb = e.target.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb, #ungrouped-pool-container .draggable-thumb');
     const nextReorderTarget = state.draggedItemInfo && targetThumb ? targetThumb : null;
     if (activeReorderTarget !== nextReorderTarget) {
       activeReorderTarget?.classList.remove('reorder-target');
       activeReorderTarget = nextReorderTarget;
       activeReorderTarget?.classList.add('reorder-target');
     }
+    nativeDropTarget = targetThumb || card || pool;
   });
 
   document.addEventListener('dragleave', (e) => {
@@ -733,6 +737,8 @@ function initApp() {
   document.addEventListener('dragstart', (e) => {
     const thumb = e.target.closest('.preview-item, .draggable-thumb');
     if (thumb) {
+      nativeDropHandled = false;
+      nativeDragSource = thumb;
       const sourceType = thumb.dataset.sourceType;
       if (sourceType === 'group') {
         state.draggedItemInfo = { type: 'group', gIdx: Number(thumb.dataset.gidx), iIdx: Number(thumb.dataset.iidx) };
@@ -749,7 +755,11 @@ function initApp() {
   });
 
   document.addEventListener('dragend', () => {
-    state.draggedItemInfo = null;
+    if (!nativeDropHandled) {
+      state.draggedItemInfo = null;
+      nativeDragSource = null;
+      nativeDropTarget = null;
+    }
     activeFileDropTarget?.classList.remove('file-drop-active');
     activeDragOverCard?.classList.remove('drag-over');
     activeDragOverPool?.classList.remove('drag-over');
@@ -762,6 +772,10 @@ function initApp() {
 
   document.addEventListener('drop', async (e) => {
     e.preventDefault();
+    nativeDropHandled = true;
+    const lastDragOverCard = activeDragOverCard;
+    const lastDragOverPool = activeDragOverPool;
+    const lastReorderTarget = activeReorderTarget;
     activeFileDropTarget?.classList.remove('file-drop-active');
     activeDragOverCard?.classList.remove('drag-over');
     activeDragOverPool?.classList.remove('drag-over');
@@ -772,7 +786,8 @@ function initApp() {
     activeReorderTarget = null;
 
     const droppedFiles = e.dataTransfer?.files;
-    if (droppedFiles && droppedFiles.length > 0) {
+    const isInternalImageDrag = Boolean(nativeDragSource || state.draggedItemInfo);
+    if (droppedFiles && droppedFiles.length > 0 && !isInternalImageDrag) {
       if (e.target.closest('#batch-upload-zone, #btn-add-more-batch')) {
         await processFilesForBatch(droppedFiles, true);
       } else if (e.target.closest('#upload-zone, #btn-trigger-upload')) {
@@ -783,6 +798,14 @@ function initApp() {
     }
 
     let dragInfo = state.draggedItemInfo;
+    if (nativeDragSource) {
+      const sourceType = nativeDragSource.dataset.sourceType;
+      if (sourceType === 'group') {
+        dragInfo = { type: 'group', gIdx: Number(nativeDragSource.dataset.gidx), iIdx: Number(nativeDragSource.dataset.iidx) };
+      } else if (sourceType === 'pool') {
+        dragInfo = { type: 'pool', idx: Number(nativeDragSource.dataset.idx) };
+      }
+    }
     if (!dragInfo) {
       try {
         const serializedDragInfo = e.dataTransfer?.getData('text/plain');
@@ -811,9 +834,14 @@ function initApp() {
     }
 
     // 2. 一括インポート画面でのドロップ移動
-    const targetGroupCard = e.target.closest('.batch-group-card');
-    const targetPoolArea = e.target.closest('#ungrouped-pool-container');
-    const targetThumb = e.target.closest('.draggable-thumb');
+    const targetGroupCard = e.target.closest('.batch-group-card') || lastDragOverCard;
+    const targetPoolArea = e.target.closest('#ungrouped-pool-container') || lastDragOverPool;
+    const eventTargetThumb = e.target.closest('.draggable-thumb');
+    const targetThumb = eventTargetThumb || nativeDropTarget || (
+      lastReorderTarget && (targetGroupCard?.contains(lastReorderTarget) || targetPoolArea?.contains(lastReorderTarget))
+        ? lastReorderTarget
+        : null
+    );
     const sourceItems = dragInfo.type === 'group'
       ? state.batchGroups[dragInfo.gIdx]
       : state.ungroupedImages;
@@ -864,6 +892,8 @@ function initApp() {
     }
 
     state.draggedItemInfo = null;
+    nativeDragSource = null;
+    nativeDropTarget = null;
     renderBatchGroupsUI();
     await syncBatchStateToDB();
   });
@@ -907,7 +937,7 @@ function initApp() {
 
       activeThumb.style.pointerEvents = 'none';
       const droppedTarget = document.elementFromPoint(e.clientX, e.clientY);
-      const targetThumb = droppedTarget?.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
+      const targetThumb = droppedTarget?.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb, #ungrouped-pool-container .draggable-thumb');
       const targetPool = droppedTarget?.closest('#ungrouped-pool-container');
       const targetCard = droppedTarget?.closest('.batch-group-card');
       activeThumb.style.pointerEvents = '';

@@ -20,6 +20,7 @@ export function openLightbox(imageSrc, ctx) {
   let arrowPrevHTML = '';
   let arrowNextHTML = '';
   let total = 0;
+  let detachedDangerHTML = '';
 
   if (ctx) {
     if (ctx.type === 'editor-preview') {
@@ -89,10 +90,16 @@ export function openLightbox(imageSrc, ctx) {
       }
 
       controlsHTML = `
-        <div class="lightbox-controls" style="display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; width: 100%; max-width: 480px; pointer-events: auto;">
-          <button type="button" class="lightbox-ctrl-btn btn-pool-create-group" data-idx="${idx}" style="background: #10b981 !important; border-color: #10b981 !important; color: #fff !important;">✨ 新しいお酒にする</button>
-          ${groupOptionsHTML}
-          <button type="button" class="lightbox-ctrl-btn btn-pool-delete-img" data-idx="${idx}" style="background: rgba(239, 68, 68, 0.15) !important; border-color: rgba(239, 68, 68, 0.3) !important; color: #ef4444 !important;">🗑️ 完全に削除</button>
+        <div class="lightbox-controls lightbox-pool-controls" style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px; width: 100%; max-width: 480px; pointer-events: auto;">
+          <div class="lightbox-pool-primary-actions">
+            <button type="button" class="lightbox-ctrl-btn btn-pool-create-group" data-idx="${idx}">✨ 新しいお酒にする</button>
+            ${groupOptionsHTML}
+          </div>
+        </div>
+      `;
+      detachedDangerHTML = `
+        <div class="lightbox-pool-danger-overlay">
+          <button type="button" class="lightbox-ctrl-btn btn-pool-delete-img" data-idx="${idx}">🗑️ 完全に削除</button>
         </div>
       `;
     } else if (ctx.type === 'detail-preview') {
@@ -112,10 +119,11 @@ export function openLightbox(imageSrc, ctx) {
     <div class="lightbox-content" style="display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; width: 100%;">
       <button type="button" class="lightbox-close" style="pointer-events: auto;">&times;</button>
       ${arrowPrevHTML}
-      <img id="lightbox-img" src="${imageSrc}" alt="拡大画像" style="max-height: 60vh !important; pointer-events: auto; cursor: zoom-out;" />
+      <img id="lightbox-img" src="${imageSrc}" alt="拡大画像" style="pointer-events: auto; cursor: zoom-out;" />
       ${arrowNextHTML}
       ${indicatorHTML}
       ${controlsHTML}
+      ${detachedDangerHTML}
     </div>
   `;
   lightbox.classList.add('active');
