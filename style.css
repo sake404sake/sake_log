@@ -1285,6 +1285,7 @@ a:hover {
 }
 
 .log-row-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1294,6 +1295,30 @@ a:hover {
   cursor: pointer;
   transition: background 0.2s;
   margin-bottom: 6px;
+}
+
+.sync-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.22);
+}
+
+.sync-dot-synced {
+  background: #22c55e;
+}
+
+.sync-dot-local {
+  background: #ef4444;
+}
+
+.batch-group-card,
+#ungrouped-pool-container {
+  position: relative;
 }
 
 .log-row-item:hover {

@@ -4,6 +4,8 @@ import { openDB, getAllLogs, saveLog, permanentlyDeleteLog } from '../store/db.j
 
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=drive&version=v3';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
+const DRIVE_REQUEST_TIMEOUT_MS = 60 * 1000;
+const IMAGE_SYNC_CONCURRENCY = 4;
 
 export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
@@ -11,6 +13,8 @@ let tokenClient = null;
 let silentRefreshPromise = null;
 let resolveSilentRefresh = null;
 let rejectSilentRefresh = null;
+let silentRefreshTimeoutId = null;
+let syncQueued = false;
 
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
@@ -91,11 +95,13 @@ const EXCLUDED_LOCAL_KEYS = [
   'sella_theme',
   'sella_settings_updated_at',
   'sella_last_synced_time',
+  'sella_last_synced_at',
   'sella_last_sync_theme',
   'sella_last_sync_apikey',
   'sella_last_sync_model',
   'sella_last_sync_bgimage',
   'sella_last_sync_custom',
+  'sella_last_sync_google_sub',
   'gemini_api_key',
   'gemini_selected_model'
 ];
@@ -162,6 +168,8 @@ export async function initGoogleAuth() {
       if (response.error !== undefined) {
         if (rejectSilentRefresh) {
           const reject = rejectSilentRefresh;
+          clearTimeout(silentRefreshTimeoutId);
+          silentRefreshTimeoutId = null;
           silentRefreshPromise = null;
           resolveSilentRefresh = null;
           rejectSilentRefresh = null;
@@ -180,6 +188,20 @@ export async function initGoogleAuth() {
         });
         if (profileRes.ok) {
           const userInfo = await profileRes.json();
+          const previousGoogleUserSub = localStorage.getItem('sella_google_user_sub') || localStorage.getItem('sella_google_sub') || localStorage.getItem('sella_last_sync_google_sub');
+          const isDifferentGoogleAccount = previousGoogleUserSub && userInfo.sub && previousGoogleUserSub !== userInfo.sub;
+          if (isDifferentGoogleAccount) {
+            localStorage.removeItem('gemini_api_key');
+            localStorage.removeItem('sella_settings_updated_at');
+            localStorage.removeItem('sella_last_sync_theme');
+            localStorage.removeItem('sella_last_sync_apikey');
+            localStorage.removeItem('sella_last_sync_model');
+            localStorage.removeItem('sella_last_sync_bgimage');
+            localStorage.removeItem('sella_last_sync_custom');
+            localStorage.removeItem('sella_last_sync_google_sub');
+            localStorage.removeItem('sella_last_synced_at');
+            console.log('[GoogleDrive] Google account changed. Cloud settings will be restored for the new account.');
+          }
           state.googleUserName = userInfo.name || 'Googleユーザー';
           state.googleUserAvatar = userInfo.picture || '';
           localStorage.setItem('sella_google_user_name', state.googleUserName);
@@ -203,6 +225,8 @@ export async function initGoogleAuth() {
 
       if (resolveSilentRefresh) {
         const resolve = resolveSilentRefresh;
+        clearTimeout(silentRefreshTimeoutId);
+        silentRefreshTimeoutId = null;
         silentRefreshPromise = null;
         resolveSilentRefresh = null;
         rejectSilentRefresh = null;
@@ -258,6 +282,7 @@ export function logoutGoogle(clearLocal = false) {
   localStorage.removeItem('sella_last_sync_model');
   localStorage.removeItem('sella_last_sync_bgimage');
   localStorage.removeItem('sella_last_sync_custom');
+  localStorage.removeItem('sella_last_synced_at');
 
   document.dispatchEvent(new CustomEvent('google-logout-success'));
 
@@ -287,9 +312,18 @@ function refreshTokenSilently() {
   silentRefreshPromise = new Promise((resolve, reject) => {
     resolveSilentRefresh = resolve;
     rejectSilentRefresh = reject;
+    silentRefreshTimeoutId = setTimeout(() => {
+      silentRefreshPromise = null;
+      resolveSilentRefresh = null;
+      rejectSilentRefresh = null;
+      silentRefreshTimeoutId = null;
+      reject(new Error('AUTH_REFRESH_TIMEOUT'));
+    }, 15 * 1000);
     try {
       tokenClient.requestAccessToken({ prompt: 'none' });
     } catch (err) {
+      clearTimeout(silentRefreshTimeoutId);
+      silentRefreshTimeoutId = null;
       silentRefreshPromise = null;
       resolveSilentRefresh = null;
       rejectSilentRefresh = null;
@@ -337,9 +371,12 @@ async function driveFetch(url, options = {}, allowTokenRefresh = true) {
   }
 
   options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DRIVE_REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(url, options);
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
     
     if (response.status === 401) {
       console.error('[GoogleDrive] Unauthorized (401). Invalid token session.');
@@ -358,6 +395,11 @@ async function driveFetch(url, options = {}, allowTokenRefresh = true) {
     
     return response;
   } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      console.warn('[GoogleDrive] Request timed out.');
+      throw new Error('NETWORK_TIMEOUT');
+    }
     if (err instanceof TypeError || err.message?.includes('fetch')) {
       console.warn('[GoogleDrive] Network error detected. App is likely offline. Login state is preserved.');
       throw new Error('OFFLINE_NETWORK_ERROR');
@@ -485,11 +527,26 @@ async function deleteCloudFile(fileId) {
   }
 }
 
+async function runWithConcurrency(items, worker, concurrency = IMAGE_SYNC_CONCURRENCY) {
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex++];
+      await worker(item);
+    }
+  }));
+}
+
 export async function syncAllData(silent = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) return;
 
-  if (state.isSyncing) return;
+  if (state.isSyncing) {
+    syncQueued = true;
+    return;
+  }
   state.isSyncing = true;
   document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: true } }));
 
@@ -591,11 +648,15 @@ export async function syncAllData(silent = false) {
               localStorage.setItem('gemini_api_key', decryptedKey);
               const apiKeyInput = document.getElementById('gemini-api-key');
               if (apiKeyInput) apiKeyInput.value = decryptedKey;
+            } else {
+              localStorage.removeItem('gemini_api_key');
             }
+          } else {
+            localStorage.removeItem('gemini_api_key');
           }
 
           localStorage.setItem('sella_last_sync_theme', cloudSettings.theme || 'dark');
-          localStorage.setItem('sella_last_sync_apikey', decryptedKey || currentApiKey || '');
+          localStorage.setItem('sella_last_sync_apikey', decryptedKey);
           localStorage.setItem('sella_last_sync_model', cloudSettings.selectedModel || 'models/gemini-2.5-flash');
           localStorage.setItem('sella_last_sync_bgimage', cloudSettings.backgroundImage || '');
           localStorage.setItem('sella_last_sync_custom', JSON.stringify(cloudSettings.customSettings || {}));
@@ -606,6 +667,8 @@ export async function syncAllData(silent = false) {
       } else {
         shouldUploadConfig = true;
       }
+
+      localStorage.setItem('sella_last_sync_google_sub', googleUserId);
 
       if (shouldUploadConfig) {
         console.log('[GoogleDriveSync] Local settings are newer. Encrypting and uploading...');
@@ -685,11 +748,13 @@ export async function syncAllData(silent = false) {
       const tx = db.transaction(['logs'], 'readwrite');
       const logStore = tx.objectStore('logs');
       for (const log of mergedLogsMap.values()) {
-        await new Promise((resolve) => {
-          const req = logStore.put(log);
-          req.onsuccess = () => resolve();
-        });
+        logStore.put(log);
       }
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error || new Error('Failed to apply cloud logs to local DB'));
+        tx.onabort = () => reject(tx.error || new Error('Cloud log transaction was aborted'));
+      });
     }
 
     console.log('[GoogleDriveSync] Auditing and syncing image binaries...');
@@ -733,7 +798,7 @@ export async function syncAllData(silent = false) {
 
     if (uploadTargets.length > 0) {
       console.log(`[GoogleDriveSync] Uploading ${uploadTargets.length} images...`);
-      await Promise.all(uploadTargets.map(async (imgId) => {
+      await runWithConcurrency(uploadTargets, async (imgId) => {
         const blobRecord = await new Promise((res) => {
           const tx = db.transaction(['images'], 'readonly');
           const req = tx.objectStore('images').get(imgId);
@@ -743,7 +808,7 @@ export async function syncAllData(silent = false) {
         if (blobRecord && blobRecord.blob) {
           await uploadImageFile(imgId, blobRecord.blob);
         }
-      }));
+      });
     }
 
     const downloadTargets = [];
@@ -755,24 +820,10 @@ export async function syncAllData(silent = false) {
 
     if (downloadTargets.length > 0) {
       console.log(`[GoogleDriveSync] Downloading ${downloadTargets.length} images...`);
-      await Promise.all(downloadTargets.map(async (imgId) => {
+      await runWithConcurrency(downloadTargets, async (imgId) => {
         const cloudFile = cloudImageFilesMap.get(imgId);
         await downloadImageFile(cloudFile.id, imgId);
-      }));
-    }
-
-    const deleteTargets = [];
-    for (const [imgId, cloudFile] of cloudImageFilesMap.entries()) {
-      if (!requiredImageIds.has(imgId)) {
-        deleteTargets.push(cloudFile);
-      }
-    }
-
-    if (deleteTargets.length > 0) {
-      console.log(`[GoogleDriveSync] Purging ${deleteTargets.length} unused cloud images...`);
-      await Promise.all(deleteTargets.map(async (cloudFile) => {
-        await deleteCloudFile(cloudFile.id);
-      }));
+      });
     }
 
     const updatedIndex = {
@@ -799,9 +850,12 @@ export async function syncAllData(silent = false) {
       }
     }
 
-    const timeStr = new Date().toLocaleTimeString();
+    const syncedAt = new Date().toISOString();
+    const timeStr = new Date(syncedAt).toLocaleTimeString();
     localStorage.setItem('sella_last_synced_time', timeStr);
+    localStorage.setItem('sella_last_synced_at', syncedAt);
     state.lastSyncedTime = timeStr;
+    state.lastSyncedAt = syncedAt;
 
     console.log('[GoogleDriveSync] Sync session completed successfully.');
     if (!silent) alert('Googleアカウント上のデータと正常に同期されました！');
@@ -814,6 +868,10 @@ export async function syncAllData(silent = false) {
       if (!silent) {
         alert('現在オフラインです。ネットワーク接続が復旧した際に再度自動同期されます。');
       }
+    } else if (err.message === 'NETWORK_TIMEOUT') {
+      if (!silent) {
+        alert('Google Driveからの応答がタイムアウトしました。ネットワーク接続を確認して再度お試しください。');
+      }
     } else if (err.message !== 'AUTH_EXPIRED') {
       if (!silent) {
         alert(`データの同期中にエラーが発生しました。\n詳細エラー: ${err.message}`);
@@ -822,6 +880,10 @@ export async function syncAllData(silent = false) {
   } finally {
     state.isSyncing = false;
     document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: false } }));
+    if (syncQueued) {
+      syncQueued = false;
+      setTimeout(() => syncAllData(true), 0);
+    }
   }
 }
 

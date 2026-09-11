@@ -1,5 +1,5 @@
 // src/views/batchImport.js
-import { state } from '../store/state.js';
+import { state, renderSyncDot } from '../store/state.js';
 import { compressImage, groupImagesByTime, extractPhotoDateObject } from '../utils/image.js';
 
 /**
@@ -90,6 +90,7 @@ export function renderBatchGroupsUI() {
 
     ungroupedHTML = `
       <div id="ungrouped-pool-container" style="position: sticky; bottom: 16px; width: 100%; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px); box-sizing: border-box;">
+        ${renderSyncDot(state.batchLocalUpdatedAt, '未所属画像')}
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
             <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px; flex-shrink: 0;">${state.isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
@@ -129,6 +130,7 @@ export function renderBatchGroupsUI() {
 
     return `
       <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box;" data-gidx="${gIdx}">
+        ${renderSyncDot(group._updatedAt || state.batchLocalUpdatedAt, '未保存グループ')}
         <div class="batch-group-card-header" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); width: 100%; box-sizing: border-box;">
           <div style="width: 100%; display: flex; flex-direction: column; gap: 4px;">
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">

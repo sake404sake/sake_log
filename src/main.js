@@ -324,6 +324,9 @@ async function sendAiChatMessage() {
 
 export async function syncBatchStateToDB() {
   try {
+    const localUpdatedAt = new Date().toISOString();
+    state.batchLocalUpdatedAt = localUpdatedAt;
+    state.batchGroups.forEach(group => { group._updatedAt = localUpdatedAt; });
     await clearAllDrafts();
 
     if (state.ungroupedImages.length > 0) {
@@ -454,11 +457,15 @@ export async function loadBatchStateFromDB() {
       group.abv = gLog.abv || '';
       group.notes = gLog.notes || '';
       group.aiInfo = gLog.aiInfo || '';
+      group._updatedAt = gLog.updatedAt || '';
       if (gLog.backupFormData) {
         group.backupFormData = { ...gLog.backupFormData };
       }
       state.batchGroups.push(group);
     }
+    state.batchLocalUpdatedAt = drafts.reduce((latest, draft) => {
+      return draft.updatedAt && (!latest || draft.updatedAt > latest) ? draft.updatedAt : latest;
+    }, '');
     renderBatchGroupsUI();
   } catch (err) {
     console.error('[DraftSync] Failed to restore drafts:', err);
@@ -503,6 +510,14 @@ function initApp() {
     updateSidebarProfile();
     if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
       await navigateTo('settings');
+    }
+  });
+
+  document.addEventListener('sync-completed', async () => {
+    if (state.currentViewName === 'batchimport') {
+      renderBatchGroupsUI();
+    } else if (state.currentViewName === 'loglist' || state.currentViewName === 'log-list' || state.currentViewName === 'dashboard') {
+      await navigateTo(state.currentViewName);
     }
   });
 
