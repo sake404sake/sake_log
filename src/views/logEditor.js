@@ -202,11 +202,12 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
         for (const blob of log.images) {
           try {
             const base64 = await blobToBase64(blob);
+            const previewUrl = URL.createObjectURL(blob);
             state.uploadedImages.push({
               blob,
               base64,
               mimeType: blob.type || 'image/jpeg',
-              previewUrl: URL.createObjectURL(blob)
+              previewUrl
             });
           } catch (e) {
             console.error('Base64変換エラー:', e);
@@ -245,14 +246,15 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
           item.blob = blob;
         }
         let previewUrl = item.previewUrl;
-        if (!previewUrl && blob instanceof Blob) {
-          try { previewUrl = URL.createObjectURL(blob); item.previewUrl = previewUrl; } catch (e) {}
+        if (!previewUrl && blob) {
+          previewUrl = URL.createObjectURL(blob);
+          item.previewUrl = previewUrl;
         }
         state.uploadedImages.push({
           blob: blob,
-          base64: item.base64 || '',
+          base64: item.base64,
           mimeType: item.mimeType || 'image/jpeg',
-          previewUrl: previewUrl || ''
+          previewUrl: previewUrl
         });
       } catch (e) {
         console.error('バッチ画像ロードエラー:', e);
@@ -271,7 +273,7 @@ export function fillEditorForm(log) {
   setVal('sake-region', log.region);
   setVal('sake-type', log.type);
   setVal('sake-abv', log.abv);
-  setVal('sake-date', log.date);
+  setVal('sake-date', log.date ? formatDateToLocalYYYYMMDD(log.date) : formatDateToLocalYYYYMMDD(new Date()));
   setVal('sake-rating', log.rating || '4');
   setVal('sake-tags', (log.tags || []).join(' '));
   setVal('sake-notes', log.notes);
@@ -310,16 +312,10 @@ export function renderImagePreviewList() {
   }
 
   const itemsHTML = state.uploadedImages.map((img, idx) => {
-    let src = img.previewUrl;
-    if (!src && img.blob instanceof Blob) {
-      try { src = URL.createObjectURL(img.blob); img.previewUrl = src; } catch (e) {}
-    }
-    if (!src && img.base64) {
-      src = `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`;
-    }
+    const src = img.previewUrl || (img.base64 ? `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}` : '');
     return `
       <div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
-        <img src="${src || ''}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none; width: 100%; height: 100%; object-fit: cover;" onerror="if(this.dataset.triedBase64 !== 'true' && '${img.base64 || ''}') { this.dataset.triedBase64='true'; this.src='data:${img.mimeType || 'image/jpeg'};base64,${img.base64 || ''}'; } else { this.onerror=null; this.style.display='none'; }" />
+        <img src="${src}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" onerror="if(this.src!=='${img.base64 ? 'data:image/jpeg;base64,' + img.base64 : ''}'){this.src='data:image/jpeg;base64,${img.base64 || ''}';}" />
         <div class="preview-actions">
           <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
         </div>
@@ -384,9 +380,6 @@ export function updateFieldRevertUI() {
   });
 }
 
-/**
- * 🌟 AIラベル解析の実行関数 (エディタ用)
- */
 export async function runAIAnalysis(targetImg) {
   if (!targetImg) {
     alert('解析する画像を選択してください。');
@@ -452,55 +445,42 @@ export async function runAIAnalysis(targetImg) {
 }
 
 /**
- * 🌟【完全修復版】画像ファイル選択時の処理
+ * 🌟 単体画像選択時の処理
+ * 1枚目画像選択時、EXIF/ファイル名から日付文字列を取得し #sake-date へ即時セット
  */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
-
-  const isFirstBatch = (state.uploadedImages.length === 0);
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
     const isImage = (file.type && file.type.startsWith('image/')) || 
-                    /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
+                    /\\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
+
+    // 1枚目写真から撮影日を取得し即時適用
+    if (i === 0 && state.uploadedImages.length === 0) {
+      extractPhotoDate(file).then(dateStr => {
+        if (dateStr) {
+          const dateInput = document.getElementById('sake-date');
+          if (dateInput) dateInput.value = dateStr;
+        }
+      }).catch(err => console.warn('Date extraction fallback:', err));
+    }
 
     try {
       const compressed = await compressImage(file);
       const blob = compressed.blob || file;
-      let previewUrl = '';
-      try { previewUrl = URL.createObjectURL(blob); } catch (e) {
-        try { previewUrl = URL.createObjectURL(file); } catch (e2) {}
-      }
+      const previewUrl = URL.createObjectURL(blob);
 
       state.uploadedImages.push({
-        blob,
+        blob: blob,
         base64: compressed.base64 || '',
         mimeType: compressed.mimeType || file.type || 'image/jpeg',
         previewUrl
       });
     } catch (e) {
-      console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
-      let previewUrl = '';
-      try { previewUrl = URL.createObjectURL(file); } catch (e2) {}
-      state.uploadedImages.push({
-        blob: file,
-        base64: '',
-        mimeType: file.type || 'image/jpeg',
-        previewUrl
-      });
-    }
-
-    if (i === 0 && isFirstBatch) {
-      extractPhotoDate(file).then(extractedDate => {
-        if (extractedDate) {
-          const dateInput = document.getElementById('sake-date');
-          if (dateInput) dateInput.value = extractedDate;
-        }
-      }).catch(err => {
-        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました (非同期続行):', err);
-      });
+      console.error(`画像 [${file.name || i}] 登録エラー:`, e);
     }
   }
 
