@@ -129,12 +129,14 @@ a:hover {
   top: 0;
   left: 0;
   width: var(--sidebar-width);
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
   background-color: var(--panel-bg);
   border-right: 1px solid var(--border-color);
   z-index: 200;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   transform: translateX(-100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -179,6 +181,8 @@ a:hover {
   flex-direction: column;
   gap: 8px;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .nav-item {
@@ -886,6 +890,29 @@ a:hover {
   border-color: var(--accent-color);
 }
 
+.image-upload-zone.file-drop-active,
+.add-more-item.file-drop-active,
+#btn-add-more-batch.file-drop-active {
+  border-color: var(--accent-color) !important;
+  background: color-mix(in srgb, var(--accent-color) 18%, var(--card-bg)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 28%, transparent), 0 0 18px color-mix(in srgb, var(--accent-color) 35%, transparent);
+}
+
+.image-upload-zone.file-drop-active::after,
+.add-more-item.file-drop-active::after,
+#btn-add-more-batch.file-drop-active::after {
+  content: 'ここにドロップ';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--accent-color);
+  background: color-mix(in srgb, var(--bg-color) 55%, transparent);
+  font-weight: 700;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
 .upload-placeholder {
   text-align: center;
   padding: 12px;
@@ -1327,10 +1354,17 @@ a:hover {
 @media (min-width: 1024px) {
   .app-container {
     grid-template-columns: var(--sidebar-width) 1fr var(--right-panel-width);
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .sidebar {
-    position: relative;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
     transform: none !important;
   }
 
@@ -1350,8 +1384,22 @@ a:hover {
     flex-direction: column;
     gap: 16px;
     padding: 20px;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
     background-color: var(--panel-bg);
     border-left: 1px solid var(--border-color);
+    overflow-y: auto;
+  }
+
+  .main-wrapper {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .app-main {
+    min-height: 0;
     overflow-y: auto;
   }
 
