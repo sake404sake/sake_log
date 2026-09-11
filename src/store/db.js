@@ -165,6 +165,23 @@ export async function getAllLogs(includeDrafts = false, includeDeleted = false) 
   return logsWithImages.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 }
 
+export async function getAllLogDates() {
+  const db = await openDB();
+  const tx = db.transaction(['logs'], 'readonly');
+  const logStore = tx.objectStore('logs');
+  return new Promise((resolve) => {
+    const req = logStore.getAll();
+    req.onsuccess = () => {
+      const logs = Array.isArray(req.result) ? req.result : [];
+      resolve(logs
+      .filter(log => log && log.status !== 'draft' && !log.isDeleted)
+      .map(log => log.date)
+      .filter(Boolean));
+    };
+    req.onerror = () => resolve([]);
+  });
+}
+
 /**
  * 下書き(未分類プール、未保存グループ)のログのみを全取得
  */

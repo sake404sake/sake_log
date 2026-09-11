@@ -24,6 +24,9 @@ export const state = {
 
   // 現在アクティブなビュー名
   currentViewName: 'logList',
+  logSearchQuery: '',
+  logSortKey: 'date',
+  logSortDirection: 'desc',
 
   // Googleアカウント同期ステータス
   googleAccessToken: null,

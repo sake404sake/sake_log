@@ -8,6 +8,9 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.google
 export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
 let tokenClient = null;
+let silentRefreshPromise = null;
+let resolveSilentRefresh = null;
+let rejectSilentRefresh = null;
 
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
@@ -157,6 +160,14 @@ export async function initGoogleAuth() {
     scope: SCOPES,
     callback: async (response) => {
       if (response.error !== undefined) {
+        if (rejectSilentRefresh) {
+          const reject = rejectSilentRefresh;
+          silentRefreshPromise = null;
+          resolveSilentRefresh = null;
+          rejectSilentRefresh = null;
+          reject(response);
+          return;
+        }
         throw response;
       }
       state.googleAccessToken = response.access_token;
@@ -189,6 +200,16 @@ export async function initGoogleAuth() {
       
       console.log('[GoogleDrive] Auth Success. Token acquired.');
       document.dispatchEvent(new CustomEvent('google-login-success'));
+
+      if (resolveSilentRefresh) {
+        const resolve = resolveSilentRefresh;
+        silentRefreshPromise = null;
+        resolveSilentRefresh = null;
+        rejectSilentRefresh = null;
+        resolve();
+        return;
+      }
+
       await syncAllData(true);
     },
   });
@@ -259,6 +280,26 @@ export function isTokenExpired() {
   return timePassed >= oneHourMs;
 }
 
+function refreshTokenSilently() {
+  if (!tokenClient) return Promise.reject(new Error('AUTH_CLIENT_UNAVAILABLE'));
+  if (silentRefreshPromise) return silentRefreshPromise;
+
+  silentRefreshPromise = new Promise((resolve, reject) => {
+    resolveSilentRefresh = resolve;
+    rejectSilentRefresh = reject;
+    try {
+      tokenClient.requestAccessToken({ prompt: 'none' });
+    } catch (err) {
+      silentRefreshPromise = null;
+      resolveSilentRefresh = null;
+      rejectSilentRefresh = null;
+      reject(err);
+    }
+  });
+
+  return silentRefreshPromise;
+}
+
 function handleTokenExpired() {
   state.isGoogleLoggedIn = false;
   state.googleAccessToken = null;
@@ -274,7 +315,7 @@ function handleTokenExpired() {
   alert('Googleアカウントのセッション有効期限が切れました。安全な同期のため、お手数ですが再度ログインを行ってください。');
 }
 
-async function driveFetch(url, options = {}) {
+async function driveFetch(url, options = {}, allowTokenRefresh = true) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) {
     throw new Error('Not authenticated with Google');
@@ -282,6 +323,15 @@ async function driveFetch(url, options = {}) {
 
   if (isTokenExpired()) {
     console.warn('[GoogleDrive] Token detected as expired before fetch request.');
+    if (allowTokenRefresh) {
+      try {
+        await refreshTokenSilently();
+        return driveFetch(url, options, false);
+      } catch (err) {
+        handleTokenExpired();
+        throw new Error('AUTH_EXPIRED');
+      }
+    }
     handleTokenExpired();
     throw new Error('AUTH_EXPIRED');
   }
@@ -293,6 +343,15 @@ async function driveFetch(url, options = {}) {
     
     if (response.status === 401) {
       console.error('[GoogleDrive] Unauthorized (401). Invalid token session.');
+      if (allowTokenRefresh) {
+        try {
+          await refreshTokenSilently();
+          return driveFetch(url, options, false);
+        } catch (err) {
+          handleTokenExpired();
+          throw new Error('AUTH_EXPIRED');
+        }
+      }
       handleTokenExpired();
       throw new Error('AUTH_EXPIRED');
     }

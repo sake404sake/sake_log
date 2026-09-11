@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Sella - お酒試飲ログ</title>
+  <title>SakeLog - お酒試飲ログ</title>
   
   <!-- アプリケーションスタイルシート -->
   <link rel="stylesheet" href="style.css">
@@ -20,7 +20,7 @@
   <!-- 🌟 iOS Safari でのネイティブPWA立ち上げ（全画面）を可能にする特殊メタタグ -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Sella">
+  <meta name="apple-mobile-web-app-title" content="SakeLog">
   <meta name="theme-color" content="#121316">
 
   <!-- 🌟 Android / PWA対応マニフェストへのリンク -->
@@ -36,7 +36,8 @@
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <span class="icon" style="font-size: 1.5rem;">🍶</span>
-        <h1 class="brand-title">Sella</h1>
+        <h1 class="brand-title">SakeLog</h1>
+        <button type="button" class="drawer-close-btn drawer-close-left" title="メニューを閉じる" aria-label="メニューを閉じる">×</button>
       </div>
       
       <nav class="side-nav">
@@ -77,10 +78,11 @@
     <div class="main-wrapper">
       <header class="mobile-header">
         <button id="btn-menu-toggle" class="icon-btn">☰</button>
-        <h2 class="mobile-title">Sella</h2>
+        <h2 class="mobile-title">SakeLog</h2>
         <div style="display: flex; gap: 8px;">
           <button class="icon-btn" data-view="batchImport" title="一括インポート">📦</button>
           <button class="icon-btn" data-view="settings" title="設定">⚙️</button>
+          <button id="btn-right-panel-toggle" class="icon-btn" title="AI・クイック操作" aria-label="AI・クイック操作">🧠</button>
         </div>
       </header>
 
@@ -91,19 +93,20 @@
     </div>
 
     <!-- 右側ウィジェットパネル（PC用） -->
-    <aside class="right-panel">
+    <aside class="right-panel" id="right-panel">
+      <div class="right-panel-header">
+        <span>AI・クイック操作</span>
+        <button type="button" class="drawer-close-btn drawer-close-right" title="パネルを閉じる" aria-label="パネルを閉じる">×</button>
+      </div>
       <div class="widget-card ai-widget">
         <div class="widget-header">
           <span class="icon">🧠</span>
-          <h3>ASK SELLA AI</h3>
+          <h3>ASK SakeLog AI</h3>
         </div>
-        <div class="ai-chat-body">
+          <div class="ai-chat-body" id="ai-chat-body">
           <div class="chat-bubble ai">何かお酒の記録や検索でお手伝いしましょうか？</div>
         </div>
-        <div class="chat-input-wrapper">
-          <input type="text" placeholder="AIに質問・検索..." />
-          <button class="send-btn">➔</button>
-        </div>
+          <div class="chat-input-wrapper" id="ai-chat-controls"></div>
       </div>
 
       <div class="widget-card plugin-widget">
@@ -120,6 +123,10 @@
           </button>
         </div>
       </div>
+
+      <div class="widget-card calendar-widget" id="sidebar-calendar">
+        <div class="calendar-loading">カレンダーを読み込み中...</div>
+      </div>
     </aside>
 
     <!-- フローティングアクションボタン (FAB) -->
@@ -128,7 +135,7 @@
   </div>
 
   <!-- アプリケーションエントリーJavaScript -->
-  <script type="module" src="src/main.js"></script>
+  <script type="module" src="src/main.js?v=20260911-calendar-fix"></script>
 
 </body>
 </html>

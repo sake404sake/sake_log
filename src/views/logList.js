@@ -1,6 +1,7 @@
 // src/views/logList.js
 
 import { getAllLogs } from '../store/db.js';
+import { state } from '../store/state.js';
 
 /**
  * 酒ログ一覧ビューのレンダリング
@@ -8,19 +9,130 @@ import { getAllLogs } from '../store/db.js';
  */
 export async function renderLogListView() {
   const logs = await getAllLogs(false, false); // 下書きと論理削除を除外
+  const rawQuery = (state.logSearchQuery || '').trim();
+  const query = rawQuery.toLocaleLowerCase();
+  const normalizeDate = (value) => {
+    const normalized = String(value || '')
+      .replace(/[０-９]/g, digit => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+      .replace(/年|月/g, '-')
+      .replace(/日/g, '')
+      .replace(/[/.]/g, '-');
+    const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    return match ? `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}` : '';
+  };
+  const datePattern = '(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{4}年\\d{1,2}月\\d{1,2}日)';
+  const rangeMatch = rawQuery.match(new RegExp(`(?:期間|日付)?\\s*[:：]?\\s*(${datePattern})\\s*(?:\\.\\.|~|〜|～|から|～)\\s*(${datePattern})`, 'i'));
+  const singleDateMatch = rawQuery.match(new RegExp(`^(?:期間|日付)?\\s*[:：]?\\s*(${datePattern})$`, 'i'));
+  const dateFrom = rangeMatch ? normalizeDate(rangeMatch[1]) : singleDateMatch ? normalizeDate(singleDateMatch[1]) : '';
+  const dateTo = rangeMatch ? normalizeDate(rangeMatch[2]) : dateFrom;
+  const dateQueryText = rangeMatch ? rangeMatch[0] : singleDateMatch ? singleDateMatch[0] : '';
+  const textQuery = rawQuery.replace(dateQueryText, '').trim().toLocaleLowerCase();
+  const queryTerms = textQuery.split(/\s+/).filter(Boolean);
+  const nonSearchableFields = new Set([
+    'id',
+    'imageIds',
+    'imageUrls',
+    'images',
+    'status',
+    'isDeleted',
+    'updatedAt',
+    'createdAt',
+    'backupFormData',
+    'groupItemsMeta',
+    'poolItemsMeta'
+  ]);
+  const getSearchText = (log) => Object.entries(log)
+    .filter(([key]) => !nonSearchableFields.has(key))
+    .flatMap(([, value]) => Array.isArray(value) ? value : [value])
+    .filter(value => value !== null && value !== undefined && typeof value !== 'object')
+    .join(' ')
+    .toLocaleLowerCase();
+  const filteredLogs = queryTerms.length > 0
+    ? logs.filter(log => {
+        const logDate = normalizeDate(log.date);
+        if (dateFrom && (!logDate || logDate < dateFrom || logDate > dateTo)) return false;
+        const searchText = getSearchText(log);
+        return queryTerms.every(term => searchText.includes(term));
+      })
+    : dateFrom
+      ? logs.filter(log => {
+          const logDate = normalizeDate(log.date);
+          return logDate && logDate >= dateFrom && logDate <= dateTo;
+        })
+      : logs;
+
+  const escapeHtml = (value) => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const suggestionValues = logs.flatMap(log => [
+    log.category,
+    log.brewery,
+    log.region,
+    log.type,
+    ...(Array.isArray(log.tags) ? log.tags : [])
+  ]);
+  const searchSuggestions = [...new Set(suggestionValues
+    .map(value => String(value || '').trim())
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'ja'))
+    .slice(0, 24);
+
+  const suggestionHTML = searchSuggestions.map(tag => {
+    const isSelected = query.includes(tag.toLocaleLowerCase());
+    return `<button type="button" class="log-search-tag${isSelected ? ' is-selected' : ''}" data-search-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`;
+  }).join('');
+
+  const sortKey = state.logSortKey === 'count' ? 'count' : 'date';
+  const sortDirection = state.logSortDirection === 'asc' ? 'asc' : 'desc';
+  const sortArrow = sortDirection === 'asc' ? '↑' : '↓';
+  const sortControlsHTML = `
+    <div class="log-sort-controls" aria-label="酒ログの並び替え">
+      <span class="log-sort-label"><span aria-hidden="true">⇅</span> 並び替え</span>
+      <button type="button" class="log-sort-button${sortKey === 'count' ? ' is-selected' : ''}" data-log-sort="count">呑んだ回数${sortKey === 'count' ? ` ${sortArrow}` : ''}</button>
+      <button type="button" class="log-sort-button${sortKey === 'date' ? ' is-selected' : ''}" data-log-sort="date">呑んだ日${sortKey === 'date' ? ` ${sortArrow}` : ''}</button>
+    </div>
+  `;
+
+  const escapedQuery = (state.logSearchQuery || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
   
-  if (!logs || logs.length === 0) {
+  const listHeaderHTML = `
+    <div class="dashboard-list-header">
+      <div class="dashboard-header">
+        <h2>酒ログ一覧</h2>
+      </div>
+      <div class="log-search-bar">
+        <span class="log-search-icon" aria-hidden="true">⌕</span>
+        <input type="search" id="log-search-input" value="${escapedQuery}" placeholder="銘柄・酒蔵・メモ・期間(YYYY-MM-DD～YYYY-MM-DD)" autocomplete="off" aria-label="酒ログを検索">
+      </div>
+      ${suggestionHTML ? `<div class="log-search-suggestions" aria-label="検索タグ"><span class="log-suggestion-label">候補</span>${suggestionHTML}</div>` : ''}
+      ${sortControlsHTML}
+    </div>
+  `;
+
+  if (!filteredLogs || filteredLogs.length === 0) {
     return `
-      <div class="empty-state" style="padding: 40px 20px; text-align: center;">
-        <p style="color: var(--text-sub); margin-bottom: 16px;">登録されたお酒の記録がありません。</p>
-        <button class="btn-primary" data-action="open-editor">最初の酒ログを登録する</button>
+      <div class="dashboard-container">
+        ${listHeaderHTML}
+        <div class="empty-state" style="padding: 40px 20px; text-align: center;">
+          <p style="color: var(--text-sub); margin-bottom: 16px;">${query ? '検索条件に一致する酒ログがありません。' : '登録されたお酒の記録がありません。'}</p>
+          <button class="btn-primary" data-action="open-editor">最初の酒ログを登録する</button>
+        </div>
       </div>
     `;
   }
 
   // 1. カテゴリ別にグループ化
   const categoryGroups = {};
-  logs.forEach(log => {
+  filteredLogs.forEach(log => {
     const cat = log.category || 'その他';
     if (!categoryGroups[cat]) categoryGroups[cat] = {};
     
@@ -34,7 +146,16 @@ export async function renderLogListView() {
     const brandMap = categoryGroups[catName];
     const totalCount = Object.values(brandMap).reduce((acc, arr) => acc + arr.length, 0);
 
-    const brandsHTML = Object.keys(brandMap).map(brandName => {
+    const brandNames = Object.keys(brandMap).sort((a, b) => {
+      const aLogs = brandMap[a];
+      const bLogs = brandMap[b];
+      const aValue = sortKey === 'count' ? aLogs.length : Math.max(...aLogs.map(log => Date.parse(log.date || '') || 0));
+      const bValue = sortKey === 'count' ? bLogs.length : Math.max(...bLogs.map(log => Date.parse(log.date || '') || 0));
+      const difference = aValue - bValue;
+      return sortDirection === 'asc' ? difference : -difference;
+    });
+
+    const brandsHTML = brandNames.map(brandName => {
       const brandLogs = brandMap[brandName];
       // 日付の新しい順にソート
       brandLogs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
@@ -115,9 +236,7 @@ export async function renderLogListView() {
 
   return `
     <div class="dashboard-container">
-      <div class="dashboard-header" style="margin-bottom: 16px;">
-        <h2>酒ログ一覧</h2>
-      </div>
+      ${listHeaderHTML}
       <div class="categories-wrapper">
         ${categoriesHTML}
       </div>

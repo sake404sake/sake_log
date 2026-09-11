@@ -106,7 +106,7 @@ export function renderSettingsView() {
       </div>
 
       <!-- 🧠 API設定カード -->
-      <div class="settings-card" style="margin-bottom: 16px;">
+      <div class="settings-card" id="gemini-api-settings-card" style="margin-bottom: 16px;">
         <div class="card-title">
           <span class="icon" style="font-size: 1.25rem;">🧠</span>
           <h3>Gemini API 設定</h3>
@@ -120,16 +120,16 @@ export function renderSettingsView() {
           <div class="step-item"><span class="step-num" style="background: var(--accent-color); color:#000; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; margin-right:6px; font-weight:bold;">2</span><span>表示されたキーをコピーし、下の入力欄に貼り付けて「保存」を押す</span></div>
         </div>
 
-        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="btn-external-link" 
-           style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px; font-size: 0.85rem; color: var(--accent-color); text-decoration: underline; font-weight: bold;">
-          <span>🚀 APIキー発行画面を開く (Google External)</span>
-        </a>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+          <button type="button" id="btn-open-gemini-api-key" class="btn-primary" style="font-size: 0.82rem;">🚀 APIキーを取得</button>
+          <button type="button" id="btn-paste-gemini-api-key" class="btn-secondary" style="font-size: 0.82rem;">📋 コピーしたキーを貼り付け</button>
+        </div>
 
         <div class="form-group" style="margin-bottom: 16px;">
           <label for="gemini-api-key">Gemini APIキー</label>
           <div class="input-group" style="display: flex; gap: 8px;">
             <input type="password" class="input-dark" id="gemini-api-key" value="${savedKey}" placeholder="AIzaSy..." style="flex: 1; min-width: 0;" />
-            <button class="btn-primary" id="btn-save-api-key" style="height: auto;">保存</button>
+            <button type="button" class="btn-primary" id="btn-save-api-key" style="height: auto;">保存して接続確認</button>
           </div>
           <p id="api-key-msg" style="font-size: 0.8rem; margin-top: 8px; color: #4cd964; display: none;">✓ キーを保存しました</p>
         </div>
@@ -197,11 +197,17 @@ export function renderSettingsView() {
         <div class="form-group">
           <label for="theme-select">配色テーマ</label>
           <select id="theme-select" class="input-dark">
-            <option value="dark" ${currentTheme === 'dark' ? 'selected' : ''}>🌙 極上の闇 (Dark)</option>
-            <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>☀️ 優雅な朝 (Light)</option>
-            <option value="sakura" ${currentTheme === 'sakura' ? 'selected' : ''}>🌸 桜吹雪 (Sakura)</option>
-            <option value="gaming" ${currentTheme === 'gaming' ? 'selected' : ''}>🎮 サイバーネオン (Gaming)</option>
-            <option value="japan-modern" ${currentTheme === 'japan-modern' ? 'selected' : ''}>🏯 和風モダン (Modern Japan)</option>
+            <option value="dark" ${currentTheme === 'dark' ? 'selected' : ''}>ダーク</option>
+            <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>ライト</option>
+            <option value="sakura" ${currentTheme === 'sakura' ? 'selected' : ''}>桜</option>
+            <option value="moon" ${currentTheme === 'moon' ? 'selected' : ''}>月</option>
+            <option value="maple" ${currentTheme === 'maple' ? 'selected' : ''}>楓</option>
+            <option value="nature" ${currentTheme === 'nature' ? 'selected' : ''}>自然</option>
+            <option value="water" ${currentTheme === 'water' ? 'selected' : ''}>水</option>
+            <option value="bar" ${currentTheme === 'bar' ? 'selected' : ''}>洋風のバー</option>
+            <option value="kominka" ${currentTheme === 'kominka' ? 'selected' : ''}>古民家</option>
+            <option value="japan-modern" ${currentTheme === 'japan-modern' ? 'selected' : ''}>和モダン</option>
+            <option value="gaming" ${currentTheme === 'gaming' ? 'selected' : ''}>ゲーム</option>
           </select>
         </div>
       </div>

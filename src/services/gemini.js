@@ -5,14 +5,67 @@ export function getSavedModel() { return localStorage.getItem(STORAGE_KEY_MODEL)
 export function setSavedModel(modelName) { localStorage.setItem(STORAGE_KEY_MODEL, modelName); }
 export function hasApiKey() { return Boolean(getApiKey().trim()); }
 
+export async function requestGeminiText(prompt) {
+  const apiKey = getApiKey().trim();
+  if (!apiKey) throw new Error('APIキーが設定されていません');
+  const targetModel = await getOrDetermineModel();
+  const modelPath = targetModel.startsWith('models/') ? targetModel : `models/${targetModel}`;
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${modelPath}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error?.message || `HTTPエラー (${response.status})`);
+  return data.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim() || 'AIから回答を取得できませんでした。';
+}
+
 let cachedModels = null; let lastApiKey = null;
 const DEFAULT_MODELS = [
+  { name: 'models/gemini-3.7-flash', displayName: 'Gemini 3.7 Flash (推奨・最新安定版)', supportedGenerationMethods: ['generateContent'] },
+  { name: 'models/gemini-3.6-flash', displayName: 'Gemini 3.6 Flash', supportedGenerationMethods: ['generateContent'] },
+  { name: 'models/gemini-3.5-flash', displayName: 'Gemini 3.5 Flash', supportedGenerationMethods: ['generateContent'] },
+  { name: 'models/gemini-3.5-flash-lite', displayName: 'Gemini 3.5 Flash-Lite', supportedGenerationMethods: ['generateContent'] },
   { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (推奨・安定)', supportedGenerationMethods: ['generateContent'] },
-  { name: 'models/gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', supportedGenerationMethods: ['generateContent'] },
-  { name: 'models/gemini-1.5-flash', displayName: 'Gemini 1.5 Flash', supportedGenerationMethods: ['generateContent'] },
-  { name: 'models/gemini-1.5-pro', displayName: 'Gemini 1.5 Pro', supportedGenerationMethods: ['generateContent'] },
-  { name: 'models/gemini-3.1-pro-preview-customtools', displayName: 'Gemini 3.1 Pro Preview', supportedGenerationMethods: ['generateContent'] }
+  { name: 'models/gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash-Lite', supportedGenerationMethods: ['generateContent'] }
 ];
+
+const BLOCKED_MODEL_PATTERNS = [
+  'embedding',
+  'imagen',
+  'veo',
+  'lyria',
+  'tts',
+  'speech',
+  'transcribe',
+  'robotics',
+  'computer-use',
+  'image'
+];
+
+function isUsableVisionModel(model) {
+  const name = (model.name || '').toLowerCase();
+  const methods = model.supportedGenerationMethods || [];
+  if (!name.includes('gemini') || !methods.includes('generateContent')) return false;
+  return !BLOCKED_MODEL_PATTERNS.some(pattern => name.includes(pattern));
+}
+
+function modelRecommendationScore(model) {
+  const name = (model.name || '').toLowerCase();
+  const versionMatch = name.match(/gemini-(\d+)(?:\.(\d+))?/);
+  const versionScore = versionMatch
+    ? Number(versionMatch[1]) * 100 + Number(versionMatch[2] || 0) * 10
+    : 0;
+  const familyScore = name.includes('flash') && !name.includes('lite')
+    ? 1000
+    : name.includes('flash-lite')
+      ? 850
+      : name.includes('pro')
+        ? 600
+        : 300;
+  const stabilityPenalty = name.includes('preview') || name.includes('experimental') || name.includes('exp') ? 200 : 0;
+  return versionScore + familyScore - stabilityPenalty;
+}
 
 /**
 *  利用可能なGeminiモデル一覧を取得 */
@@ -31,7 +84,7 @@ export async function fetchAvailableModels(forceRefresh = false) {
 
   const uniqueMap = new Map();
   // 1. まず確実にデフォルトモデルを登録
-  DEFAULT_MODELS.forEach(m => uniqueMap.set(m.name, m));
+  DEFAULT_MODELS.filter(isUsableVisionModel).forEach(m => uniqueMap.set(m.name, m));
 
   // 2. APIからの取得を試みる（CORS等で失敗する場合はフォールバックを維持）
   try {
@@ -41,16 +94,13 @@ export async function fetchAvailableModels(forceRefresh = false) {
       const apiModels = data.models || [];
       apiModels.forEach(m => {
         const methods = m.supportedGenerationMethods || [];
-        const name = (m.name || '').toLowerCase();
-        const supportsContent = methods.includes('generateContent');
-        const isUnusable = name.includes('tts') || name.includes('imagen') || name.includes('embedding') || name.includes('banana');
-
-        if (supportsContent && !isUnusable) {
+        if (isUsableVisionModel(m)) {
           if (!uniqueMap.has(m.name)) {
             uniqueMap.set(m.name, {
               name: m.name,
               displayName: m.displayName || m.name,
-              supportedGenerationMethods: methods
+              supportedGenerationMethods: methods,
+              inputTokenLimit: m.inputTokenLimit || 0
             });
           }
         }
@@ -60,7 +110,10 @@ export async function fetchAvailableModels(forceRefresh = false) {
     console.warn('API model fetch blocked or failed (using default model list):', error);
   }
 
-  cachedModels = Array.from(uniqueMap.values());
+  cachedModels = Array.from(uniqueMap.values()).sort((a, b) => {
+    const scoreDiff = modelRecommendationScore(b) - modelRecommendationScore(a);
+    return scoreDiff || (a.displayName || a.name).localeCompare(b.displayName || b.name, 'ja');
+  });
   lastApiKey = apiKey;
   return cachedModels;
 }
@@ -69,13 +122,7 @@ export async function fetchAvailableModels(forceRefresh = false) {
 *  リストの中から最適なデフォルトモデルを自動決定 */
 export function autoSelectBestModel(models) {
   if (!models || models.length === 0) return 'models/gemini-2.5-flash';
-  const flash25 = models.find(m => m.name.includes('gemini-2.5-flash'));
-  if (flash25) return flash25.name;
-  const flash20 = models.find(m => m.name.includes('gemini-2.0-flash'));
-  if (flash20) return flash20.name;
-  const flash15 = models.find(m => m.name.includes('gemini-1.5-flash'));
-  if (flash15) return flash15.name;
-  return models[0].name || 'models/gemini-2.5-flash';
+  return [...models].sort((a, b) => modelRecommendationScore(b) - modelRecommendationScore(a))[0].name || 'models/gemini-2.5-flash';
 }
 
 /**
@@ -118,7 +165,7 @@ export async function populateModelDropdown(selectElement, forceRefresh = false)
     return;
   }
 
-  let currentSaved = getSavedModel();
+  let currentSaved = forceRefresh ? '' : getSavedModel();
   if (!currentSaved || !models.some(m => m.name === currentSaved)) {
     currentSaved = autoSelectBestModel(models);
     setSavedModel(currentSaved);

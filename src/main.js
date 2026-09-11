@@ -4,12 +4,21 @@ import { renderSettingsView } from './views/settings.js';
 import { renderLogEditorModal, openEditorModal, closeEditorModal, handleImageFiles, runAIAnalysis, updateFieldRevertUI, syncEditorFormToCurrentBatchGroup, renderImagePreviewList, TRACKED_FIELDS } from './views/logEditor.js';
 import { renderLogDetailModal, openDetailModal, closeDetailModal } from './views/logDetail.js';
 import { renderLogListView } from './views/logList.js';
-import { saveLog, deleteLog, clearAllDrafts, openDB, getDraftLogs } from './store/db.js';
+import { renderAnalyticsView, runAnalyticsAI } from './views/analytics.js';
+import { saveLog, deleteLog, clearAllDrafts, openDB, getDraftLogs, getAllLogs, getAllLogDates } from './store/db.js';
 import { renderBatchImportView, renderBatchGroupsUI, processFilesForBatch } from './views/batchImport.js';
 import { openLightbox, closeLightbox, triggerLightboxNext, triggerLightboxPrev } from './views/lightbox.js';
 import { state, base64ToBlob, blobToBase64 } from './store/state.js';
 import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth } from './services/googleDrive.js';
+import { getApiKey, requestGeminiText } from './services/gemini.js';
 import { formatDateToLocalYYYYMMDD } from './utils/image.js';
+
+function moveArrayItem(items, sourceIndex, targetIndex) {
+  if (sourceIndex === targetIndex || !items[sourceIndex]) return;
+  const [movedItem] = items.splice(sourceIndex, 1);
+  const insertionIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  items.splice(Math.max(0, insertionIndex), 0, movedItem);
+}
 
 function ensureSpinnerStyles() {
   if (document.getElementById('sella-spinner-style')) return;
@@ -26,7 +35,7 @@ function ensureSpinnerStyles() {
 }
 
 export function setTheme(themeName) {
-  const validThemes = ['dark', 'light', 'sakura', 'gaming', 'japan-modern'];
+  const validThemes = ['dark', 'light', 'sakura', 'moon', 'maple', 'nature', 'water', 'bar', 'kominka', 'gaming', 'japan-modern'];
   let targetTheme = themeName;
   if (!targetTheme || !validThemes.includes(targetTheme)) {
     targetTheme = 'dark';
@@ -60,7 +69,8 @@ const views = {
   logs: renderLogListView,
   batchimport: renderBatchImportView,
   settings: renderSettingsView,
-  setting: renderSettingsView
+  setting: renderSettingsView,
+  analytics: renderAnalyticsView
 };
 
 export async function navigateTo(viewName) {
@@ -95,19 +105,221 @@ export async function navigateTo(viewName) {
     btn.classList.toggle('active', btnView === key || btn.dataset.view === viewName);
   });
   closeSidebar();
+  renderSidebarCalendar();
 }
 
 const sidebar = document.getElementById('sidebar');
+const rightPanel = document.getElementById('right-panel');
 const overlay = document.getElementById('drawer-overlay');
+let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+function getCalendarDateKey(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const normalized = value
+      .replace(/[０-９]/g, digit => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+      .replace(/年|月/g, '-')
+      .replace(/日/g, '')
+      .replace(/[/.]/g, '-');
+    const match = normalized.match(/^(\d{4}-\d{1,2}-\d{1,2})/);
+    if (match) {
+      const [year, month, day] = match[1].split('-');
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+  }
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? '' : formatDateToLocalYYYYMMDD(date);
+}
+
+function getJapaneseHolidayName(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const fixedHolidays = {
+    '1-1': '元日',
+    '2-11': '建国記念の日',
+    '2-23': '天皇誕生日',
+    '4-29': '昭和の日',
+    '5-3': '憲法記念日',
+    '5-4': 'みどりの日',
+    '5-5': 'こどもの日',
+    '8-11': '山の日',
+    '11-3': '文化の日',
+    '11-23': '勤労感謝の日'
+  };
+  const fixedName = fixedHolidays[`${month}-${day}`];
+  if (fixedName) return fixedName;
+
+  const mondayNumber = Math.floor((day - 1) / 7) + 1;
+  if (date.getDay() === 1) {
+    if (month === 1 && mondayNumber === 2) return '成人の日';
+    if (month === 7 && mondayNumber === 3) return '海の日';
+    if (month === 9 && mondayNumber === 3) return '敬老の日';
+    if (month === 10 && mondayNumber === 2) return 'スポーツの日';
+  }
+
+  const equinoxDay = month === 3
+    ? Math.floor(20.8431 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4))
+    : month === 9
+      ? Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4))
+      : 0;
+  if (equinoxDay === day) return month === 3 ? '春分の日' : '秋分の日';
+  return '';
+}
+
+async function renderSidebarCalendar() {
+  const calendar = document.getElementById('sidebar-calendar');
+  if (!calendar) return;
+
+  try {
+    let logs = [];
+    try {
+      const logDates = await getAllLogDates();
+      logs = logDates.map(date => ({ date }));
+    } catch (err) {
+      console.error('[Calendar] Failed to load log dates:', err);
+      try {
+        logs = await getAllLogs(false, false);
+      } catch (fallbackErr) {
+        console.error('[Calendar] Fallback log loading failed:', fallbackErr);
+      }
+    }
+    if (!Array.isArray(logs)) logs = [];
+
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  const monthStart = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = monthStart.getDay();
+  const logDates = new Set(logs.map(log => getCalendarDateKey(log.date)).filter(Boolean));
+  const todayKey = getCalendarDateKey(new Date());
+  const monthLabel = `${year}年${month + 1}月`;
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+
+  let daysHTML = '';
+  for (let i = 0; i < firstDay; i++) {
+    daysHTML += '<span class="calendar-day calendar-day-empty" aria-hidden="true"></span>';
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const hasLog = logDates.has(dateKey);
+    const isToday = dateKey === todayKey;
+    const date = new Date(year, month, day);
+    const holidayName = getJapaneseHolidayName(date);
+    const dayClass = date.getDay() === 0 ? ' is-sunday' : date.getDay() === 6 ? ' is-saturday' : '';
+    const dayContent = `
+      <span class="calendar-day-number">${day}</span>
+      ${hasLog ? '<span class="calendar-day-dot" aria-hidden="true"></span>' : ''}`;
+    const dayTitle = holidayName || (hasLog ? '酒ログを表示' : '');
+    daysHTML += hasLog
+      ? `<button type="button" class="calendar-day calendar-day-button${dayClass}${holidayName ? ' is-holiday' : ''}${isToday ? ' is-today' : ''}" data-calendar-date="${dateKey}" title="${dayTitle}">${dayContent}</button>`
+      : `<span class="calendar-day${dayClass}${holidayName ? ' is-holiday' : ''}${isToday ? ' is-today' : ''}" title="${dayTitle}">${dayContent}</span>`;
+  }
+
+  calendar.innerHTML = `
+    <div class="calendar-header">
+      <h3>カレンダー</h3>
+      <div class="calendar-month-controls">
+        <button type="button" data-calendar-nav="prev" title="前の月" aria-label="前の月">‹</button>
+        <input type="month" class="calendar-month-picker" id="calendar-month-input" value="${year}-${String(month + 1).padStart(2, '0')}" aria-label="表示する年月" title="年月を選択">
+        <button type="button" data-calendar-nav="next" title="次の月" aria-label="次の月">›</button>
+      </div>
+    </div>
+    <div class="calendar-weekdays">${weekdays.map(day => `<span>${day}</span>`).join('')}</div>
+    <div class="calendar-grid">${daysHTML}</div>
+  `;
+  } catch (err) {
+    console.error('[Calendar] Failed to render calendar:', err);
+    if (!calendar.dataset.calendarRetry) {
+      calendar.dataset.calendarRetry = 'true';
+      setTimeout(() => {
+        calendar.dataset.calendarRetry = '';
+        renderSidebarCalendar();
+      }, 200);
+    }
+    calendar.innerHTML = '<div class="calendar-loading">カレンダーを表示できませんでした</div>';
+  }
+}
 
 function openSidebar() {
+  rightPanel?.classList.remove('open');
   sidebar?.classList.add('open');
   overlay?.classList.add('active');
 }
 
-function closeSidebar() {
+function openRightPanel() {
   sidebar?.classList.remove('open');
+  rightPanel?.classList.add('open');
+  overlay?.classList.add('active');
+}
+
+function closeDrawers() {
+  sidebar?.classList.remove('open');
+  rightPanel?.classList.remove('open');
   overlay?.classList.remove('active');
+}
+
+function closeSidebar() {
+  closeDrawers();
+}
+
+function renderAiChatControls() {
+  const controls = document.getElementById('ai-chat-controls');
+  if (!controls) return;
+
+  if (!getApiKey()) {
+    controls.innerHTML = `
+      <div class="ai-unavailable-box">
+        <strong>AI機能を利用するにはAPIキーが必要です</strong>
+        <span>Gemini APIキーを設定すると、酒ログについて質問できます。</span>
+        <button type="button" id="btn-open-api-settings" class="btn-secondary">APIキーの設定へ</button>
+      </div>`;
+    return;
+  }
+
+  controls.innerHTML = `
+    <input type="text" id="ai-chat-input" placeholder="AIに質問・検索..." aria-label="AIに質問・検索">
+    <button type="button" class="send-btn" title="送信" aria-label="送信">➔</button>`;
+  document.getElementById('ai-chat-input')?.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      await sendAiChatMessage();
+    }
+  });
+}
+
+async function openApiSettings() {
+  await navigateTo('settings');
+  requestAnimationFrame(() => {
+    document.getElementById('gemini-api-settings-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('gemini-api-key')?.focus();
+  });
+}
+
+async function sendAiChatMessage() {
+  const input = document.getElementById('ai-chat-input');
+  const body = document.getElementById('ai-chat-body');
+  if (!input || !body) return;
+  const question = input.value.trim();
+  if (!question) return;
+  if (!getApiKey()) {
+    body.insertAdjacentHTML('beforeend', '<div class="chat-bubble ai">APIキーがないためAI質問は利用できません。設定画面でAPIキーを登録してください。</div>');
+    return;
+  }
+  const logs = await getAllLogs(false, false);
+  const safeQuestion = question.replace(/[&<>]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char]));
+  body.insertAdjacentHTML('beforeend', `<div class="chat-bubble user">${safeQuestion}</div><div class="chat-bubble ai" id="ai-chat-pending"><span class="sella-spinner"></span>回答中...</div>`);
+  input.value = '';
+  try {
+    const context = logs.slice(0, 50).map(log => ({ name: log.name, category: log.category, brewery: log.brewery, region: log.region, type: log.type, date: log.date, rating: log.rating, notes: log.notes }));
+    const answer = await requestGeminiText(`あなたは酒ログアプリのアシスタントです。登録ログを参考に質問へ日本語で簡潔に答えてください。\n質問: ${question}\n登録ログ: ${JSON.stringify(context)}`);
+    const pending = document.getElementById('ai-chat-pending');
+    if (pending) pending.textContent = answer;
+  } catch (error) {
+    const pending = document.getElementById('ai-chat-pending');
+    if (pending) pending.textContent = `回答できませんでした: ${error.message}`;
+  }
+  body.scrollTop = body.scrollHeight;
 }
 
 export async function syncBatchStateToDB() {
@@ -255,8 +467,13 @@ export async function loadBatchStateFromDB() {
 
 function initApp() {
   ensureSpinnerStyles();
-  initGoogleAuth();
+  initGoogleAuth().then(() => {
+    updateSidebarProfile();
+  }).catch(err => {
+    console.error('[GoogleDrive] Auth initialization failed:', err);
+  });
   loadBatchStateFromDB();
+  updateSidebarProfile();
 
   if (localStorage.getItem('sella_google_logged_in') === 'true') {
     state.isGoogleLoggedIn = true;
@@ -264,7 +481,30 @@ function initApp() {
   }
 
   document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
-  overlay?.addEventListener('click', closeSidebar);
+  document.getElementById('btn-right-panel-toggle')?.addEventListener('click', openRightPanel);
+  overlay?.addEventListener('click', closeDrawers);
+  document.querySelector('.drawer-close-left')?.addEventListener('click', closeDrawers);
+  document.querySelector('.drawer-close-right')?.addEventListener('click', closeDrawers);
+  renderSidebarCalendar();
+
+  renderAiChatControls();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDrawers();
+  });
+
+  document.addEventListener('google-login-success', async () => {
+    updateSidebarProfile();
+    if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
+      await navigateTo('settings');
+    }
+  });
+
+  document.addEventListener('google-logout-success', async () => {
+    updateSidebarProfile();
+    if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
+      await navigateTo('settings');
+    }
+  });
 
   document.addEventListener('navigation-request', async (e) => {
     const detail = e.detail;
@@ -279,7 +519,43 @@ function initApp() {
     await syncBatchStateToDB();
   });
 
+  let logSearchRenderTimer = null;
+  let isLogSearchComposing = false;
+  const scheduleLogSearchRender = () => {
+    clearTimeout(logSearchRenderTimer);
+    if (isLogSearchComposing) return;
+
+    logSearchRenderTimer = setTimeout(async () => {
+      await navigateTo('logList');
+      const searchInput = document.getElementById('log-search-input');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+      }
+    }, 250);
+  };
+
+  document.addEventListener('compositionstart', (e) => {
+    if (e.target.id === 'log-search-input') {
+      isLogSearchComposing = true;
+    }
+  });
+
+  document.addEventListener('compositionend', (e) => {
+    if (e.target.id === 'log-search-input') {
+      isLogSearchComposing = false;
+      state.logSearchQuery = e.target.value;
+      scheduleLogSearchRender();
+    }
+  });
+
   document.addEventListener('input', async (e) => {
+    if (e.target.id === 'log-search-input') {
+      state.logSearchQuery = e.target.value;
+      scheduleLogSearchRender();
+      return;
+    }
+
     if (TRACKED_FIELDS.includes(e.target.id)) {
       updateFieldRevertUI();
     }
@@ -300,6 +576,15 @@ function initApp() {
   });
 
   document.addEventListener('change', async (e) => {
+    if (e.target && e.target.id === 'calendar-month-input') {
+      const [year, month] = e.target.value.split('-').map(Number);
+      if (year && month) {
+        calendarMonth = new Date(year, month - 1, 1);
+        await renderSidebarCalendar();
+      }
+      return;
+    }
+
     if (e.target && e.target.id === 'theme-select') {
       setTheme(e.target.value);
       if (state.isGoogleLoggedIn) {
@@ -350,9 +635,18 @@ function initApp() {
     const card = e.target.closest('.batch-group-card');
     document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
     if (card) card.classList.add('drag-over');
+
+    document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
+    const targetThumb = e.target.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
+    if (targetThumb && state.draggedItemInfo) {
+      targetThumb.classList.add('reorder-target');
+    }
   });
 
   document.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget) {
+      document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
+    }
     const fileDropTarget = e.target.closest('#batch-upload-zone, #btn-add-more-batch, #upload-zone, #btn-trigger-upload');
     if (fileDropTarget && !fileDropTarget.contains(e.relatedTarget)) {
       fileDropTarget.classList.remove('file-drop-active');
@@ -385,6 +679,7 @@ function initApp() {
     e.preventDefault();
     document.querySelectorAll('.file-drop-active').forEach(target => target.classList.remove('file-drop-active'));
     document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
+    document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
 
     const droppedFiles = e.dataTransfer?.files;
     if (droppedFiles && droppedFiles.length > 0) {
@@ -407,8 +702,7 @@ function initApp() {
         const targetIdx = targetImg ? Number(targetImg.dataset.idx) : Number(targetThumb.dataset.idx);
         const srcIdx = state.draggedItemInfo.idx;
         if (!isNaN(srcIdx) && !isNaN(targetIdx) && srcIdx !== targetIdx && state.uploadedImages[srcIdx]) {
-          const [movedItem] = state.uploadedImages.splice(srcIdx, 1);
-          state.uploadedImages.splice(targetIdx, 0, movedItem);
+          moveArrayItem(state.uploadedImages, srcIdx, targetIdx);
           state.activeThumbnailIndex = 0;
           renderImagePreviewList();
         }
@@ -421,6 +715,23 @@ function initApp() {
     const targetGroupCard = e.target.closest('.batch-group-card');
     const targetPoolArea = e.target.closest('#ungrouped-pool-container');
     const targetThumb = e.target.closest('.draggable-thumb');
+
+    if (state.draggedItemInfo.type === 'group' && targetGroupCard && targetThumb) {
+      const sourceGroupIndex = state.draggedItemInfo.gIdx;
+      const sourceItemIndex = state.draggedItemInfo.iIdx;
+      const targetGroupIndex = Number(targetGroupCard.dataset.gidx);
+      const targetItemIndex = Number(targetThumb.dataset.iidx);
+      if (sourceGroupIndex === targetGroupIndex && sourceItemIndex !== targetItemIndex) {
+        const group = state.batchGroups[sourceGroupIndex];
+        if (group) {
+          moveArrayItem(group, sourceItemIndex, targetItemIndex);
+          state.draggedItemInfo = null;
+          renderBatchGroupsUI();
+          await syncBatchStateToDB();
+        }
+        return;
+      }
+    }
 
     let movedImage = null;
 
@@ -497,6 +808,14 @@ function initApp() {
       activeThumb.style.transform = `translate(${diffX}px, ${diffY}px)`;
       activeThumb.style.opacity = '0.8';
       activeThumb.style.zIndex = '999';
+
+      activeThumb.style.pointerEvents = 'none';
+      const targetThumb = document.elementFromPoint(e.clientX, e.clientY)?.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
+      activeThumb.style.pointerEvents = '';
+      document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
+      if (targetThumb && targetThumb !== activeThumb) {
+        targetThumb.classList.add('reorder-target');
+      }
     }
   });
 
@@ -514,6 +833,7 @@ function initApp() {
     thumb.style.transform = '';
     thumb.style.opacity = '';
     thumb.style.zIndex = '';
+    document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
 
     if (!isPointerMoving) return;
 
@@ -535,8 +855,7 @@ function initApp() {
         const srcIdx = imgEl ? Number(imgEl.dataset.idx) : Number(thumb.dataset.idx);
 
         if (!isNaN(srcIdx) && !isNaN(targetIdx) && srcIdx !== targetIdx && state.uploadedImages[srcIdx]) {
-          const [movedItem] = state.uploadedImages.splice(srcIdx, 1);
-          state.uploadedImages.splice(targetIdx, 0, movedItem);
+          moveArrayItem(state.uploadedImages, srcIdx, targetIdx);
           state.activeThumbnailIndex = 0;
           renderImagePreviewList();
         }
@@ -565,7 +884,13 @@ function initApp() {
         } else if (isBatch) {
           const srcGIdx = Number(thumb.dataset.gidx);
           const srcIIdx = Number(thumb.dataset.iidx);
-          if (srcGIdx !== targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx]) {
+          const targetThumb = droppedEl.closest('.draggable-thumb');
+          const targetIIdx = targetThumb ? Number(targetThumb.dataset.iidx) : NaN;
+          if (srcGIdx === targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && !isNaN(targetIIdx) && srcIIdx !== targetIIdx && state.batchGroups[srcGIdx]) {
+            moveArrayItem(state.batchGroups[srcGIdx], srcIIdx, targetIIdx);
+            renderBatchGroupsUI();
+            await syncBatchStateToDB();
+          } else if (srcGIdx !== targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx]) {
             const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
             state.batchGroups[targetGIdx].push(movedItem);
             if (state.batchGroups[srcGIdx].length === 0) {
@@ -593,6 +918,125 @@ function initApp() {
 
   // グローバルクリックイベント委譲ハンドラー
   document.addEventListener('click', async (e) => {
+    if (e.target.closest('#btn-open-gemini-api-key')) {
+      window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (e.target.closest('#btn-paste-gemini-api-key')) {
+      const apiKeyInput = document.getElementById('gemini-api-key');
+      try {
+        const clipboardText = await navigator.clipboard.readText();
+        if (apiKeyInput && clipboardText) {
+          apiKeyInput.value = clipboardText.trim();
+          apiKeyInput.focus();
+        }
+      } catch (err) {
+        alert('クリップボードを読み取れませんでした。APIキー欄へ貼り付けてください。');
+      }
+      return;
+    }
+
+    if (e.target.closest('#btn-open-api-settings')) {
+      await openApiSettings();
+      return;
+    }
+
+    const sortButton = e.target.closest('[data-log-sort]');
+    if (sortButton) {
+      const nextSortKey = sortButton.dataset.logSort;
+      if (state.logSortKey === nextSortKey) {
+        state.logSortDirection = state.logSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.logSortKey = nextSortKey;
+        state.logSortDirection = 'desc';
+      }
+      await navigateTo('logList');
+      return;
+    }
+
+    const analyticsAIButton = e.target.closest('[data-analytics-ai]');
+    if (analyticsAIButton) {
+      analyticsAIButton.disabled = true;
+      await runAnalyticsAI(analyticsAIButton.dataset.analyticsAi);
+      analyticsAIButton.disabled = false;
+      return;
+    }
+
+    if (e.target.closest('.send-btn')) {
+      await sendAiChatMessage();
+      return;
+    }
+
+    const calendarDate = e.target.closest('[data-calendar-date]');
+    if (calendarDate) {
+      e.preventDefault();
+      state.logSearchQuery = `日付:${calendarDate.dataset.calendarDate}`;
+      await navigateTo('logList');
+      document.getElementById('log-search-input')?.focus();
+      return;
+    }
+
+    const calendarNav = e.target.closest('[data-calendar-nav]');
+    if (calendarNav) {
+      e.preventDefault();
+      calendarMonth.setMonth(calendarMonth.getMonth() + (calendarNav.dataset.calendarNav === 'next' ? 1 : -1));
+      await renderSidebarCalendar();
+      return;
+    }
+
+    const searchTag = e.target.closest('.log-search-tag');
+    if (searchTag) {
+      e.preventDefault();
+      const tag = searchTag.dataset.searchTag || '';
+      const currentQuery = state.logSearchQuery.trim();
+      const queryLower = currentQuery.toLocaleLowerCase();
+      const tagLower = tag.toLocaleLowerCase();
+      const tagIndex = queryLower.indexOf(tagLower);
+      if (tag && tagIndex >= 0) {
+        state.logSearchQuery = `${currentQuery.slice(0, tagIndex)} ${currentQuery.slice(tagIndex + tag.length)}`
+          .replace(/\s+/g, ' ')
+          .trim();
+      } else if (tag) {
+        state.logSearchQuery = currentQuery ? `${currentQuery} ${tag}` : tag;
+      }
+      await navigateTo('logList');
+      document.getElementById('log-search-input')?.focus();
+      return;
+    }
+
+    if (e.target.closest('#btn-clear-log-search')) {
+      state.logSearchQuery = '';
+      await navigateTo('logList');
+      document.getElementById('log-search-input')?.focus();
+      return;
+    }
+
+    const sidebarProfile = e.target.closest('#sidebar-user-profile');
+    if (sidebarProfile) {
+      e.preventDefault();
+      if (state.isGoogleLoggedIn || localStorage.getItem('sella_google_logged_in') === 'true') {
+        await navigateTo('settings');
+      } else {
+        loginGoogle();
+      }
+      return;
+    }
+
+    if (e.target.closest('#btn-fullscreen')) {
+      e.preventDefault();
+      try {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        } else {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (err) {
+        console.error('[Fullscreen] Toggle failed:', err);
+      }
+      return;
+    }
+
     if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
       e.stopPropagation();
       e.preventDefault();
@@ -660,12 +1104,23 @@ function initApp() {
         return;
       }
       saveApiKey(apiKey);
+      renderAiChatControls();
       const msgEl = document.getElementById('api-key-msg');
       if (msgEl) {
         msgEl.style.display = 'block';
         setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
       }
       await updateModelDropdown(true);
+      if (state.isGoogleLoggedIn) {
+        await syncAllData(true);
+      }
+      return;
+    }
+
+    if (e.target && e.target.id === 'btn-reload-models') {
+      await updateModelDropdown(true);
+      const selectedModel = document.getElementById('select-gemini-model')?.value;
+      if (selectedModel) setSavedModel(selectedModel);
       if (state.isGoogleLoggedIn) {
         await syncAllData(true);
       }
