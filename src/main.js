@@ -271,7 +271,7 @@ function renderAiChatControls() {
     controls.innerHTML = `
       <div class="ai-unavailable-box">
         <strong>AI機能の利用にはAPIキーが必要です</strong>
-        <span>Gemini APIキーの設定後、質問可能になります。</span>
+        <span>APIキーの設定後、質問可能になります。</span>
         <button type="button" id="btn-open-api-settings" class="btn-secondary">APIキーの設定へ</button>
       </div>`;
     return;
