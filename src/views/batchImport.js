@@ -190,7 +190,7 @@ export async function processFilesForBatch(files, append = true) {
     batchUploadZone.innerHTML = `
       <div style="padding: 40px; text-align: center; color: var(--text-main);">
         <div class="sella-spinner" style="width: 32px; height: 32px; border-width: 4px; margin-bottom: 12px; border-top-color: var(--accent-color);"></div>
-        <div style="font-weight: bold; font-size: 1.1rem;">写真を解析・グルーピング中...</div>
+        <div class="batch-progress-status" style="font-weight: bold; font-size: 1.1rem;">撮影情報を読み取り中...</div>
         <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 4px;">(${files.length}枚の画像を処理しています)</div>
       </div>`;
   }
@@ -209,41 +209,57 @@ export async function processFilesForBatch(files, append = true) {
     return;
   }
 
-  const processPromises = imageFiles.map(async (file) => {
+  const readMetadata = async (file) => {
     try {
-      const [compressed, date] = await Promise.all([
-        compressImage(file),
-        extractPhotoDateObject(file)
-      ]);
-
-      const blob = compressed.blob || file;
-      const previewUrl = URL.createObjectURL(blob);
+      const date = await extractPhotoDateObject(file);
+      const capturedDate = date && !isNaN(date.getTime())
+        ? date
+        : (file.lastModified ? new Date(file.lastModified) : null);
 
       return {
         file,
-        date: (date && !isNaN(date.getTime())) ? date : (file.lastModified ? new Date(file.lastModified) : null),
-        blob,
-        base64: compressed.base64 || '',
-        mimeType: compressed.mimeType || file.type || 'image/jpeg',
+        date: capturedDate,
+        blob: file,
+        base64: '',
+        mimeType: file.type || 'image/jpeg',
         metadata: {
-          ...(compressed.metadata || {}),
-          capturedAt: date ? date.toISOString() : null,
-          capturedAtSource: date ? 'exif-or-file-date' : null
+          originalFileName: file.name || '',
+          originalMimeType: file.type || '',
+          originalLastModified: file.lastModified || 0,
+          capturedAt: capturedDate ? capturedDate.toISOString() : null,
+          capturedAtSource: date && !isNaN(date.getTime()) ? 'exif-or-file-date' : 'file-date'
         },
-        previewUrl
+        previewUrl: URL.createObjectURL(file)
       };
     } catch (e) {
       console.error(`ファイル ${file.name} の処理に失敗しました:`, e);
       failedFiles.push(file.name);
       return null;
     }
-  });
+  };
 
   try {
-    const results = await Promise.all(processPromises);
-    for (const item of results) {
+    const results = new Array(imageFiles.length);
+    let nextFileIndex = 0;
+    let processedCount = 0;
+    const metadataWorkerCount = Math.min(8, imageFiles.length);
+    const updateProgress = () => {
+      const status = batchUploadZone?.querySelector('.batch-progress-status');
+      if (status) status.textContent = `撮影情報を読み取り中... (${processedCount}/${imageFiles.length}枚)`;
+    };
+
+    await Promise.all(Array.from({ length: metadataWorkerCount }, async () => {
+      while (nextFileIndex < imageFiles.length) {
+        const fileIndex = nextFileIndex++;
+        results[fileIndex] = await readMetadata(imageFiles[fileIndex]);
+        processedCount += 1;
+        if (processedCount === imageFiles.length || processedCount % 10 === 0) updateProgress();
+      }
+    }));
+
+    results.forEach(item => {
       if (item) items.push(item);
-    }
+    });
 
     if (items.length > 0) {
       const cleansedItems = items.map(item => ({
@@ -257,6 +273,37 @@ export async function processFilesForBatch(files, append = true) {
       } else {
         state.batchGroups = newGroups;
       }
+
+      renderBatchGroupsUI();
+
+      const compressibleItems = newGroups.flat();
+      let compressedCount = 0;
+      let nextCompressIndex = 0;
+      const compressionWorkerCount = Math.min(4, compressibleItems.length);
+      const updateCompressionProgress = () => {
+        const status = batchUploadZone?.querySelector('.batch-progress-status');
+        if (status) status.textContent = `画像を軽量化中... (${compressedCount}/${compressibleItems.length}枚)`;
+      };
+
+      await Promise.all(Array.from({ length: compressionWorkerCount }, async () => {
+        while (nextCompressIndex < compressibleItems.length) {
+          const item = compressibleItems[nextCompressIndex++];
+          const oldPreviewUrl = item.previewUrl;
+          try {
+            const compressed = await compressImage(item.file);
+            item.blob = compressed.blob || item.blob;
+            item.base64 = '';
+            item.mimeType = compressed.mimeType || item.mimeType;
+            item.metadata = { ...item.metadata, ...(compressed.metadata || {}) };
+            item.previewUrl = URL.createObjectURL(item.blob);
+            if (oldPreviewUrl) URL.revokeObjectURL(oldPreviewUrl);
+          } catch (err) {
+            console.warn(`[BatchImport] Compression skipped for ${item.file?.name || 'image'}:`, err);
+          }
+          compressedCount += 1;
+          if (compressedCount === compressibleItems.length || compressedCount % 10 === 0) updateCompressionProgress();
+        }
+      }));
 
       if (failedFiles.length > 0) {
         alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。：\n\n・ ` + failedFiles.join('\n・ '));
