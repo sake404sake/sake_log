@@ -225,6 +225,11 @@ export async function processFilesForBatch(files, append = true) {
         blob,
         base64: compressed.base64 || '',
         mimeType: compressed.mimeType || file.type || 'image/jpeg',
+        metadata: {
+          ...(compressed.metadata || {}),
+          capturedAt: date ? date.toISOString() : null,
+          capturedAtSource: date ? 'exif-or-file-date' : null
+        },
         previewUrl
       };
     } catch (e) {

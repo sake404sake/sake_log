@@ -225,21 +225,16 @@ export function extractPhotoDateObject(file) {
 /**
  * 銘柄の文字が読める解像度を保ちつつ軽量化圧縮 (白背景補完で透過黒化防止)
  */
-export function compressImage(file, maxWidth = 1600, quality = 0.75) {
+export function compressImage(file, maxWidth = 1600, quality = 0.84, maxBytes = 700 * 1024) {
   return new Promise((resolve) => {
+    const sourceMetadata = {
+      originalFileName: file?.name || '',
+      originalMimeType: file?.type || '',
+      originalLastModified: file?.lastModified || 0
+    };
+
     const fallbackReturn = () => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const base64Full = e.target.result || '';
-        const base64Data = base64Full.includes(',') ? base64Full.split(',')[1] : base64Full;
-        resolve({
-          blob: file,
-          base64: base64Data,
-          mimeType: file.type || 'image/jpeg'
-        });
-      };
-      reader.onerror = () => resolve({ blob: file, base64: '', mimeType: file.type || 'image/jpeg' });
-      reader.readAsDataURL(file);
+      resolve({ blob: file, base64: '', mimeType: file.type || 'image/jpeg', metadata: sourceMetadata });
     };
 
     if (!file || !file.type || !file.type.startsWith('image/')) {
@@ -277,22 +272,44 @@ export function compressImage(file, maxWidth = 1600, quality = 0.75) {
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              fallbackReturn();
+        const encode = (targetWidth, targetHeight, targetQuality) => new Promise((encodeResolve) => {
+          const outputCanvas = targetWidth === width && targetHeight === height ? canvas : document.createElement('canvas');
+          if (outputCanvas !== canvas) {
+            outputCanvas.width = targetWidth;
+            outputCanvas.height = targetHeight;
+            outputCanvas.getContext('2d').drawImage(img, 0, 0, targetWidth, targetHeight);
+          }
+          outputCanvas.toBlob((webpBlob) => {
+            if (webpBlob) {
+              encodeResolve({ blob: webpBlob, mimeType: 'image/webp' });
               return;
             }
-            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-            resolve({
-              blob,
-              base64: compressedBase64.split(',')[1],
-              mimeType: 'image/jpeg'
-            });
-          },
-          'image/jpeg',
-          quality
-        );
+            outputCanvas.toBlob((jpegBlob) => {
+              encodeResolve(jpegBlob ? { blob: jpegBlob, mimeType: 'image/jpeg' } : null);
+            }, 'image/jpeg', targetQuality);
+          }, 'image/webp', targetQuality);
+        });
+
+        const compressToTarget = async (targetWidth, targetHeight, targetQuality) => {
+          const encoded = await encode(targetWidth, targetHeight, targetQuality);
+          if (!encoded) {
+            fallbackReturn();
+            return;
+          }
+          if (encoded.blob.size > maxBytes && targetQuality > 0.72) {
+            await compressToTarget(targetWidth, targetHeight, Math.max(0.72, targetQuality - 0.06));
+            return;
+          }
+          if (encoded.blob.size > maxBytes && targetWidth > 1280) {
+            const reducedWidth = Math.round(targetWidth * 0.85);
+            const reducedHeight = Math.round(targetHeight * 0.85);
+            await compressToTarget(reducedWidth, reducedHeight, 0.78);
+            return;
+          }
+          resolve({ blob: encoded.blob, base64: '', mimeType: encoded.mimeType, metadata: sourceMetadata });
+        };
+
+        compressToTarget(width, height, quality);
       };
       img.onerror = () => fallbackReturn();
     };

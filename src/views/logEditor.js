@@ -199,13 +199,15 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
     if (log) {
       fillEditorForm(log);
       if (log.images && log.images.length > 0) {
-        for (const blob of log.images) {
+        for (let imageIndex = 0; imageIndex < log.images.length; imageIndex++) {
+          const blob = log.images[imageIndex];
           try {
             const base64 = await blobToBase64(blob);
             state.uploadedImages.push({
               blob,
               base64,
               mimeType: blob.type || 'image/jpeg',
+              metadata: log.imageMetadata?.[imageIndex] || {},
               previewUrl: URL.createObjectURL(blob)
             });
           } catch (e) {
@@ -477,6 +479,7 @@ export async function handleImageFiles(files) {
         blob: compressed.blob,
         base64: compressed.base64,
         mimeType: compressed.mimeType,
+        metadata: compressed.metadata || {},
         previewUrl
       });
     } catch (e) {

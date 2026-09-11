@@ -539,6 +539,20 @@ async function runWithConcurrency(items, worker, concurrency = IMAGE_SYNC_CONCUR
   }));
 }
 
+function stripEmbeddedImageData(log) {
+  const sanitizedLog = { ...log };
+  for (const key of ['poolItemsMeta', 'groupItemsMeta']) {
+    if (Array.isArray(sanitizedLog[key])) {
+      sanitizedLog[key] = sanitizedLog[key].map(item => {
+        const sanitizedItem = { ...item };
+        delete sanitizedItem.base64;
+        return sanitizedItem;
+      });
+    }
+  }
+  return sanitizedLog;
+}
+
 export async function syncAllData(silent = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) return;
@@ -827,10 +841,24 @@ export async function syncAllData(silent = false) {
     }
 
     const updatedIndex = {
-      logs: Array.from(mergedLogsMap.values()),
+      logs: Array.from(mergedLogsMap.values()).map(stripEmbeddedImageData),
       lastSynced: new Date().toISOString()
     };
     await uploadJsonFile('sella_index.json', updatedIndex, indexFile?.id);
+
+    const draftLogsToMigrate = Array.from(mergedLogsMap.values())
+      .filter(log => log.status === 'draft')
+      .map(stripEmbeddedImageData);
+    if (draftLogsToMigrate.length > 0) {
+      const migrationTx = db.transaction(['logs'], 'readwrite');
+      const migrationStore = migrationTx.objectStore('logs');
+      draftLogsToMigrate.forEach(log => migrationStore.put(log));
+      await new Promise((resolve, reject) => {
+        migrationTx.oncomplete = resolve;
+        migrationTx.onerror = () => reject(migrationTx.error || new Error('Failed to migrate draft image metadata'));
+        migrationTx.onabort = () => reject(migrationTx.error || new Error('Draft metadata migration was aborted'));
+      });
+    }
 
     const EXPIRE_LIMIT_MS = 30 * 24 * 60 * 60 * 1000;
     const nowTime = Date.now();

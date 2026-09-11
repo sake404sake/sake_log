@@ -164,6 +164,16 @@ function getJapaneseHolidayName(date) {
       ? Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4))
       : 0;
   if (equinoxDay === day) return month === 3 ? '春分の日' : '秋分の日';
+
+  // 祝日と祝日に挟まれた平日は「国民の休日」
+  if (date.getDay() !== 0 && date.getDay() !== 6) {
+    const previousDay = new Date(year, month - 1, day - 1);
+    const nextDay = new Date(year, month - 1, day + 1);
+    if (getJapaneseHolidayName(previousDay) && getJapaneseHolidayName(nextDay)) {
+      return '国民の休日';
+    }
+  }
+
   return '';
 }
 
@@ -340,8 +350,8 @@ export async function syncBatchStateToDB() {
         if (blob instanceof Blob) {
           poolBlobs.push(blob);
           poolItemsMeta.push({
-            base64: item.base64,
             mimeType: item.mimeType || 'image/jpeg',
+            metadata: item.metadata || {},
             date: item.date ? item.date.toISOString() : null
           });
         }
@@ -364,8 +374,8 @@ export async function syncBatchStateToDB() {
         if (blob instanceof Blob) {
           groupBlobs.push(blob);
           groupItemsMeta.push({
-            base64: item.base64,
             mimeType: item.mimeType || 'image/jpeg',
+            metadata: item.metadata || {},
             date: item.date ? item.date.toISOString() : null
           });
         }
@@ -417,6 +427,7 @@ export async function loadBatchStateFromDB() {
           blob,
           base64: meta.base64 || '',
           mimeType: meta.mimeType || 'image/jpeg',
+          metadata: meta.metadata || {},
           previewUrl,
           date: meta.date ? new Date(meta.date) : null
         });
@@ -443,6 +454,7 @@ export async function loadBatchStateFromDB() {
           blob,
           base64: meta.base64 || '',
           mimeType: meta.mimeType || 'image/jpeg',
+          metadata: meta.metadata || {},
           previewUrl,
           date: meta.date ? new Date(meta.date) : null
         });
@@ -573,6 +585,17 @@ function initApp() {
   });
 
   document.addEventListener('input', async (e) => {
+    if (e.target.id === 'destroy-validation-input') {
+      const destroyButton = document.getElementById('btn-destroy-all-data');
+      const isConfirmed = e.target.value.trim() === 'データをすべて消去する';
+      if (destroyButton) {
+        destroyButton.disabled = !isConfirmed;
+        destroyButton.style.opacity = isConfirmed ? '1' : '0.3';
+        destroyButton.style.cursor = isConfirmed ? 'pointer' : 'not-allowed';
+      }
+      return;
+    }
+
     if (e.target.id === 'log-search-input') {
       state.logSearchQuery = e.target.value;
       scheduleLogSearchRender();
@@ -1222,7 +1245,8 @@ function initApp() {
       return;
     }
 
-    if (e.target && e.target.id === 'btn-destroy-all-data') {
+    const destroyAllButton = e.target.closest('#btn-destroy-all-data');
+    if (destroyAllButton) {
       const input = document.getElementById('destroy-validation-input')?.value.trim();
       if (input === 'データをすべて消去する') {
         if (confirm('本当に実行しますか？この操作によりクラウド・ローカル双方の全ての酒ログと写真が永久に消滅します。')) {
@@ -1399,12 +1423,13 @@ function initApp() {
           const name = cardName !== '' ? cardName : (group.name || `お酒グループ #${gIdx + 1}`);
           const brewery = cardBrewery !== '' ? cardBrewery : (group.brewery || '');
 
-          const orderedBlobs = group.map(img => {
+          const orderedImages = group.map(img => {
             if (!img.blob && img.base64) {
               img.blob = base64ToBlob(img.base64, img.mimeType || 'image/jpeg');
             }
-            return img.blob;
-          }).filter(blob => blob instanceof Blob);
+            return img;
+          }).filter(img => img.blob instanceof Blob);
+          const orderedBlobs = orderedImages.map(img => img.blob);
 
           let mainDate = '';
           const rawDate = group[0]?.date;
@@ -1428,7 +1453,8 @@ function initApp() {
             tags: [],
             notes: group.notes || '',
             aiInfo: group.aiInfo || '',
-            status: 'active'
+            status: 'active',
+            imageMetadata: orderedImages.map(img => img.metadata || {})
           };
           await saveLog(logData, orderedBlobs);
         }
@@ -1726,12 +1752,13 @@ function initApp() {
       const rawTags = document.getElementById('sake-tags')?.value.trim() || '';
       const tags = rawTags ? rawTags.split(/\s+/).filter(Boolean) : [];
 
-      let orderedBlobs = state.uploadedImages.map(img => {
+      const orderedImages = state.uploadedImages.map(img => {
         if (!img.blob && img.base64) {
           img.blob = base64ToBlob(img.base64, img.mimeType || 'image/jpeg');
         }
-        return img.blob;
-      }).filter(blob => blob instanceof Blob);
+        return img;
+      }).filter(img => img.blob instanceof Blob);
+      const orderedBlobs = orderedImages.map(img => img.blob);
 
       const logData = {
         category: document.getElementById('sake-category')?.value || 'その他',
@@ -1746,7 +1773,8 @@ function initApp() {
         tags,
         notes: document.getElementById('sake-notes')?.value.trim() || '',
         aiInfo: document.getElementById('sake-ai-info')?.value.trim() || '',
-        status: 'active'
+        status: 'active',
+        imageMetadata: orderedImages.map(img => img.metadata || {})
       };
 
       if (state.currentEditingLogId) {

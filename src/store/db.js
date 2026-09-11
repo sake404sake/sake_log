@@ -146,6 +146,7 @@ export async function getAllLogs(includeDrafts = false, includeDeleted = false) 
 
   const logsWithImages = await Promise.all(filteredLogs.map(async (log) => {
     const imageUrls = [];
+    const images = [];
     if (Array.isArray(log.imageIds) && log.imageIds.length > 0) {
       for (const imgId of log.imageIds) {
         const imgRecord = await new Promise((res) => {
@@ -154,11 +155,12 @@ export async function getAllLogs(includeDrafts = false, includeDeleted = false) 
           req.onerror = () => res(null);
         });
         if (imgRecord && imgRecord.blob) {
+          images.push(imgRecord.blob);
           imageUrls.push(URL.createObjectURL(imgRecord.blob));
         }
       }
     }
-    return { ...log, imageUrls };
+    return { ...log, images, imageUrls };
   }));
 
   // 日付順にソートして返却
