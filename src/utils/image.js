@@ -1,12 +1,11 @@
 // src/utils/image.js
 
 /**
- * Dateオブジェクトまたは日付表現からローカル時間の YYYY-MM-DD 文字列を正確にフォーマットする
- * (.toISOString() による時差ズレを完全回避)
+ * Dateオブジェクトまたは日付文字列/タイムスタンプから、JST/ローカル時間の "YYYY-MM-DD" 文字列を安全に生成する
  */
-export function formatDateToLocalYYYYMMDD(date) {
-  if (!date) return '';
-  const d = (date instanceof Date) ? date : new Date(date);
+export function formatDateToLocalYYYYMMDD(dateVal) {
+  if (!dateVal) return '';
+  const d = (dateVal instanceof Date) ? dateVal : new Date(dateVal);
   if (isNaN(d.getTime())) return '';
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -15,7 +14,10 @@ export function formatDateToLocalYYYYMMDD(date) {
 }
 
 /**
- * 画像ファイルから撮影日時 (EXIF / ファイル名 / lastModified) を高精度に抽出する関数
+ * 画像ファイルから撮影日時 (EXIF Tag 0x9003 / 0x9004 / 0x0132) を高精度に抽出する関数
+ * - 2MB ヘッダーパースによりスマホカメラの大きな埋め込みサムネイルによる打ち切りを防止
+ * - HEIC / 大文字拡張子 (.JPG) / MIMEタイプ空文字等にも柔軟対応
+ * - ファイル名正規表現 (IMG_20241103_...) および file.lastModified へ安全にフォールバック
  */
 export function extractPhotoDate(file) {
   return new Promise((resolve) => {
@@ -25,20 +27,20 @@ export function extractPhotoDate(file) {
     }
 
     const fallback = () => {
-      // 1. ファイル名からの日付パターン判定 (例: IMG_20241103_184512.jpg, 2025-01-15_photo.png 等)
-      const name = file.name || '';
-      const match = name.match(/(20\d{2})[-_\.]?([01]\d)[-_\.]?([0-3]\d)/);
-      if (match) {
-        const y = match[1];
-        const m = match[2];
-        const d = match[3];
-        if (Number(m) >= 1 && Number(m) <= 12 && Number(d) >= 1 && Number(d) <= 31) {
-          resolve(`${y}-${m}-${d}`);
+      // 1. ファイル名からの日付抽出 (例: IMG_20241103_184512.jpg, 2025-01-15_photo.png など)
+      const fileName = file.name || '';
+      const nameMatch = fileName.match(/(20\d{2})[:\/\.-_]?([01]\d)[:\/\.-_]?([0-3]\d)/);
+      if (nameMatch) {
+        const year = nameMatch[1];
+        const month = nameMatch[2];
+        const day = nameMatch[3];
+        if (Number(month) >= 1 && Number(month) <= 12 && Number(day) >= 1 && Number(day) <= 31) {
+          resolve(`${year}-${month}-${day}`);
           return;
         }
       }
 
-      // 2. file.lastModified によるフォールバック (ローカル時間フォーマット)
+      // 2. lastModified からの抽出
       if (file.lastModified) {
         const photoDate = new Date(file.lastModified);
         if (!isNaN(photoDate.getTime())) {
@@ -46,7 +48,6 @@ export function extractPhotoDate(file) {
           return;
         }
       }
-
       resolve(null);
     };
 
@@ -64,7 +65,7 @@ export function extractPhotoDate(file) {
     }
 
     const reader = new FileReader();
-    // 🌟 512KB -> 2MB (2097152 bytes) ヘッダー読み込みに拡張
+    // 🌟 512KB -> 2MB (2097152 bytes) へ拡張し、大きなAPP1ヘッダーでも読み切れを防ぐ
     const slice = file.slice(0, 2097152);
     reader.readAsArrayBuffer(slice);
 
@@ -120,7 +121,6 @@ export function extractPhotoDate(file) {
         if (ifdOffset + 2 > length) { fallback(); return; }
         const entriesCount = view.getUint16(ifdOffset, isLittleEndian);
         let exifSubIFDOffset = 0;
-        let ifd0DateOffset = 0;
 
         for (let i = 0; i < entriesCount; i++) {
           const entryOffset = ifdOffset + 2 + (i * 12);
@@ -129,48 +129,42 @@ export function extractPhotoDate(file) {
           const tag = view.getUint16(entryOffset, isLittleEndian);
           if (tag === 0x8769) {
             exifSubIFDOffset = view.getUint32(entryOffset + 8, isLittleEndian);
-          } else if (tag === 0x0132) { // IFD0 DateTime
-            ifd0DateOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+            break;
           }
         }
 
-        let targetDateOffset = 0;
+        if (exifSubIFDOffset === 0) { fallback(); return; }
 
-        if (exifSubIFDOffset > 0) {
-          let subIFDOffset = tiffOffset + exifSubIFDOffset;
-          if (subIFDOffset + 2 <= length) {
-            const subEntriesCount = view.getUint16(subIFDOffset, isLittleEndian);
-            for (let i = 0; i < subEntriesCount; i++) {
-              const entryOffset = subIFDOffset + 2 + (i * 12);
-              if (entryOffset + 12 > length) break;
+        let subIFDOffset = tiffOffset + exifSubIFDOffset;
+        if (subIFDOffset + 2 > length) { fallback(); return; }
+        const subEntriesCount = view.getUint16(subIFDOffset, isLittleEndian);
+        let dateTimeOriginalOffset = 0;
 
-              const tag = view.getUint16(entryOffset, isLittleEndian);
-              if (tag === 0x9003) { // DateTimeOriginal
-                targetDateOffset = view.getUint32(entryOffset + 8, isLittleEndian);
-                break;
-              } else if (tag === 0x9004 && targetDateOffset === 0) { // DateTimeDigitized
-                targetDateOffset = view.getUint32(entryOffset + 8, isLittleEndian);
-              }
-            }
+        for (let i = 0; i < subEntriesCount; i++) {
+          const entryOffset = subIFDOffset + 2 + (i * 12);
+          if (entryOffset + 12 > length) break;
+
+          const tag = view.getUint16(entryOffset, isLittleEndian);
+          if (tag === 0x9003 || tag === 0x9004 || tag === 0x0132) {
+            dateTimeOriginalOffset = view.getUint32(entryOffset + 8, isLittleEndian);
+            break;
           }
         }
 
-        if (targetDateOffset === 0 && ifd0DateOffset > 0) {
-          targetDateOffset = ifd0DateOffset;
-        }
+        if (dateTimeOriginalOffset === 0) { fallback(); return; }
 
-        if (targetDateOffset === 0) { fallback(); return; }
-
-        const dateStrOffset = tiffOffset + targetDateOffset;
-        if (dateStrOffset + 19 > length) { fallback(); return; }
+        const dateStrOffset = tiffOffset + dateTimeOriginalOffset;
+        if (dateStrOffset + 10 > length) { fallback(); return; }
 
         let dateCharCodes = [];
         for (let i = 0; i < 19; i++) {
-          dateCharCodes.push(view.getUint8(dateStrOffset + i));
+          if (dateStrOffset + i < length) {
+            dateCharCodes.push(view.getUint8(dateStrOffset + i));
+          }
         }
         const dateStr = String.fromCharCode(...dateCharCodes);
 
-        const match = dateStr.match(/(\d{4})[:\/\.-](\d{2})[:\/\.-](\d{2})/);
+        const match = dateStr.match(/(20\d{2})[:\/\.-]([01]\d)[:\/\.-]([0-3]\d)/);
         if (match) {
           resolve(`${match[1]}-${match[2]}-${match[3]}`);
         } else {
@@ -194,7 +188,7 @@ export function extractPhotoDateObject(file) {
       if (dateStr) {
         const parts = dateStr.split('-');
         if (parts.length === 3) {
-          // ローカル正午 (12:00:00) の Date オブジェクトを生成 (タイムゾーンズレ防止)
+          // 🌟 正午 12:00:00 で Date オブジェクトを生成することで時差計算による日付ズレを100%防止
           const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 12, 0, 0);
           if (!isNaN(d.getTime())) {
             resolve(d);
@@ -202,13 +196,13 @@ export function extractPhotoDateObject(file) {
           }
         }
       }
-      if (file && file.lastModified) {
+      if (file.lastModified) {
         resolve(new Date(file.lastModified));
       } else {
         resolve(null);
       }
     }).catch(() => {
-      if (file && file.lastModified) {
+      if (file.lastModified) {
         resolve(new Date(file.lastModified));
       } else {
         resolve(null);
@@ -218,87 +212,82 @@ export function extractPhotoDateObject(file) {
 }
 
 /**
- * 銘柄の文字が読める解像度を保ちつつ軽量化圧縮 (絶対に失敗・拒否しない安全設計)
+ * 銘柄の文字が読める解像度を保ちつつ軽量化圧縮
  */
 export function compressImage(file, maxWidth = 1600, quality = 0.75) {
   return new Promise((resolve) => {
     if (!file) {
-      resolve({ blob: file, base64: '', mimeType: 'image/jpeg' });
+      resolve({ blob: null, base64: '', mimeType: 'image/jpeg' });
       return;
     }
 
-    const fallbackOriginal = () => {
-      if (window.FileReader && file instanceof Blob) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const res = reader.result || '';
-          const b64 = res.split(',')[1] || '';
-          resolve({ blob: file, base64: b64, mimeType: file.type || 'image/jpeg' });
-        };
-        reader.onerror = () => resolve({ blob: file, base64: '', mimeType: file.type || 'image/jpeg' });
-        reader.readAsDataURL(file);
-      } else {
-        resolve({ blob: file, base64: '', mimeType: file.type || 'image/jpeg' });
-      }
+    const fallback = () => {
+      resolve({
+        blob: file,
+        base64: '',
+        mimeType: file.type || 'image/jpeg'
+      });
     };
 
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = () => {
-          try {
-            let width = img.width;
-            let height = img.height;
+    // 5秒タイムアウト保護
+    const timeoutTimer = setTimeout(() => {
+      console.warn(`[compressImage] Timeout for file ${file.name}, using raw file fallback.`);
+      fallback();
+    }, 5000);
 
-            if (width > maxWidth || height > maxWidth) {
-              if (width > height) {
-                height = Math.round((height * maxWidth) / width);
-                width = maxWidth;
-              } else {
-                width = Math.round((width * maxWidth) / height);
-                height = maxWidth;
-              }
-            }
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+      img.onload = () => {
+        clearTimeout(timeoutTimer);
+        let width = img.width;
+        let height = img.height;
 
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-
-            // 🌟 透過画像の黒塗り化防止 (白背景固定)
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(img, 0, 0, width, height);
-
-            canvas.toBlob(
-              (blob) => {
-                if (blob) {
-                  const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-                  resolve({
-                    blob,
-                    base64: compressedBase64.split(',')[1] || '',
-                    mimeType: 'image/jpeg'
-                  });
-                } else {
-                  fallbackOriginal();
-                }
-              },
-              'image/jpeg',
-              quality
-            );
-          } catch (err) {
-            fallbackOriginal();
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
           }
-        };
-        img.onerror = () => fallbackOriginal();
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // 背景塗りつぶし (透過背景の黒化防止)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+            resolve({
+              blob: blob || file,
+              base64: compressedBase64.split(',')[1] || '',
+              mimeType: 'image/jpeg'
+            });
+          },
+          'image/jpeg',
+          quality
+        );
       };
-      reader.onerror = () => fallbackOriginal();
-    } catch (e) {
-      fallbackOriginal();
-    }
+      img.onerror = () => {
+        clearTimeout(timeoutTimer);
+        fallback();
+      };
+    };
+    reader.onerror = () => {
+      clearTimeout(timeoutTimer);
+      fallback();
+    };
   });
 }
 
