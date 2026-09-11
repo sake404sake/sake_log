@@ -41,11 +41,11 @@ export const state = {
   batchLocalUpdatedAt: ''
 };
 
-export function renderSyncDot(updatedAt, label = '同期状態') {
+export function renderSyncDot(updatedAt, label = '同期状態', imagesReady = true) {
   const lastSyncedAt = localStorage.getItem('sella_last_synced_at') || state.lastSyncedAt;
   const updatedTime = Date.parse(updatedAt || '');
   const syncedTime = Date.parse(lastSyncedAt || '');
-  const isSynced = state.isGoogleLoggedIn && Number.isFinite(updatedTime) && Number.isFinite(syncedTime) && updatedTime <= syncedTime;
+  const isSynced = state.isGoogleLoggedIn && !state.isSyncing && imagesReady && Number.isFinite(updatedTime) && Number.isFinite(syncedTime) && updatedTime <= syncedTime;
   const status = isSynced ? 'synced' : 'local';
   const statusText = isSynced ? 'Google Driveに同期済み' : 'ローカル保存・未同期';
   return `<span class="sync-dot sync-dot-${status}" title="${statusText}" aria-label="${label}: ${statusText}"></span>`;

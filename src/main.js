@@ -521,6 +521,14 @@ function initApp() {
     }
   });
 
+  document.addEventListener('sync-state-change', async () => {
+    if (state.currentViewName === 'batchimport') {
+      renderBatchGroupsUI();
+    } else if (state.currentViewName === 'loglist' || state.currentViewName === 'log-list' || state.currentViewName === 'dashboard') {
+      await navigateTo(state.currentViewName);
+    }
+  });
+
   document.addEventListener('navigation-request', async (e) => {
     const detail = e.detail;
     const targetView = typeof detail === 'string' ? detail : detail.view;
