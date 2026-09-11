@@ -687,7 +687,15 @@ function initApp() {
         state.draggedItemInfo = { type: 'editor', idx };
       }
       e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify(state.draggedItemInfo));
     }
+  });
+
+  document.addEventListener('dragend', () => {
+    state.draggedItemInfo = null;
+    document.querySelectorAll('.drag-over, .reorder-target').forEach(target => {
+      target.classList.remove('drag-over', 'reorder-target');
+    });
   });
 
   document.addEventListener('drop', async (e) => {
@@ -744,6 +752,29 @@ function initApp() {
           renderBatchGroupsUI();
           await syncBatchStateToDB();
         }
+        return;
+      }
+    }
+
+    if (state.draggedItemInfo.type === 'group' && targetGroupCard) {
+      const sourceGroupIndex = state.draggedItemInfo.gIdx;
+      const sourceItemIndex = state.draggedItemInfo.iIdx;
+      const targetGroupIndex = Number(targetGroupCard.dataset.gidx);
+      const sourceGroup = state.batchGroups[sourceGroupIndex];
+      const targetGroup = state.batchGroups[targetGroupIndex];
+
+      if (sourceGroup && targetGroup && sourceGroup !== targetGroup) {
+        const movedImage = sourceGroup.splice(sourceItemIndex, 1)[0];
+        if (movedImage) {
+          targetGroup.push(movedImage);
+          if (sourceGroup.length === 0) {
+            state.batchGroups.splice(sourceGroupIndex, 1);
+          }
+          state.draggedItemInfo = null;
+          renderBatchGroupsUI();
+          await syncBatchStateToDB();
+        }
+        state.draggedItemInfo = null;
         return;
       }
     }
