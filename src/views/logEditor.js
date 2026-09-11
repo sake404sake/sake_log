@@ -5,15 +5,8 @@ import { state, resetEditorState, blobToBase64, base64ToBlob } from '../store/st
 import { compressImage, extractPhotoDate } from '../utils/image.js';
 
 export const TRACKED_FIELDS = [
-  'sake-category',
-  'sake-name',
-  'sake-product',
-  'sake-brewery',
-  'sake-region',
-  'sake-type',
-  'sake-abv',
-  'sake-notes',
-  'sake-ai-info'
+  'sake-category', 'sake-name', 'sake-product', 'sake-brewery', 
+  'sake-region', 'sake-type', 'sake-abv', 'sake-notes', 'sake-ai-info'
 ];
 
 export async function renderLogEditorModal(logId = null) {
@@ -33,25 +26,28 @@ export async function renderLogEditorModal(logId = null) {
   }
 
   return `
-    <div id="modal-overlay" class="modal-overlay">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h3>${logId ? '酒ログを編集' : '新しい酒ログを登録'}</h3>
-          <button type="button" class="modal-close-btn" id="btn-close-modal">&times;</button>
-        </div>
-
-        <div class="modal-body">
-          <!-- 左側：画像アップロード・プレビュー領域 -->
-          <div class="modal-image-col">
-            <div id="image-preview-list" class="image-preview-grid"></div>
-
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>${logId ? '酒ログを編集' : '酒ログを追加'}</h3>
+        <button type="button" class="modal-close-btn" id="btn-close-modal">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          <!-- 左側：画像アップロード・プレビュー -->
+          <div style="display: flex; flex-direction: column; gap: 12px;">
             <div class="image-upload-zone" id="upload-zone">
-              <div class="upload-placeholder">
-                <span class="upload-icon">📷</span>
-                <p class="upload-text">タップまたはドラッグ＆ドロップで写真を追加<br><small style="color:var(--text-sub)">(複数枚選択可能)</small></p>
+              <div class="upload-placeholder" id="upload-placeholder">
+                <span class="upload-icon">📸</span>
+                <p class="upload-text">タップ・ドラッグで画像を複数選択<br><small style="color:var(--text-sub)">(自動圧縮保存)</small></p>
+              </div>
+              <div id="analyzing-status" class="analyzing-overlay" style="display: none;">
+                <div class="spinner"></div>
+                <span>解析中...</span>
               </div>
             </div>
             <input type="file" id="file-input" style="display: none;" multiple accept="image/*" />
+            <div id="image-preview-list" class="image-preview-grid"></div>
           </div>
 
           <!-- 右側：入力フォーム -->
@@ -143,26 +139,27 @@ export async function renderLogEditorModal(logId = null) {
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- フッター -->
-        <div class="modal-footer" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; justify-content: space-between; padding-top: 10px;">
-          <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 260px;">
-            <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
-              <select id="modal-model-select" class="input-dark model-select" title="使用するAIモデルを選択" style="flex: 1; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
-                ${initialOptionHTML}
-              </select>
-              <button type="button" id="btn-reload-modal-models" class="btn-secondary" style="padding: 4px 12px; font-size: 1.2rem; line-height: 1; flex-shrink: 0;" title="モデルリストを更新">↺</button>
-            </div>
-            <button type="button" id="btn-analyze" class="btn-ai-action" style="width: fit-content;">🤖 AI解析実行</button>
+      <!-- フッター -->
+      <div class="modal-footer" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; justify-content: space-between; padding-top: 10px;">
+        <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 260px;">
+          <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
+            <select id="modal-model-select" class="input-dark model-select" title="使用するAIモデルを選択" style="flex: 1; min-width: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
+              ${initialOptionHTML}
+            </select>
+            <button type="button" id="btn-reload-modal-models" class="btn-secondary" style="padding: 4px 12px; font-size: 1.2rem; line-height: 1; flex-shrink: 0;" title="モデルリストを更新">↺</button>
           </div>
-          <div style="display: flex; gap: 10px; margin-left: auto; width: 100%; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
-            ${logId ? `<button type="button" id="btn-delete-log-editor" data-id="${logId}" class="btn-secondary" style="color: #ff4d4f; border-color: #ff4d4f; font-weight: bold; margin-right: auto; padding: 10px 20px; border-radius: 8px;">🗑️ 削除</button>` : ''}
-            <button type="button" id="btn-cancel-modal" class="btn-sub" style="padding: 10px 20px; border-radius: 8px;">キャンセル</button>
-            <button type="button" id="btn-save-log" class="btn-primary" style="padding: 10px 20px; border-radius: 8px;">保存</button>
-          </div>
+          <button type="button" id="btn-analyze" class="btn-ai-action" style="width: fit-content;">🤖 AI解析実行</button>
+        </div>
+        <div style="display: flex; gap: 10px; margin-left: auto; width: 100%; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+          ${logId ? `<button type="button" id="btn-delete-log-editor" data-id="${logId}" class="btn-secondary" style="color: #ff4d4f; border-color: #ff4d4f; font-weight: bold; margin-right: auto; padding: 10px 20px; border-radius: 8px;">🗑️ 削除</button>` : ''}
+          <button type="button" id="btn-cancel-modal" class="btn-sub" style="padding: 10px 20px; border-radius: 8px;">キャンセル</button>
+          <button type="button" id="btn-save-log" class="btn-primary" style="padding: 10px 20px; border-radius: 8px;">保存</button>
         </div>
       </div>
     </div>
+  </div>
   `;
 }
 
@@ -219,10 +216,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
       }
     }
   } else if (initialBatchGroup) {
-    const setVal = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.value = val || '';
-    };
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
     setVal('sake-category', initialBatchGroup.category || '日本酒');
     setVal('sake-name', initialBatchGroup.name || '');
     setVal('sake-product', initialBatchGroup.productName || '');
@@ -271,10 +265,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
 }
 
 export function fillEditorForm(log) {
-  const setVal = (id, val) => {
-    const el = document.getElementById(id);
-    if (el) el.value = val || '';
-  };
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
   setVal('sake-category', log.category || '日本酒');
   setVal('sake-name', log.name);
   setVal('sake-product', log.productName);
@@ -321,25 +312,30 @@ export function renderImagePreviewList() {
   }
 
   const itemsHTML = state.uploadedImages.map((img, idx) => {
-    const src = img.previewUrl || (img.base64 ? `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}` : '');
-    return `
-    <div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
-      <img src="${src}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" onerror="this.onerror=null; this.style.display='none';" />
+    let src = img.previewUrl;
+    if (!src && img.blob) {
+      try {
+        src = URL.createObjectURL(img.blob);
+        img.previewUrl = src;
+      } catch (e) {}
+    }
+    if (!src && img.base64) {
+      src = `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`;
+    }
+    return `<div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
+      <img src="${src || ''}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" onerror="this.onerror=null; this.style.display='none';" />
       <div class="preview-actions">
         <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
       </div>
-    </div>
-  `;
+    </div>`;
   }).join('');
 
-  const addMoreHTML = `
-    <div class="preview-item add-more-item" id="btn-trigger-upload">
-      <div class="add-more-content">
-        <span class="add-icon">＋</span>
-        <span class="add-text">追加</span>
-      </div>
+  const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">
+    <div class="add-more-content">
+      <span class="add-icon">＋</span>
+      <span class="add-text">追加</span>
     </div>
-  `;
+  </div>`;
 
   container.innerHTML = itemsHTML + addMoreHTML;
 }
@@ -389,98 +385,100 @@ export function updateFieldRevertUI() {
   });
 }
 
-export async function runAIAnalysis(imageItem) {
-  if (!imageItem) {
-    alert('解析する画像を選択してください。');
+/**
+ * 🌟 AIラベル解析の実行関数 (エディタ用)
+ */
+export async function runAIAnalysis(targetImg = null) {
+  const target = targetImg || state.uploadedImages[state.activeThumbnailIndex || 0];
+  if (!target) {
+    alert('解析対象の画像が選択されていません。');
     return;
   }
+  
   if (!hasApiKey()) {
     alert('APIキーが設定されていません。設定画面でAPIキーを登録してください。');
     return;
   }
 
   const btnAnalyze = document.getElementById('btn-analyze');
-  const overlay = document.getElementById('analyzing-status');
-  const originalText = btnAnalyze ? btnAnalyze.innerHTML : '';
+  const statusOverlay = document.getElementById('analyzing-status');
+  const originalText = btnAnalyze ? btnAnalyze.innerHTML : '🤖 AI解析実行';
 
   if (btnAnalyze) {
     btnAnalyze.disabled = true;
-    btnAnalyze.innerHTML = '<span class="spinner"></span> 解析中...';
+    btnAnalyze.innerHTML = '<span class="sella-spinner"></span> 解析中...';
   }
-  if (overlay) overlay.style.display = 'flex';
-
-  saveCurrentFormBackup();
+  if (statusOverlay) statusOverlay.style.display = 'flex';
 
   try {
-    let base64 = imageItem.base64;
-    let mimeType = imageItem.mimeType || 'image/jpeg';
+    let base64 = target.base64;
+    let mimeType = target.mimeType || 'image/jpeg';
 
-    if (!base64 && imageItem.blob) {
-      base64 = await blobToBase64(imageItem.blob);
-      imageItem.base64 = base64;
+    if (!base64 && target.blob) {
+      base64 = await blobToBase64(target.blob);
+      target.base64 = base64;
     }
 
     if (!base64) {
-      throw new Error('画像のデータが存在しません。');
+      alert('画像の読み込みに失敗しました。');
+      return;
+    }
+
+    if (Object.keys(state.backupFormData).length === 0) {
+      saveCurrentFormBackup();
     }
 
     const selectedModel = document.getElementById('modal-model-select')?.value || null;
     const result = await analyzeLabelImage(base64, mimeType, selectedModel);
 
     if (result) {
-      const setFieldIfVal = (id, val) => {
+      const setVal = (id, val) => {
         const el = document.getElementById(id);
-        if (el && val) el.value = val;
+        if (el && val !== undefined && val !== null) el.value = val;
       };
 
-      if (result.category) setFieldIfVal('sake-category', result.category);
-      if (result.name || result.productName) setFieldIfVal('sake-name', result.name || result.productName);
-      if (result.productName) setFieldIfVal('sake-product', result.productName);
-      if (result.brewery) setFieldIfVal('sake-brewery', result.brewery);
-      if (result.region) setFieldIfVal('sake-region', result.region);
-      if (result.type) setFieldIfVal('sake-type', result.type);
-      if (result.abv) setFieldIfVal('sake-abv', result.abv);
-      if (result.aiInfo) setFieldIfVal('sake-ai-info', result.aiInfo);
+      if (result.category) setVal('sake-category', result.category);
+      if (result.name || result.productName) setVal('sake-name', result.name || result.productName);
+      if (result.productName) setVal('sake-product', result.productName);
+      if (result.brewery) setVal('sake-brewery', result.brewery);
+      if (result.region) setVal('sake-region', result.region);
+      if (result.type) setVal('sake-type', result.type);
+      if (result.abv) setVal('sake-abv', result.abv);
+      if (result.aiInfo) setVal('sake-ai-info', result.aiInfo);
 
       updateFieldRevertUI();
     }
   } catch (err) {
     console.error('AI解析エラー:', err);
-    alert('AI解析中にエラーが発生しました: ' + (err.message || err));
+    alert('AI解析中にエラーが発生しました: ' + (err.message || '不明なエラー'));
   } finally {
     if (btnAnalyze) {
       btnAnalyze.disabled = false;
       btnAnalyze.innerHTML = originalText;
     }
-    if (overlay) overlay.style.display = 'none';
+    if (statusOverlay) statusOverlay.style.display = 'none';
   }
 }
 
+/**
+ * 🌟【完全修復・順序安全版】画像ファイル選択時の処理
+ */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
 
+  const isFirstBatch = (state.uploadedImages.length === 0);
+
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-
+    
     const isImage = (file.type && file.type.startsWith('image/')) || 
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    if (i === 0 && state.uploadedImages.length === 0) {
-      try {
-        const extractedDate = await extractPhotoDate(file);
-        if (extractedDate) {
-          const dateInput = document.getElementById('sake-date');
-          if (dateInput) dateInput.value = extractedDate;
-        }
-      } catch (err) {
-        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました (圧縮処理へ続行):', err);
-      }
-    }
-
+    // 1. まず画像を確実に圧縮・オブジェクト化して配列に追加（ブロック回避）
     try {
       const compressed = await compressImage(file);
-      const previewUrl = compressed.blob ? URL.createObjectURL(compressed.blob) : '';
+      const previewUrl = compressed.blob ? URL.createObjectURL(compressed.blob) : URL.createObjectURL(file);
 
       state.uploadedImages.push({
         blob: compressed.blob || file,
@@ -502,6 +500,18 @@ export async function handleImageFiles(files) {
       } catch (err2) {
         console.error('フォールバック登録エラー:', err2);
       }
+    }
+
+    // 2. 1枚目の写真の場合のみ、撮影日時抽出を非同期バックグラウンド（非ブロック）で実行
+    if (i === 0 && isFirstBatch) {
+      extractPhotoDate(file).then(extractedDate => {
+        if (extractedDate) {
+          const dateInput = document.getElementById('sake-date');
+          if (dateInput) dateInput.value = extractedDate;
+        }
+      }).catch(err => {
+        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました:', err);
+      });
     }
   }
 
