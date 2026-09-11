@@ -645,39 +645,53 @@ function initApp() {
   });
 
   // HTML5 Native Drag & Drop
+  let activeFileDropTarget = null;
+  let activeDragOverCard = null;
+  let activeReorderTarget = null;
+
   document.addEventListener('dragover', (e) => {
     e.preventDefault();
 
     const fileDropTarget = e.target.closest('#batch-upload-zone, #btn-add-more-batch, #upload-zone, #btn-trigger-upload');
     const isFileDrag = e.dataTransfer?.types?.includes('Files');
-    document.querySelectorAll('.file-drop-active').forEach(target => target.classList.remove('file-drop-active'));
-    if (fileDropTarget && isFileDrag) {
-      fileDropTarget.classList.add('file-drop-active');
+    const nextFileDropTarget = isFileDrag ? fileDropTarget : null;
+    if (activeFileDropTarget !== nextFileDropTarget) {
+      activeFileDropTarget?.classList.remove('file-drop-active');
+      activeFileDropTarget = nextFileDropTarget;
+      activeFileDropTarget?.classList.add('file-drop-active');
     }
 
     const card = e.target.closest('.batch-group-card');
-    document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-    if (card) card.classList.add('drag-over');
+    if (activeDragOverCard !== card) {
+      activeDragOverCard?.classList.remove('drag-over');
+      activeDragOverCard = card;
+      activeDragOverCard?.classList.add('drag-over');
+    }
 
-    document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
     const targetThumb = e.target.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
-    if (targetThumb && state.draggedItemInfo) {
-      targetThumb.classList.add('reorder-target');
+    const nextReorderTarget = state.draggedItemInfo && targetThumb ? targetThumb : null;
+    if (activeReorderTarget !== nextReorderTarget) {
+      activeReorderTarget?.classList.remove('reorder-target');
+      activeReorderTarget = nextReorderTarget;
+      activeReorderTarget?.classList.add('reorder-target');
     }
   });
 
   document.addEventListener('dragleave', (e) => {
     if (!e.relatedTarget) {
-      document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
+      activeReorderTarget?.classList.remove('reorder-target');
+      activeReorderTarget = null;
     }
     const fileDropTarget = e.target.closest('#batch-upload-zone, #btn-add-more-batch, #upload-zone, #btn-trigger-upload');
     if (fileDropTarget && !fileDropTarget.contains(e.relatedTarget)) {
       fileDropTarget.classList.remove('file-drop-active');
+      if (activeFileDropTarget === fileDropTarget) activeFileDropTarget = null;
     }
 
     const card = e.target.closest('.batch-group-card');
     if (card && !card.contains(e.relatedTarget)) {
       card.classList.remove('drag-over');
+      if (activeDragOverCard === card) activeDragOverCard = null;
     }
   });
 
@@ -701,16 +715,22 @@ function initApp() {
 
   document.addEventListener('dragend', () => {
     state.draggedItemInfo = null;
-    document.querySelectorAll('.drag-over, .reorder-target').forEach(target => {
-      target.classList.remove('drag-over', 'reorder-target');
-    });
+    activeFileDropTarget?.classList.remove('file-drop-active');
+    activeDragOverCard?.classList.remove('drag-over');
+    activeReorderTarget?.classList.remove('reorder-target');
+    activeFileDropTarget = null;
+    activeDragOverCard = null;
+    activeReorderTarget = null;
   });
 
   document.addEventListener('drop', async (e) => {
     e.preventDefault();
-    document.querySelectorAll('.file-drop-active').forEach(target => target.classList.remove('file-drop-active'));
-    document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-    document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
+    activeFileDropTarget?.classList.remove('file-drop-active');
+    activeDragOverCard?.classList.remove('drag-over');
+    activeReorderTarget?.classList.remove('reorder-target');
+    activeFileDropTarget = null;
+    activeDragOverCard = null;
+    activeReorderTarget = null;
 
     const droppedFiles = e.dataTransfer?.files;
     if (droppedFiles && droppedFiles.length > 0) {
@@ -835,6 +855,7 @@ function initApp() {
   let pointerStartY = 0;
   let activeThumb = null;
   let isPointerMoving = false;
+  let activePointerTarget = null;
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -859,16 +880,18 @@ function initApp() {
 
     if (Math.abs(diffX) > 12 || Math.abs(diffY) > 12) {
       isPointerMoving = true;
-      activeThumb.style.transform = `translate(${diffX}px, ${diffY}px)`;
+      activeThumb.style.transform = `translate3d(${diffX}px, ${diffY}px, 0)`;
       activeThumb.style.opacity = '0.8';
       activeThumb.style.zIndex = '999';
 
       activeThumb.style.pointerEvents = 'none';
       const targetThumb = document.elementFromPoint(e.clientX, e.clientY)?.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb');
       activeThumb.style.pointerEvents = '';
-      document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
-      if (targetThumb && targetThumb !== activeThumb) {
-        targetThumb.classList.add('reorder-target');
+      const nextPointerTarget = targetThumb && targetThumb !== activeThumb ? targetThumb : null;
+      if (activePointerTarget !== nextPointerTarget) {
+        activePointerTarget?.classList.remove('reorder-target');
+        activePointerTarget = nextPointerTarget;
+        activePointerTarget?.classList.add('reorder-target');
       }
     }
   });
@@ -887,7 +910,8 @@ function initApp() {
     thumb.style.transform = '';
     thumb.style.opacity = '';
     thumb.style.zIndex = '';
-    document.querySelectorAll('.reorder-target').forEach(target => target.classList.remove('reorder-target'));
+    activePointerTarget?.classList.remove('reorder-target');
+    activePointerTarget = null;
 
     if (!isPointerMoving) return;
 
