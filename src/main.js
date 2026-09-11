@@ -7,7 +7,6 @@ import { renderLogListView } from './views/logList.js';
 import { saveLog, deleteLog, clearAllDrafts, openDB, getDraftLogs } from './store/db.js';
 import { renderBatchImportView, renderBatchGroupsUI, processFilesForBatch } from './views/batchImport.js';
 import { openLightbox, closeLightbox, triggerLightboxNext, triggerLightboxPrev } from './views/lightbox.js';
-import { formatDateToLocalYYYYMMDD } from './utils/image.js';
 import { state, base64ToBlob, blobToBase64 } from './store/state.js';
 import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth } from './services/googleDrive.js';
 
@@ -16,38 +15,11 @@ function ensureSpinnerStyles() {
   const style = document.createElement('style');
   style.id = 'sella-spinner-style';
   style.textContent = `
-    @keyframes sellaSpin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .sella-spinner {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-radius: 50%;
-      border-top-color: #fff;
-      animation: sellaSpin 0.8s linear infinite;
-      vertical-align: middle;
-      margin-right: 6px;
-    }
-    .draggable-thumb {
-      cursor: grab;
-      transition: transform 0.15s, opacity 0.15s;
-      touch-action: none;
-      box-sizing: border-box;
-      -webkit-touch-callout: none !important;
-      -webkit-user-select: none !important;
-      user-select: none !important;
-      overflow: visible !important;
-    }
-    .draggable-thumb:active {
-      cursor: grabbing;
-    }
-    .batch-group-card.drag-over, #ungrouped-pool-container.drag-over {
-      border-color: var(--accent-color) !important;
-      background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important;
-    }
+    @keyframes sellaSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .sella-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: sellaSpin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+    .draggable-thumb { cursor: grab; transition: transform 0.15s, opacity 0.15s; touch-action: none; box-sizing: border-box; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; overflow: visible !important; }
+    .draggable-thumb:active { cursor: grabbing; }
+    .batch-group-card.drag-over, #ungrouped-pool-container.drag-over { border-color: var(--accent-color) !important; background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important; }
   `;
   document.head.appendChild(style);
 }
@@ -56,7 +28,6 @@ export function setTheme(themeName) {
   const validThemes = ['dark', 'light', 'sakura', 'gaming', 'japan-modern'];
   let targetTheme = themeName;
   if (!targetTheme || !validThemes.includes(targetTheme)) {
-    console.warn(`無効なテーマ名 "${themeName}" が検出されたため、デフォルトの "dark" テーマに自己復旧しました。`);
     targetTheme = 'dark';
   }
   document.documentElement.setAttribute('data-theme', targetTheme);
@@ -79,10 +50,6 @@ export async function updateModelDropdown(forceRefresh = false) {
   if (selectEl) {
     await populateModelDropdown(selectEl, forceRefresh);
   }
-  const modalSelectEl = document.getElementById('modal-model-select');
-  if (modalSelectEl) {
-    await populateModelDropdown(modalSelectEl, forceRefresh);
-  }
 }
 
 const views = {
@@ -100,17 +67,23 @@ export async function navigateTo(viewName) {
   if (!appContainer) return;
 
   const key = viewName ? viewName.toLowerCase() : 'dashboard';
-  const renderFn = views[key] || renderLogListView;
-
   state.currentViewName = key;
+  const renderView = views[key] || views.dashboard;
 
   try {
-    const html = await renderFn();
-    appContainer.innerHTML = html;
+    const content = await renderView();
+    appContainer.innerHTML = content;
+
+    if (key === 'batchimport') {
+      renderBatchGroupsUI();
+    }
 
     if (key === 'settings' || key === 'setting') {
-      await updateModelDropdown();
-      updateSidebarProfile();
+      const themeSelect = document.getElementById('theme-select');
+      if (themeSelect) {
+        themeSelect.value = localStorage.getItem('sella_theme') || 'dark';
+      }
+      updateModelDropdown();
     }
   } catch (err) {
     console.error('View Render Error:', err);
@@ -130,6 +103,7 @@ function openSidebar() {
   sidebar?.classList.add('open');
   overlay?.classList.add('active');
 }
+
 function closeSidebar() {
   sidebar?.classList.remove('open');
   overlay?.classList.remove('active');
@@ -222,12 +196,9 @@ export async function loadBatchStateFromDB() {
       const poolImages = poolLog.images || [];
       const metaList = poolLog.poolItemsMeta || [];
       for (let i = 0; i < poolLog.imageUrls.length; i++) {
+        const previewUrl = poolLog.imageUrls[i];
         const blob = poolImages[i];
         const meta = metaList[i] || {};
-        let previewUrl = '';
-        if (blob instanceof Blob) {
-          try { previewUrl = URL.createObjectURL(blob); } catch(e){}
-        }
         state.ungroupedImages.push({
           blob,
           base64: meta.base64 || '',
@@ -251,12 +222,9 @@ export async function loadBatchStateFromDB() {
       const group = [];
 
       for (let i = 0; i < gLog.imageUrls.length; i++) {
+        const previewUrl = gLog.imageUrls[i];
         const blob = groupImages[i];
         const meta = metaList[i] || {};
-        let previewUrl = '';
-        if (blob instanceof Blob) {
-          try { previewUrl = URL.createObjectURL(blob); } catch(e){}
-        }
         group.push({
           blob,
           base64: meta.base64 || '',
@@ -318,7 +286,6 @@ function initApp() {
       }
       return;
     }
-
     if (e.target && (e.target.id === 'select-gemini-model' || e.target.id === 'modal-model-select')) {
       setSavedModel(e.target.value);
       const globalSelect = document.getElementById('select-gemini-model');
@@ -330,7 +297,6 @@ function initApp() {
       }
       return;
     }
-
     if (e.target && e.target.id === 'file-input') {
       const files = e.target.files;
       if (files && files.length > 0) {
@@ -339,7 +305,6 @@ function initApp() {
       e.target.value = '';
       return;
     }
-
     if (e.target && e.target.id === 'batch-file-input') {
       const files = e.target.files;
       if (files && files.length > 0) {
@@ -347,10 +312,6 @@ function initApp() {
       }
       e.target.value = '';
       return;
-    }
-
-    if (TRACKED_FIELDS.includes(e.target.id)) {
-      updateFieldRevertUI();
     }
   });
 
@@ -452,51 +413,8 @@ function initApp() {
     await syncBatchStateToDB();
   });
 
+  // グローバルクリック委譲
   document.addEventListener('click', async (e) => {
-    // 🌟 一括インポートのカード上「✕」ボタン直接操作ハンドラー
-    const batchRemoveBtn = e.target.closest('.btn-batch-remove-img');
-    if (batchRemoveBtn && !e.target.closest('.lightbox-overlay')) {
-      e.stopPropagation();
-      e.preventDefault();
-      const gIdx = Number(batchRemoveBtn.dataset.gidx);
-      const iIdx = Number(batchRemoveBtn.dataset.iidx);
-      if (state.batchGroups[gIdx]) {
-        const detached = state.batchGroups[gIdx].splice(iIdx, 1)[0];
-        if (detached) {
-          state.ungroupedImages.push(detached);
-        }
-        if (state.batchGroups[gIdx].length === 0) {
-          state.batchGroups.splice(gIdx, 1);
-        }
-        renderBatchGroupsUI();
-        await syncBatchStateToDB();
-      }
-      return;
-    }
-
-    const ungroupedRemoveBtn = e.target.closest('.btn-ungrouped-remove');
-    if (ungroupedRemoveBtn && !e.target.closest('.lightbox-overlay')) {
-      e.stopPropagation();
-      e.preventDefault();
-      const idx = Number(ungroupedRemoveBtn.dataset.idx);
-      state.ungroupedImages.splice(idx, 1);
-      renderBatchGroupsUI();
-      await syncBatchStateToDB();
-      return;
-    }
-
-    if (e.target && e.target.id === 'btn-create-group-from-ungrouped') {
-      e.stopPropagation();
-      e.preventDefault();
-      if (state.ungroupedImages.length > 0) {
-        state.batchGroups.push([...state.ungroupedImages]);
-        state.ungroupedImages = [];
-        renderBatchGroupsUI();
-        await syncBatchStateToDB();
-      }
-      return;
-    }
-
     if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
       e.stopPropagation();
       e.preventDefault();
@@ -581,6 +499,7 @@ function initApp() {
       return;
     }
 
+    // ライトボックス
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]') || (e.target.tagName === 'IMG' && !e.target.closest('button, nav, header, aside, .lightbox-overlay, #sidebar') && (e.target.closest('#app') || e.target.closest('#detail-modal-overlay')) ? e.target : null);
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;
@@ -753,8 +672,19 @@ function initApp() {
             return img.blob;
           }).filter(blob => blob instanceof Blob);
 
-          let mainDate = group[0]?.date ? formatDateToLocalYYYYMMDD(group[0].date) : formatDateToLocalYYYYMMDD(new Date());
-          logData = {
+          let mainDate = '';
+          const rawDate = group[0]?.date;
+          if (rawDate) {
+            const dateObj = (rawDate instanceof Date) ? rawDate : new Date(rawDate);
+            if (!isNaN(dateObj.getTime())) {
+              const y = dateObj.getFullYear();
+              const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const d = String(dateObj.getDate()).padStart(2, '0');
+              mainDate = `${y}-${m}-${d}`;
+            }
+          }
+
+          const logData = {
             category: group.category || '日本酒',
             name: name || '名称未設定',
             productName: group.productName || '',
@@ -1142,8 +1072,20 @@ function initApp() {
   });
 
   document.addEventListener('google-login-success', () => {
+    updateSidebarProfile();
     if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
       navigateTo('settings');
+    }
+  });
+  document.addEventListener('google-logout-success', () => { updateSidebarProfile(); });
+  document.addEventListener('sync-completed', () => {
+    updateSidebarProfile();
+    const lbl = document.getElementById('sync-time-lbl');
+    if (lbl) {
+      lbl.innerText = localStorage.getItem('sella_last_synced_time') || '未同期';
+    }
+    if (state.currentViewName === 'loglist' || state.currentViewName === 'dashboard' || state.currentViewName === 'log-list') {
+      navigateTo('logList');
     }
   });
 
@@ -1161,451 +1103,31 @@ function initApp() {
     }
   });
 
-  document.addEventListener('sync-completed', () => {
-    const lbl = document.getElementById('sync-time-lbl');
-    if (lbl) {
-      lbl.innerText = localStorage.getItem('sella_last_synced_time') || '未同期';
-    }
-    if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
-      updateModelDropdown();
-    }
-    if (state.currentViewName === 'loglist' || state.currentViewName === 'dashboard' || state.currentViewName === 'log-list') {
-      navigateTo('logList');
-    }
-  });
+  // 🌟【サイドバー開閉・ハンバーガーイベント】
+  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
+  overlay?.addEventListener('click', closeSidebar);
 
-  let pointerStartX = 0;
-  let pointerStartY = 0;
-  let pointerStartTime = 0;
-  let isDragging = false;
-  let activeSwipeThumb = null;
-  let isMoveTriggered = false;
-  let siblingPositions = [];
-  let initialSiblings = [];
-  let targetIdx = -1;
-
-  document.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
-    if (e.target.closest('button, input, select, textarea, .lightbox-close')) return;
-
-    const lightbox = document.getElementById('lightbox-modal');
-    if (lightbox && lightbox.classList.contains('active')) {
-      const img = lightbox.querySelector('#lightbox-img');
-      const closeBtn = lightbox.querySelector('.lightbox-close');
-      const ctrlBtn = e.target.closest('.lightbox-ctrl-btn, .lightbox-arrow-btn');
-
-      if (closeBtn && (e.target === closeBtn || closeBtn.contains(e.target))) return;
-      if (ctrlBtn) return;
-
-      pointerStartX = e.clientX;
-      pointerStartY = e.clientY;
-      pointerStartTime = Date.now();
-      isDragging = true;
-      isMoveTriggered = false;
-
-      if (img) {
-        img.style.transition = 'none';
-        img.setPointerCapture(e.pointerId);
-      }
-    } else {
-      const thumb = e.target.closest('.preview-item, .draggable-thumb');
-      if (thumb) {
-        activeSwipeThumb = thumb;
-        pointerStartX = e.clientX;
-        pointerStartY = e.clientY;
-        pointerStartTime = Date.now();
-        isDragging = true;
-        isMoveTriggered = false;
-        activeSwipeThumb.style.transition = 'none';
-        try {
-          activeSwipeThumb.setPointerCapture(e.pointerId);
-        } catch (err) {}
-      }
-    }
-  });
-
-  document.addEventListener('pointermove', (e) => {
-    if (!isDragging) return;
-    const diffX = e.clientX - pointerStartX;
-    const diffY = e.clientY - pointerStartY;
-
-    const lightbox = document.getElementById('lightbox-modal');
-    if (lightbox && lightbox.classList.contains('active')) {
-      const img = lightbox.querySelector('#lightbox-img');
-      if (img && img.hasPointerCapture(e.pointerId)) {
-        e.preventDefault();
-        if (Math.abs(diffX) > 8) {
-          isMoveTriggered = true;
-          img.style.transform = `translateX(${diffX}px) scale(0.98)`;
-        }
-      }
-    } else if (activeSwipeThumb && activeSwipeThumb.hasPointerCapture(e.pointerId)) {
-      if (Math.abs(diffX) > 15 || Math.abs(diffY) > 15) {
-        e.preventDefault();
-
-        const isEditor = activeSwipeThumb.classList.contains('preview-item');
-        const isBatch = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'group';
-        const isPool = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'pool';
-
-        let curIdx = -1;
-        if (isEditor) {
-          curIdx = Number(activeSwipeThumb.dataset.idx);
-        } else if (isBatch) {
-          curIdx = Number(activeSwipeThumb.dataset.iidx);
-        } else if (isPool) {
-          curIdx = Number(activeSwipeThumb.dataset.idx);
-        }
-
-        if (!isMoveTriggered) {
-          isMoveTriggered = true;
-          targetIdx = curIdx;
-
-          if (isEditor) {
-            initialSiblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item:not(.add-more-item)'));
-          } else if (isBatch) {
-            const gIdx = Number(activeSwipeThumb.dataset.gidx);
-            initialSiblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
-          } else if (isPool) {
-            initialSiblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
-          }
-
-          siblingPositions = initialSiblings.map(sib => ({
-            left: sib.offsetLeft,
-            top: sib.offsetTop
-          }));
-
-          activeSwipeThumb.style.outline = '3px solid var(--accent-color) !important';
-          activeSwipeThumb.style.outlineOffset = '-3px';
-          activeSwipeThumb.style.borderRadius = '8px';
-          activeSwipeThumb.style.zIndex = '99999';
-        }
-
-        activeSwipeThumb.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.08) rotate(${diffX * 0.03}deg)`;
-        activeSwipeThumb.style.boxShadow = '0 12px 30px rgba(0,0,0,0.5)';
-
-        activeSwipeThumb.style.pointerEvents = 'none';
-        const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
-        activeSwipeThumb.style.pointerEvents = 'auto';
-
-        const targetCard = hoveredEl ? hoveredEl.closest('.batch-group-card') : null;
-        const targetPool = hoveredEl ? hoveredEl.closest('#ungrouped-pool-container') : null;
-
-        document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-        const poolContainer = document.getElementById('ungrouped-pool-container');
-        if (poolContainer) poolContainer.classList.remove('drag-over');
-
-        let isCrossContainerDrag = false;
-        if (!isEditor) {
-          if (targetCard) {
-            const targetGIdx = Number(targetCard.dataset.gidx);
-            const isSelf = isBatch && Number(activeSwipeThumb.dataset.gidx) === targetGIdx;
-            if (!isSelf) {
-              targetCard.classList.add('drag-over');
-              isCrossContainerDrag = true;
-            }
-          } else if (targetPool) {
-            const isSelf = isPool;
-            if (!isSelf) {
-              targetPool.classList.add('drag-over');
-              isCrossContainerDrag = true;
-            }
-          }
-        }
-
-        let shouldCancelGap = isCrossContainerDrag;
-        if (isEditor && Math.abs(diffY) > 80) {
-          shouldCancelGap = true;
-        }
-
-        if (shouldCancelGap) {
-          initialSiblings.forEach(sib => {
-            if (sib !== activeSwipeThumb) sib.style.transform = 'none';
-          });
-          targetIdx = curIdx;
-        } else if (curIdx !== -1 && !isNaN(curIdx) && siblingPositions.length > 0) {
-          const curLeft = siblingPositions[curIdx].left + diffX;
-          const curTop = siblingPositions[curIdx].top + diffY;
-
-          let newTargetIdx = curIdx;
-          let minDistance = Infinity;
-
-          siblingPositions.forEach((pos, sIdx) => {
-            const dist = Math.pow(curLeft - pos.left, 2) + Math.pow(curTop - pos.top, 2);
-            if (dist < minDistance) {
-              minDistance = dist;
-              newTargetIdx = sIdx;
-            }
-          });
-
-          targetIdx = Math.max(0, Math.min(initialSiblings.length - 1, newTargetIdx));
-
-          const virtualSiblings = [...initialSiblings];
-          const [movedItem] = virtualSiblings.splice(curIdx, 1);
-          virtualSiblings.splice(targetIdx, 0, movedItem);
-
-          initialSiblings.forEach((sib, oldIdx) => {
-            if (sib === activeSwipeThumb) return;
-
-            const newIdx = virtualSiblings.indexOf(sib);
-            const dx = siblingPositions[newIdx].left - siblingPositions[oldIdx].left;
-            const dy = siblingPositions[newIdx].top - siblingPositions[oldIdx].top;
-
-            sib.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-            sib.style.transform = `translate(${dx}px, ${dy}px)`;
-          });
-        }
-      }
-    }
-  });
-
-  document.addEventListener('pointerup', async (e) => {
-    if (!isDragging) return;
-    isDragging = false;
-
-    const diffX = e.clientX - pointerStartX;
-    const diffY = e.clientY - pointerStartY;
-    const duration = Date.now() - pointerStartTime;
-
-    const lightbox = document.getElementById('lightbox-modal');
-    if (lightbox && lightbox.classList.contains('active')) {
-      const img = lightbox.querySelector('#lightbox-img');
-      if (img && img.hasPointerCapture(e.pointerId)) {
-        img.releasePointerCapture(e.pointerId);
-        img.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-
-        if (!isMoveTriggered) {
-          img.style.transform = 'translateX(0) scale(1)';
-          return;
-        }
-
-        if (Math.abs(diffX) > 55 || (duration < 300 && Math.abs(diffX) > 30)) {
-          if (diffX < 0) {
-            img.style.transform = 'translateX(-120%) scale(0.9)';
-            setTimeout(() => {
-              triggerLightboxNext();
-              const updatedImg = document.getElementById('lightbox-img');
-              if (updatedImg) {
-                updatedImg.style.transition = 'none';
-                updatedImg.style.transform = 'translateX(120%) scale(0.9)';
-                updatedImg.offsetHeight;
-                updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                updatedImg.style.transform = 'translateX(0) scale(1)';
-              }
-            }, 180);
-          } else {
-            img.style.transform = 'translateX(120%) scale(0.9)';
-            setTimeout(() => {
-              triggerLightboxPrev();
-              const updatedImg = document.getElementById('lightbox-img');
-              if (updatedImg) {
-                updatedImg.style.transition = 'none';
-                updatedImg.style.transform = 'translateX(-120%) scale(0.9)';
-                updatedImg.offsetHeight;
-                updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                updatedImg.style.transform = 'translateX(0) scale(1)';
-              }
-            }, 180);
-          }
-        } else {
-          img.style.transform = 'translateX(0) scale(1)';
-        }
-      }
-    } else if (activeSwipeThumb) {
-      const thumb = activeSwipeThumb;
-      activeSwipeThumb = null;
-      if (thumb.hasPointerCapture(e.pointerId)) {
-        thumb.releasePointerCapture(e.pointerId);
-      }
-
-      const isEditor = thumb.classList.contains('preview-item');
-      const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
-      const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
-
-      let siblings = [];
-      if (isEditor) {
-        siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
-      } else if (isBatch) {
-        const gIdx = Number(thumb.dataset.gidx);
-        siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
-      } else if (isPool) {
-        siblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
-      }
-
-      siblings.forEach(sib => {
-        sib.style.transition = 'none';
-        sib.style.transform = 'none';
-        sib.style.outline = 'none';
-        sib.style.outlineOffset = '0';
-        sib.style.boxShadow = 'none';
-      });
-
-      let isContainerMoved = false;
-      if (!isEditor && isMoveTriggered) {
-        thumb.style.pointerEvents = 'none';
-        const droppedEl = document.elementFromPoint(e.clientX, e.clientY);
-        thumb.style.pointerEvents = '';
-
-        const targetCard = droppedEl ? droppedEl.closest('.batch-group-card') : null;
-        const targetPool = droppedEl ? droppedEl.closest('#ungrouped-pool-container') : null;
-
-        document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-        const poolContainer = document.getElementById('ungrouped-pool-container');
-        if (poolContainer) poolContainer.classList.remove('drag-over');
-
-        if (targetCard) {
-          const targetGIdx = Number(targetCard.dataset.gidx);
-          if (!isNaN(targetGIdx) && state.batchGroups[targetGIdx]) {
-            if (isPool) {
-              const idx = Number(thumb.dataset.idx);
-              if (!isNaN(idx) && state.ungroupedImages[idx]) {
-                const [movedItem] = state.ungroupedImages.splice(idx, 1);
-                state.batchGroups[targetGIdx].push(movedItem);
-                isContainerMoved = true;
-              }
-            } else if (isBatch) {
-              const srcGIdx = Number(thumb.dataset.gidx);
-              const srcIIdx = Number(thumb.dataset.iidx);
-              if (srcGIdx !== targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx] && state.batchGroups[srcGIdx][srcIIdx]) {
-                const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
-                state.batchGroups[targetGIdx].push(movedItem);
-                if (state.batchGroups[srcGIdx].length === 0) {
-                  state.batchGroups.splice(srcGIdx, 1);
-                }
-                isContainerMoved = true;
-              }
-            }
-          }
-        } else if (targetPool && isBatch) {
-          const srcGIdx = Number(thumb.dataset.gidx);
-          const srcIIdx = Number(thumb.dataset.iidx);
-          if (!isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx] && state.batchGroups[srcGIdx][srcIIdx]) {
-            const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
-            state.ungroupedImages.push(movedItem);
-            if (state.batchGroups[srcGIdx].length === 0) {
-              state.batchGroups.splice(srcGIdx, 1);
-            }
-            isContainerMoved = true;
-          }
-        }
-      }
-
-      if (isContainerMoved) {
-        renderBatchGroupsUI();
-        await syncBatchStateToDB();
-        return;
-      }
-
-      thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
-
-      if (!isMoveTriggered && Math.abs(diffX) < 15 && Math.abs(diffY) < 15 && duration < 350) {
-        thumb.style.transform = 'none';
-        thumb.style.zIndex = '';
-        thumb.style.boxShadow = 'none';
-
-        const imgEl = thumb.querySelector('img');
-        if (imgEl) {
-          const contextType = imgEl.dataset.contextType;
-          let ctxData = null;
-          if (contextType === 'editor-preview') {
-            ctxData = { type: 'editor-preview', idx: Number(imgEl.dataset.idx) };
-          } else if (contextType === 'batch-group') {
-            ctxData = { type: 'batch-group', gidx: Number(imgEl.dataset.gidx), iidx: Number(imgEl.dataset.iidx) };
-          } else if (contextType === 'pool') {
-            ctxData = { type: 'pool', poolIdx: Number(imgEl.dataset.poolIdx) };
-          }
-          openLightbox(imgEl.src, ctxData);
-        }
-        return;
-      }
-
-      if (isMoveTriggered && targetIdx !== -1) {
-        if (isEditor) {
-          const imgEl = thumb.querySelector('img');
-          if (imgEl && imgEl.dataset.idx !== undefined) {
-            const idx = Number(imgEl.dataset.idx);
-            if (!isNaN(idx) && targetIdx !== idx) {
-              const [movedItem] = state.uploadedImages.splice(idx, 1);
-              state.uploadedImages.splice(targetIdx, 0, movedItem);
-              state.activeThumbnailIndex = 0;
-              renderImagePreviewList();
-              return;
-            }
-          }
-        } else if (isBatch) {
-          const gIdx = Number(thumb.dataset.gidx);
-          const iIdx = Number(thumb.dataset.iidx);
-          if (!isNaN(gIdx) && !isNaN(iIdx) && state.batchGroups[gIdx]) {
-            const group = state.batchGroups[gIdx];
-            if (targetIdx !== iIdx) {
-              const [movedItem] = group.splice(iIdx, 1);
-              group.splice(targetIdx, 0, movedItem);
-              renderBatchGroupsUI();
-              await syncBatchStateToDB();
-              return;
-            }
-          }
-        } else if (isPool) {
-          const idx = Number(thumb.dataset.idx);
-          if (!isNaN(idx) && targetIdx !== idx) {
-            const [movedItem] = state.ungroupedImages.splice(idx, 1);
-            state.ungroupedImages.splice(targetIdx, 0, movedItem);
-            renderBatchGroupsUI();
-            await syncBatchStateToDB();
-            return;
-          }
-        }
-      }
-
-      thumb.style.transform = 'none';
-      thumb.style.zIndex = '';
-      thumb.style.boxShadow = 'none';
-    }
-  });
-}
-
-const fullscreenBtn = document.getElementById('btn-fullscreen');
-if (fullscreenBtn) {
-  fullscreenBtn.addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen()
-        .then(() => {
-          const label = fullscreenBtn.querySelector('.label');
-          if (label) label.innerText = '全画面を解除';
-        })
-        .catch(err => {
-          console.error(`全画面表示の起動に失敗しました: ${err.message}`);
-        });
-    } else {
-      document.exitFullscreen().then(() => {
-        const label = fullscreenBtn.querySelector('.label');
-        if (label) label.innerText = '全画面表示';
-      });
-    }
-  });
-}
-
-const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-if (isPWA) {
-  console.log('[PWA] Launched in standalone display mode (default fullscreen enabled).');
-  document.addEventListener('click', () => {
-    if (!document.fullscreenElement && localStorage.getItem('sella_auto_fullscreen') === 'true') {
-      document.documentElement.requestFullscreen().catch(() => {});
-    }
-  }, { once: true });
-}
-
-document.addEventListener('fullscreenchange', () => {
+  // 全画面ボタン
+  const fullscreenBtn = document.getElementById('btn-fullscreen');
   if (fullscreenBtn) {
-    const label = fullscreenBtn.querySelector('.label');
-    if (label) {
-      if (document.fullscreenElement) {
-        label.innerText = '全画面を解除';
+    fullscreenBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
       } else {
-        label.innerText = '全画面表示';
+        document.exitFullscreen().catch(() => {});
       }
-    }
+    });
   }
-});
+
+  const profileEl = document.getElementById('sidebar-user-profile');
+  if (profileEl) {
+    profileEl.addEventListener('click', () => {
+      navigateTo('settings');
+    });
+  }
+
+  updateSidebarProfile();
+}
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
