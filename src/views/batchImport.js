@@ -1,35 +1,340 @@
-import { extractPhotoDate, compressImage, groupImagesByTime } from '../utils/image.js';
-import { getApiKey, hasApiKey, analyzeLabelImage } from '../services/gemini.js';
-import { saveLog } from '../store/db.js';
+// src/views/batchImport.js
+import { state } from '../store/state.js';
+import { compressImage, groupImagesByTime, extractPhotoDateObject } from '../utils/image.js';
+
+/**
+ * 安全にサムネイル画像の URL/DataURI を取得するヘルパー関数
+ */
+function getSafeImgSrc(item) {
+  if (!item) return '';
+  if (item.previewUrl && typeof item.previewUrl === 'string' && item.previewUrl.length > 0) {
+    return item.previewUrl;
+  }
+  if (item.blob && item.blob instanceof Blob) {
+    try {
+      const url = URL.createObjectURL(item.blob);
+      item.previewUrl = url;
+      return url;
+    } catch (e) {}
+  }
+  if (item.base64 && typeof item.base64 === 'string' && item.base64.length > 0) {
+    return `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+  }
+  return '';
+}
 
 export function renderBatchImportView() {
   return `
-<div class="batch-import-container" style="max-width: 720px; margin: 0 auto; padding-top: 20px;">
-  <div class="batch-header" style="margin-bottom: 24px;">
-    <h2 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 6px;">📦 お酒ボトル一括インポート</h2>
-    <p style="font-size: 0.88rem; color: var(--text-sub);">同じタイミングで撮影した写真を同一ボトルのグループ（表・裏ラベル等）に自動でまとめ、一気に追加できます。</p>
-  </div>
+    <div class="batch-import-container">
+      <div class="settings-card">
+        <div class="card-title card-title-bulk">
+          <span style="font-size: 1.25rem;">📦</span>
+          <h3>一括画像解析（複数ボトルを自動認識）</h3>
+        </div>
+        <p class="card-desc bulk-desc">
+          複数のボトル写真を一度にアップロードできます。撮影時間からお酒を自動でグルーピングし、一括で解析・登録が完了します。
+        </p>
 
-  <input type="file" id="batch-file-input" accept="image/*" multiple style="display: none;" />
-  
-  <div class="image-upload-zone" id="batch-upload-zone" style="cursor: pointer; border: 2px dashed var(--border-color); border-radius: 12px; padding: 30px; text-align: center; background: var(--bg-color);">
-    <span class="upload-icon" style="font-size: 2.5rem;">📁</span>
-    <p style="font-weight: bold; margin-top: 8px;">タップして写真を選択、またはここにドラッグ＆ドロップ</p>
-    <span style="font-size: 0.8rem; color: var(--text-sub);">JPEG / PNG / HEIC等対応（自動軽量化）</span>
-  </div>
-</div>
+        <!-- アップロードゾーン -->
+        <div class="image-upload-zone" id="batch-upload-zone" style="height: 180px;">
+          <div class="upload-placeholder">
+            <span class="upload-icon">📁</span>
+            <p class="upload-text">ここに複数の写真ファイルをドロップ、またはタップして選択<br><small style="color:var(--text-sub)">(撮影日時・順序自動解析)</small></p>
+          </div>
+        </div>
+        <input type="file" id="batch-file-input" style="display: none;" multiple accept="image/*" />
+      </div>
 
-<!-- プレビュー＆グルーピング調整エリア（初期は非表示） -->
-<div id="batch-preview-section" style="display: none; margin-top: 24px;">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-    <h3 id="batch-group-count-title" style="font-size: 1.1rem; color: var(--accent-color);">✨ 検出されたグループ (0件)</h3>
-    <button type="button" class="btn-primary" id="btn-execute-batch-save" style="background-color: #4cd964; color: #000;">
-      🚀 すべてのグループを一括登録する
-    </button>
-  </div>
-
-  <!-- グループカードが動的に挿入されるコンテナ -->
-  <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 20px;"></div>
-</div>
+      <!-- プレビューと未保存グルーピングUI -->
+      <div id="batch-preview-section" style="margin-top: 24px; display: none;"></div>
+    </div>
   `;
 }
+
+export function renderBatchGroupsUI() {
+  const previewSection = document.getElementById('batch-preview-section');
+  if (!previewSection) return;
+
+  const uploadZone = document.getElementById('batch-upload-zone');
+  if (uploadZone) {
+    uploadZone.innerHTML = `
+      <div style="padding: 30px; text-align: center; border: 2px dashed var(--border-color); border-radius: 12px; cursor: pointer; background: var(--card-bg);">
+        <div style="font-size: 1.8rem; margin-bottom: 6px;">📁</div>
+        <div style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">さらに写真を追加する</div>
+      </div>`;
+  }
+
+  const hasItems = state.batchGroups.length > 0 || state.ungroupedImages.length > 0;
+  if (!hasItems) {
+    previewSection.style.display = 'none';
+    return;
+  }
+  previewSection.style.display = 'block';
+
+  let ungroupedHTML = '';
+  if (state.ungroupedImages.length > 0) {
+    const thumbs = state.isPoolCollapsed ? '' : `
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
+        ${state.ungroupedImages.map((item, idx) => {
+          const imgSrc = getSafeImgSrc(item);
+          return `
+            <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
+                 style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: manipulation; flex-shrink: 0;">
+              <img src="${imgSrc}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="this.onerror=null; if(this.src!==''){this.style.display='none';}" />
+              <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
+                      style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.75); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:50%; width:22px; height:22px; font-size:11px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    ungroupedHTML = `
+      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 12px; right: 12px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px); box-sizing: border-box;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px; flex-shrink: 0;">${state.isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
+            <span style="font-weight: bold; color: var(--text-main); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📂 未所属プール (${state.ungroupedImages.length}枚)</span>
+          </div>
+          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px; flex-shrink: 0;">✨ グループ作成</button>
+        </div>
+        ${thumbs}
+      </div>
+    `;
+  } else {
+    ungroupedHTML = `<div id="ungrouped-pool-container" style="display:none;"></div>`;
+  }
+
+  const groupsHTML = state.batchGroups.map((group, gIdx) => {
+    const mainImg = group[0];
+    let dateStr = '日時不明';
+    if (mainImg && mainImg.date) {
+      const d = (mainImg.date instanceof Date) ? mainImg.date : new Date(mainImg.date);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        dateStr = `${year}-${month}-${day} ${hours}:${minutes}`;
+      }
+    }
+
+    const thumbsHTML = group.map((item, iIdx) => {
+      const imgSrc = getSafeImgSrc(item);
+      return `
+        <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
+             style="position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 8px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: manipulation; flex-shrink: 0;">
+          <img src="${imgSrc}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="this.onerror=null; if(this.src!==''){this.style.display='none';}" />
+          ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
+          <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
+                  style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.75); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:50%; width:22px; height:22px; font-size:11px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center;">✕</button>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box;" data-gidx="${gIdx}">
+        <div class="batch-group-card-header" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); width: 100%; box-sizing: border-box;">
+          <div style="width: 100%; display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <span style="font-weight: bold; color: var(--accent-color); font-size: 0.95rem;">🍶 未保存お酒グループ #${gIdx + 1}</span>
+              <span style="font-size: 0.75rem; color: var(--text-sub);">(${group.length}枚)</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-sub); display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+              <span>📅 撮影日時:</span>
+              <span style="color: var(--text-main); font-weight: 500;">${dateStr}</span>
+            </div>
+          </div>
+          
+          <div class="batch-group-btn-container" style="display: flex; gap: 6px; width: 100%; justify-content: space-between; margin-top: 4px; box-sizing: border-box;">
+            <button type="button" class="btn-secondary btn-batch-open-editor" data-gidx="${gIdx}" style="flex: 1; font-size: 0.72rem; padding: 6px 2px; font-weight: bold; justify-content: center; display: inline-flex; align-items: center; min-width: 0;">✏️ 詳細編集</button>
+            <button type="button" class="btn-secondary btn-batch-analyze" data-gidx="${gIdx}" style="flex: 1; font-size: 0.72rem; padding: 6px 2px; font-weight: bold; justify-content: center; display: inline-flex; align-items: center; min-width: 0;">🤖 AI解析</button>
+            <button type="button" class="btn-secondary btn-batch-split" data-gidx="${gIdx}" style="flex: 1; font-size: 0.72rem; padding: 6px 2px; font-weight: bold; justify-content: center; display: inline-flex; align-items: center; min-width: 0;" title="分割">✂️ 分割</button>
+            <button type="button" class="btn-secondary btn-batch-delete-group" data-gidx="${gIdx}" style="flex: 1; font-size: 0.72rem; padding: 6px 2px; font-weight: bold; justify-content: center; display: inline-flex; align-items: center; color: #ef4444; border-color: #ef4444; min-width: 0;" title="グループごと削除">🗑️ 削除</button>
+          </div>
+        </div>
+
+        <div style="font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px;">💡 写真をタップすると拡大表示できます。長押しやドラッグで並び替え可能です。</div>
+        <div class="thumbs-scroll-container" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; min-height: 50px;">
+          ${thumbsHTML}
+        </div>
+
+        <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <input type="text" class="input-dark batch-name-input" data-gidx="${gIdx}" value="${group.name || ''}" placeholder="銘柄名 (例: 寫樂)" style="font-size: 0.85rem;" />
+          <input type="text" class="input-dark batch-brewery-input" data-gidx="${gIdx}" value="${group.brewery || ''}" placeholder="酒蔵・メーカー" style="font-size: 0.85rem;" />
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  previewSection.innerHTML = `
+    <div style="display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 16px; gap: 12px; width: 100%; box-sizing: border-box;">
+      <h3 id="batch-group-count-title" style="margin: 0; font-size: 1.1rem; font-weight: bold; color: var(--text-main); line-height: 1.4;">✨ 未保存の酒ログアイテム (${state.batchGroups.length} 件)</h3>
+      <div style="display: flex; gap: 8px; width: 100%; box-sizing: border-box; flex-wrap: wrap;">
+        <button type="button" id="btn-add-more-batch" class="btn-secondary" style="flex: 1; font-size: 0.85rem; padding: 10px 16px; font-weight: bold; justify-content: center; display: inline-flex; align-items: center; min-width: 140px; box-sizing: border-box;">➕ 写真を追加する</button>
+        ${state.batchGroups.length > 0 ? `<button type="button" id="btn-save-all-batches" class="btn-primary" style="flex: 1.5; background: #10b981; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.85rem; justify-content: center; display: inline-flex; align-items: center; min-width: 180px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25); box-sizing: border-box;">🚀 すべてまとめて登録する</button>` : ''}
+      </div>
+    </div>
+    <div id="batch-groups-container" style="display: flex; flex-direction: column; gap: 16px; padding-bottom: ${state.ungroupedImages.length > 0 ? '120px' : '20px'};">
+      ${groupsHTML}
+    </div>
+    ${ungroupedHTML}
+  `;
+}
+
+/**
+ * 🌟【まともに動いていた頃ベース＋現行仕様適合版】一括画像投入・自動グルーピング処理
+ */
+export async function processFilesForBatch(files, append = true) {
+  if (!files || files.length === 0) return;
+
+  const batchUploadZone = document.getElementById('batch-upload-zone');
+  if (batchUploadZone) {
+    batchUploadZone.innerHTML = `
+      <div style="padding: 40px; text-align: center; color: var(--text-main);">
+        <div class="sella-spinner" style="width: 32px; height: 32px; border-width: 4px; margin-bottom: 12px; border-top-color: var(--accent-color);"></div>
+        <div style="font-weight: bold; font-size: 1.1rem;">写真を解析・グルーピング中...</div>
+        <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 4px;">(${files.length}枚の画像を処理しています)</div>
+      </div>`;
+  }
+
+  const items = [];
+  const failedFiles = [];
+
+  const imageFiles = Array.from(files).filter(file => {
+    return (file.type && file.type.startsWith('image/')) ||
+           /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
+  });
+
+  if (imageFiles.length === 0) {
+    alert('有効な画像ファイルが見つかりませんでした。');
+    renderBatchGroupsUI();
+    return;
+  }
+
+  for (const file of imageFiles) {
+    try {
+      const compressed = await compressImage(file).catch(() => ({ blob: file, base64: '', mimeType: file.type || 'image/jpeg' }));
+      let date = await extractPhotoDateObject(file).catch(() => null);
+
+      if (!date && file.lastModified) {
+        const d = new Date(file.lastModified);
+        if (!isNaN(d.getTime())) {
+          date = d;
+        }
+      }
+
+      const blob = compressed.blob || file;
+      const previewUrl = URL.createObjectURL(blob);
+
+      items.push({
+        file,
+        date: (date && !isNaN(date.getTime())) ? date : null,
+        blob,
+        base64: compressed.base64 || '',
+        mimeType: compressed.mimeType || file.type || 'image/jpeg',
+        previewUrl
+      });
+    } catch (e) {
+      console.error(`ファイル ${file.name} の処理に失敗しました:`, e);
+      failedFiles.push(file.name);
+    }
+  }
+
+  try {
+    if (items.length > 0) {
+      const cleansedItems = items.map(item => ({
+        ...item,
+        date: (item.date && !isNaN(item.date.getTime())) ? item.date : null
+      }));
+
+      const newGroups = groupImagesByTime(cleansedItems, 3 * 60 * 1000, 5);
+      if (append) {
+        state.batchGroups = state.batchGroups.concat(newGroups);
+      } else {
+        state.batchGroups = newGroups;
+      }
+
+      if (failedFiles.length > 0) {
+        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました：\n\n・ ` + failedFiles.join('\n・ '));
+      }
+    } else {
+      if (failedFiles.length > 0) {
+        alert(`画像の読み込みに失敗しました：\n\n・ ` + failedFiles.join('\n・ '));
+      } else {
+        alert('有効な画像ファイルが見つかりませんでした。');
+      }
+    }
+  } catch (err) {
+    console.error('Batch Grouping Error:', err);
+    alert('画像の自動グルーピング処理中に予期せぬエラーが発生しました。');
+  } finally {
+    renderBatchGroupsUI();
+    document.dispatchEvent(new CustomEvent('batch-state-modified'));
+  }
+}
+
+// 🌟【一括インポート専用の標準イベント委譲ハンドラー】
+// 重いスワイプ/PointerMove計算を排除し、タップ/クリック操作を軽快に即時実行
+document.addEventListener('click', (e) => {
+  // グループカード上の「✕」ボタン (未所属プールへ移動)
+  const removeBtn = e.target.closest('.btn-batch-remove-img');
+  if (removeBtn) {
+    e.stopPropagation();
+    e.preventDefault();
+    const gIdx = Number(removeBtn.dataset.gidx);
+    const iIdx = Number(removeBtn.dataset.iidx);
+    if (!isNaN(gIdx) && !isNaN(iIdx) && state.batchGroups[gIdx]) {
+      const detached = state.batchGroups[gIdx].splice(iIdx, 1)[0];
+      if (detached) {
+        state.ungroupedImages.push(detached);
+      }
+      if (state.batchGroups[gIdx].length === 0) {
+        state.batchGroups.splice(gIdx, 1);
+      }
+      renderBatchGroupsUI();
+      document.dispatchEvent(new CustomEvent('batch-state-modified'));
+    }
+    return;
+  }
+
+  // 未所属プール上の「✕」ボタン (完全削除)
+  const poolRemoveBtn = e.target.closest('.btn-ungrouped-remove');
+  if (poolRemoveBtn) {
+    e.stopPropagation();
+    e.preventDefault();
+    const idx = Number(poolRemoveBtn.dataset.idx);
+    if (!isNaN(idx) && state.ungroupedImages[idx]) {
+      state.ungroupedImages.splice(idx, 1);
+      renderBatchGroupsUI();
+      document.dispatchEvent(new CustomEvent('batch-state-modified'));
+    }
+    return;
+  }
+
+  // 「未所属からグループを作成」ボタン
+  const createGroupBtn = e.target.closest('#btn-create-group-from-ungrouped');
+  if (createGroupBtn) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (state.ungroupedImages.length > 0) {
+      const newGroup = [...state.ungroupedImages];
+      state.ungroupedImages = [];
+      state.batchGroups.push(newGroup);
+      renderBatchGroupsUI();
+      document.dispatchEvent(new CustomEvent('batch-state-modified'));
+    }
+    return;
+  }
+
+  // プールの折りたたみトグルボタン
+  const togglePoolBtn = e.target.closest('#btn-toggle-pool-collapse');
+  if (togglePoolBtn) {
+    e.stopPropagation();
+    e.preventDefault();
+    state.isPoolCollapsed = !state.isPoolCollapsed;
+    renderBatchGroupsUI();
+    return;
+  }
+});
