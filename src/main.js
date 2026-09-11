@@ -20,6 +20,77 @@ function ensureSpinnerStyles() {
     .draggable-thumb { cursor: grab; transition: transform 0.15s, opacity 0.15s; touch-action: none; box-sizing: border-box; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; overflow: visible !important; }
     .draggable-thumb:active { cursor: grabbing; }
     .batch-group-card.drag-over, #ungrouped-pool-container.drag-over { border-color: var(--accent-color) !important; background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important; }
+
+    .batch-group-btn-container {
+      display: flex !important;
+      gap: 6px !important;
+      overflow-x: auto !important;
+      white-space: nowrap !important;
+      -webkit-overflow-scrolling: touch !important;
+      scrollbar-width: none !important;
+      padding-bottom: 2px !important;
+      width: auto !important;
+    }
+    .batch-group-btn-container::-webkit-scrollbar { display: none !important; }
+    .batch-group-btn-container button { flex-shrink: 0 !important; font-size: 0.72rem !important; padding: 6px 10px !important; }
+
+    #batch-preview-section > div:first-child {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 12px !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    #batch-group-count-title { font-size: 1.1rem !important; line-height: 1.4 !important; white-space: normal !important; width: 100% !important; }
+
+    @media (max-width: 600px) {
+      body, #app, #batch-preview-section, #batch-groups-container { max-width: 100% !important; box-sizing: border-box !important; overflow-x: hidden !important; }
+      #ungrouped-pool-container {
+        left: 8px !important; right: 8px !important; bottom: 8px !important;
+        width: calc(100% - 16px) !important; max-width: calc(100% - 16px) !important;
+        box-sizing: border-box !important; border-radius: 12px !important; padding: 10px 12px !important;
+        box-shadow: 0 -8px 24px rgba(0,0,0,0.6) !important; position: fixed !important; z-index: 9999 !important;
+      }
+      #ungrouped-pool-container .thumbs-scroll-container { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; padding-bottom: 4px !important; min-height: 80px !important; }
+      #ungrouped-pool-container .draggable-thumb { width: 80px !important; height: 80px !important; min-height: 80px !important; flex-shrink: 0 !important; }
+      .batch-group-card { width: 100% !important; max-width: 100% !important; padding: 12px !important; margin-bottom: 10px !important; box-sizing: border-box !important; overflow: visible !important; }
+      .batch-group-card-header { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; width: 100% !important; box-sizing: border-box !important; }
+      .batch-group-btn-container { width: 100% !important; justify-content: flex-start !important; }
+      .batch-group-card .thumbs-scroll-container { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; padding-bottom: 4px !important; max-width: 100% !important; box-sizing: border-box !important; }
+      .batch-group-card .draggable-thumb { width: 80px !important; height: 80px !important; min-height: 80px !important; flex-shrink: 0 !important; }
+      .batch-group-card .form-row { display: flex !important; flex-direction: column !important; gap: 8px !important; width: 100% !important; box-sizing: border-box !important; }
+      .batch-group-card .form-row input { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; }
+    }
+
+    .preview-item, .add-more-item {
+      width: 90px !important; height: 90px !important; min-height: 90px !important; position: relative !important;
+      touch-action: none !important; box-sizing: border-box !important; -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important; user-select: none !important; overflow: visible !important;
+    }
+    .preview-item img, .draggable-thumb img {
+      width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 6px !important;
+      cursor: grab !important; -webkit-touch-callout: none !important; -webkit-user-select: none !important;
+      user-select: none !important; -webkit-user-drag: none !important;
+    }
+    .preview-item img:active, .draggable-thumb img:active { cursor: grabbing !important; }
+
+    .btn-img-del, .btn-batch-remove-img, .btn-ungrouped-remove {
+      position: absolute !important; top: -6px !important; right: -6px !important; background: #ef4444 !important;
+      color: #fff !important; border: 1px solid rgba(255,255,255,0.2) !important; border-radius: 50% !important;
+      width: 24px !important; height: 24px !important; font-size: 11px !important; font-weight: bold !important;
+      cursor: pointer !important; display: flex !important; align-items: center !important; justify-content: center !important;
+      z-index: 30 !important; pointer-events: auto !important; box-shadow: 0 2px 6px rgba(0,0,0,0.5) !important;
+    }
+
+    @media (min-width: 601px) {
+      .btn-img-del { opacity: 0 !important; transition: opacity 0.2s ease !important; }
+      .preview-item:hover .btn-img-del { opacity: 1 !important; }
+    }
+    @media (max-width: 600px) {
+      .preview-item, .add-more-item { width: 85px !important; height: 85px !important; min-height: 85px !important; }
+      .btn-img-del, .btn-batch-remove-img, .btn-ungrouped-remove { opacity: 1 !important; }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -172,7 +243,6 @@ export async function syncBatchStateToDB() {
       };
       await saveLog(groupLogData, groupBlobs);
     }
-    console.log('[DraftSync] Batch state saved to IndexedDB.');
 
     if (state.isGoogleLoggedIn) {
       syncAllData(true);
@@ -187,7 +257,6 @@ export async function loadBatchStateFromDB() {
     const drafts = await getDraftLogs();
     if (drafts.length === 0) return;
 
-    console.log('[DraftSync] Recovering batch import drafts from IndexedDB...');
     state.batchGroups = [];
     state.ungroupedImages = [];
 
@@ -248,12 +317,24 @@ export async function loadBatchStateFromDB() {
       }
       state.batchGroups.push(group);
     }
-    console.log('[DraftSync] Restore complete.');
     renderBatchGroupsUI();
   } catch (err) {
     console.error('[DraftSync] Failed to restore drafts:', err);
   }
 }
+
+// --------------------------------------------------
+// 📱💻 PointerEvents 2Dドラッグ＆ドロップ管理状態
+// --------------------------------------------------
+let pointerStartX = 0;
+let pointerStartY = 0;
+let pointerStartTime = 0;
+let isDragging = false;
+let activeSwipeThumb = null;
+let isMoveTriggered = false;
+let siblingPositions = [];
+let initialSiblings = [];
+let targetIdx = -1;
 
 function initApp() {
   ensureSpinnerStyles();
@@ -264,6 +345,9 @@ function initApp() {
     state.isGoogleLoggedIn = true;
     syncAllData(true);
   }
+
+  document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
+  overlay?.addEventListener('click', closeSidebar);
 
   document.addEventListener('navigation-request', async (e) => {
     const detail = e.detail;
@@ -276,6 +360,40 @@ function initApp() {
 
   document.addEventListener('batch-state-modified', async () => {
     await syncBatchStateToDB();
+  });
+
+  document.addEventListener('input', async (e) => {
+    if (TRACKED_FIELDS.includes(e.target.id)) {
+      updateFieldRevertUI();
+    }
+    if (e.target.classList.contains('batch-name-input')) {
+      const gIdx = Number(e.target.dataset.gidx);
+      if (state.batchGroups[gIdx]) {
+        state.batchGroups[gIdx].name = e.target.value;
+        await syncBatchStateToDB();
+      }
+    }
+    if (e.target.classList.contains('batch-brewery-input')) {
+      const gIdx = Number(e.target.dataset.gidx);
+      if (state.batchGroups[gIdx]) {
+        state.batchGroups[gIdx].brewery = e.target.value;
+        await syncBatchStateToDB();
+      }
+    }
+    if (e.target && e.target.id === 'destroy-validation-input') {
+      const btn = document.getElementById('btn-destroy-all-data');
+      if (btn) {
+        if (e.target.value.trim() === 'データをすべて消去する') {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        } else {
+          btn.disabled = true;
+          btn.style.opacity = '0.3';
+          btn.style.cursor = 'not-allowed';
+        }
+      }
+    }
   });
 
   document.addEventListener('change', async (e) => {
@@ -315,118 +433,417 @@ function initApp() {
     }
   });
 
-  // ドラッグ＆ドロップ UI
-  document.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    const card = e.target.closest('.batch-group-card');
-    document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-    if (card) card.classList.add('drag-over');
-  });
-
-  document.addEventListener('dragleave', (e) => {
-    const card = e.target.closest('.batch-group-card');
-    if (card && !card.contains(e.relatedTarget)) {
-      card.classList.remove('drag-over');
+  document.addEventListener('google-login-success', () => {
+    updateSidebarProfile();
+    if (state.currentViewName === 'settings' || state.currentViewName === 'setting') {
+      navigateTo('settings');
     }
   });
 
-  document.addEventListener('dragstart', (e) => {
-    const thumb = e.target.closest('.preview-item, .draggable-thumb');
-    if (thumb) {
-      const sourceType = thumb.dataset.sourceType;
-      if (sourceType === 'group') {
-        state.draggedItemInfo = { type: 'group', gIdx: Number(thumb.dataset.gidx), iIdx: Number(thumb.dataset.iidx) };
-      } else if (sourceType === 'pool') {
-        state.draggedItemInfo = { type: 'pool', idx: Number(thumb.dataset.idx) };
-      }
-      e.dataTransfer.effectAllowed = 'move';
+  document.addEventListener('google-logout-success', () => {
+    updateSidebarProfile();
+  });
+
+  document.addEventListener('sync-completed', () => {
+    updateSidebarProfile();
+    const lbl = document.getElementById('sync-time-lbl');
+    if (lbl) {
+      lbl.innerText = localStorage.getItem('sella_last_synced_time') || '未同期';
+    }
+    const savedModel = localStorage.getItem('gemini_selected_model');
+    if (savedModel) {
+      const globalSelect = document.getElementById('select-gemini-model');
+      const modalSelect = document.getElementById('modal-model-select');
+      if (globalSelect) globalSelect.value = savedModel;
+      if (modalSelect) modalSelect.value = savedModel;
     }
   });
 
-  document.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
+  // --------------------------------------------------
+  // 📱💻 PointerEvents 2Dドラッグ＆ドロップ イベント制御
+  // --------------------------------------------------
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (e.target.closest('button, input, select, textarea, .lightbox-close')) return;
 
-    const batchUploadZone = e.target.closest('#batch-upload-zone');
-    if (batchUploadZone && !state.draggedItemInfo) {
-      const files = e.dataTransfer.files;
-      if (files && files.length > 0) {
-        await processFilesForBatch(files, true);
+    const lightbox = document.getElementById('lightbox-modal');
+    if (lightbox && lightbox.classList.contains('active')) {
+      const img = lightbox.querySelector('#lightbox-img');
+      const closeBtn = lightbox.querySelector('.lightbox-close');
+      const ctrlBtn = e.target.closest('.lightbox-ctrl-btn, .lightbox-arrow-btn');
+
+      if (closeBtn && (e.target === closeBtn || closeBtn.contains(e.target))) return;
+      if (ctrlBtn) return;
+
+      pointerStartX = e.clientX;
+      pointerStartY = e.clientY;
+      pointerStartTime = Date.now();
+      isDragging = true;
+      isMoveTriggered = false;
+
+      if (img) {
+        img.style.transition = 'none';
+        img.setPointerCapture(e.pointerId);
       }
-      return;
-    }
-
-    const singleUploadZone = e.target.closest('#upload-zone');
-    if (singleUploadZone && !state.draggedItemInfo) {
-      const files = e.dataTransfer.files;
-      if (files && files.length > 0) {
-        handleImageFiles(files);
-      }
-      return;
-    }
-
-    if (!state.draggedItemInfo) return;
-
-    const targetGroupCard = e.target.closest('.batch-group-card');
-    const targetThumb = e.target.closest('.draggable-thumb');
-    const targetPoolArea = e.target.closest('#ungrouped-pool-container');
-
-    let movedImage = null;
-
-    if (state.draggedItemInfo.type === 'group') {
-      const srcGroup = state.batchGroups[state.draggedItemInfo.gIdx];
-      if (srcGroup) {
-        movedImage = srcGroup.splice(state.draggedItemInfo.iIdx, 1)[0];
-        if (srcGroup.length === 0) {
-          state.batchGroups.splice(state.draggedItemInfo.gIdx, 1);
-        }
-      }
-    } else if (state.draggedItemInfo.type === 'pool') {
-      movedImage = state.ungroupedImages.splice(state.draggedItemInfo.idx, 1)[0];
-    }
-
-    if (!movedImage) {
-      state.draggedItemInfo = null;
-      return;
-    }
-
-    if (targetGroupCard) {
-      const targetGIdx = Number(targetGroupCard.dataset.gidx);
-      if (!isNaN(targetGIdx) && state.batchGroups[targetGIdx]) {
-        const targetGroup = state.batchGroups[targetGIdx];
-        if (targetThumb && targetThumb.dataset.gidx !== undefined && Number(targetThumb.dataset.gidx) === targetGIdx) {
-          const targetIIdx = Number(targetThumb.dataset.iidx);
-          targetGroup.splice(targetIIdx, 0, movedImage);
-        } else {
-          targetGroup.push(movedImage);
-        }
-      } else {
-        state.batchGroups.push([movedImage]);
-      }
-    } else if (targetPoolArea) {
-      state.ungroupedImages.push(movedImage);
     } else {
-      state.batchGroups.push([movedImage]);
+      const thumb = e.target.closest('.preview-item, .draggable-thumb');
+      if (thumb) {
+        activeSwipeThumb = thumb;
+        pointerStartX = e.clientX;
+        pointerStartY = e.clientY;
+        pointerStartTime = Date.now();
+        isDragging = true;
+        isMoveTriggered = false;
+        activeSwipeThumb.style.transition = 'none';
+        try {
+          activeSwipeThumb.setPointerCapture(e.pointerId);
+        } catch (err) {}
+      }
     }
-
-    state.draggedItemInfo = null;
-    renderBatchGroupsUI();
-    await syncBatchStateToDB();
   });
 
-  // クリックイベントのグローバル一括委譲
-  document.addEventListener('click', async (e) => {
-    if (e.target && (e.target.id === 'btn-create-group-from-ungrouped' || e.target.closest('#btn-create-group-from-ungrouped'))) {
-      if (state.ungroupedImages.length > 0) {
-        const items = [...state.ungroupedImages];
-        state.ungroupedImages = [];
-        state.batchGroups.push(items);
+  document.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const diffX = e.clientX - pointerStartX;
+    const diffY = e.clientY - pointerStartY;
+
+    const lightbox = document.getElementById('lightbox-modal');
+    if (lightbox && lightbox.classList.contains('active')) {
+      const img = lightbox.querySelector('#lightbox-img');
+      if (img && img.hasPointerCapture(e.pointerId)) {
+        e.preventDefault();
+        if (Math.abs(diffX) > 8) {
+          isMoveTriggered = true;
+          img.style.transform = `translateX(${diffX}px) scale(0.98)`;
+        }
+      }
+    } else if (activeSwipeThumb && activeSwipeThumb.hasPointerCapture(e.pointerId)) {
+      if (Math.abs(diffX) > 15 || Math.abs(diffY) > 15) {
+        e.preventDefault();
+
+        const isEditor = activeSwipeThumb.classList.contains('preview-item');
+        const isBatch = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'group';
+        const isPool = activeSwipeThumb.classList.contains('draggable-thumb') && activeSwipeThumb.dataset.sourceType === 'pool';
+
+        let curIdx = -1;
+        if (isEditor) {
+          curIdx = Number(activeSwipeThumb.dataset.idx);
+        } else if (isBatch) {
+          curIdx = Number(activeSwipeThumb.dataset.iidx);
+        } else if (isPool) {
+          curIdx = Number(activeSwipeThumb.dataset.idx);
+        }
+
+        if (!isMoveTriggered) {
+          isMoveTriggered = true;
+          targetIdx = curIdx;
+
+          if (isEditor) {
+            initialSiblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item:not(.add-more-item)'));
+          } else if (isBatch) {
+            const gIdx = Number(activeSwipeThumb.dataset.gidx);
+            initialSiblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
+          } else if (isPool) {
+            initialSiblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
+          }
+
+          siblingPositions = initialSiblings.map(sib => ({
+            left: sib.offsetLeft,
+            top: sib.offsetTop
+          }));
+
+          activeSwipeThumb.style.outline = '3px solid var(--accent-color) !important';
+          activeSwipeThumb.style.outlineOffset = '-3px';
+          activeSwipeThumb.style.borderRadius = '8px';
+          activeSwipeThumb.style.zIndex = '99999';
+        }
+
+        activeSwipeThumb.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.08) rotate(${diffX * 0.03}deg)`;
+        activeSwipeThumb.style.boxShadow = '0 12px 30px rgba(0,0,0,0.5)';
+
+        activeSwipeThumb.style.pointerEvents = 'none';
+        const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+        activeSwipeThumb.style.pointerEvents = 'auto';
+
+        const targetCard = hoveredEl ? hoveredEl.closest('.batch-group-card') : null;
+        const targetPool = hoveredEl ? hoveredEl.closest('#ungrouped-pool-container') : null;
+
+        document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
+        const poolContainer = document.getElementById('ungrouped-pool-container');
+        if (poolContainer) poolContainer.classList.remove('drag-over');
+
+        let isCrossContainerDrag = false;
+        if (!isEditor) {
+          if (targetCard) {
+            const targetGIdx = Number(targetCard.dataset.gidx);
+            const isSelf = isBatch && Number(activeSwipeThumb.dataset.gidx) === targetGIdx;
+            if (!isSelf) {
+              targetCard.classList.add('drag-over');
+              isCrossContainerDrag = true;
+            }
+          } else if (targetPool) {
+            const isSelf = isPool;
+            if (!isSelf) {
+              targetPool.classList.add('drag-over');
+              isCrossContainerDrag = true;
+            }
+          }
+        }
+
+        let shouldCancelGap = isCrossContainerDrag;
+        if (isEditor && Math.abs(diffY) > 80) {
+          shouldCancelGap = true;
+        }
+
+        if (shouldCancelGap) {
+          initialSiblings.forEach(sib => {
+            if (sib !== activeSwipeThumb) sib.style.transform = 'none';
+          });
+          targetIdx = curIdx;
+        } else if (curIdx !== -1 && !isNaN(curIdx) && siblingPositions.length > 0) {
+          const curLeft = siblingPositions[curIdx].left + diffX;
+          const curTop = siblingPositions[curIdx].top + diffY;
+
+          let newTargetIdx = curIdx;
+          let minDistance = Infinity;
+
+          siblingPositions.forEach((pos, sIdx) => {
+            const dist = Math.pow(curLeft - pos.left, 2) + Math.pow(curTop - pos.top, 2);
+            if (dist < minDistance) {
+              minDistance = dist;
+              newTargetIdx = sIdx;
+            }
+          });
+
+          targetIdx = Math.max(0, Math.min(initialSiblings.length - 1, newTargetIdx));
+
+          const virtualSiblings = [...initialSiblings];
+          const [movedItem] = virtualSiblings.splice(curIdx, 1);
+          virtualSiblings.splice(targetIdx, 0, movedItem);
+
+          initialSiblings.forEach((sib, oldIdx) => {
+            if (sib === activeSwipeThumb) return;
+
+            const newIdx = virtualSiblings.indexOf(sib);
+            const dx = siblingPositions[newIdx].left - siblingPositions[oldIdx].left;
+            const dy = siblingPositions[newIdx].top - siblingPositions[oldIdx].top;
+
+            sib.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            sib.style.transform = `translate(${dx}px, ${dy}px)`;
+          });
+        }
+      }
+    }
+  }, { passive: false });
+
+  document.addEventListener('pointerup', async (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+
+    const diffX = e.clientX - pointerStartX;
+    const diffY = e.clientY - pointerStartY;
+    const duration = Date.now() - pointerStartTime;
+
+    const lightbox = document.getElementById('lightbox-modal');
+    if (lightbox && lightbox.classList.contains('active')) {
+      const img = lightbox.querySelector('#lightbox-img');
+      if (img && img.hasPointerCapture(e.pointerId)) {
+        try { img.releasePointerCapture(e.pointerId); } catch(err){}
+        img.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+        if (!isMoveTriggered) {
+          img.style.transform = 'translateX(0) scale(1)';
+          return;
+        }
+
+        if (Math.abs(diffX) > 55 || (duration < 300 && Math.abs(diffX) > 30)) {
+          if (diffX < 0) {
+            img.style.transform = 'translateX(-120%) scale(0.9)';
+            setTimeout(() => {
+              triggerLightboxNext();
+              const updatedImg = document.getElementById('lightbox-img');
+              if (updatedImg) {
+                updatedImg.style.transition = 'none';
+                updatedImg.style.transform = 'translateX(120%) scale(0.9)';
+                updatedImg.offsetHeight;
+                updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                updatedImg.style.transform = 'translateX(0) scale(1)';
+              }
+            }, 180);
+          } else {
+            img.style.transform = 'translateX(120%) scale(0.9)';
+            setTimeout(() => {
+              triggerLightboxPrev();
+              const updatedImg = document.getElementById('lightbox-img');
+              if (updatedImg) {
+                updatedImg.style.transition = 'none';
+                updatedImg.style.transform = 'translateX(-120%) scale(0.9)';
+                updatedImg.offsetHeight;
+                updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                updatedImg.style.transform = 'translateX(0) scale(1)';
+              }
+            }, 180);
+          }
+        } else {
+          img.style.transform = 'translateX(0) scale(1)';
+        }
+      }
+    } else if (activeSwipeThumb) {
+      const thumb = activeSwipeThumb;
+      activeSwipeThumb = null;
+      if (thumb.hasPointerCapture(e.pointerId)) {
+        try { thumb.releasePointerCapture(e.pointerId); } catch(err){}
+      }
+
+      const isEditor = thumb.classList.contains('preview-item');
+      const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
+      const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
+
+      let siblings = [];
+      if (isEditor) {
+        siblings = Array.from(document.querySelectorAll('#image-preview-list .preview-item'));
+      } else if (isBatch) {
+        const gIdx = Number(thumb.dataset.gidx);
+        siblings = Array.from(document.querySelectorAll(`.batch-group-card[data-gidx="${gIdx}"] .draggable-thumb`));
+      } else if (isPool) {
+        siblings = Array.from(document.querySelectorAll('#ungrouped-pool-container .draggable-thumb'));
+      }
+
+      siblings.forEach(sib => {
+        sib.style.transition = 'none';
+        sib.style.transform = 'none';
+        sib.style.outline = 'none';
+        sib.style.outlineOffset = '0';
+        sib.style.boxShadow = 'none';
+      });
+
+      let isContainerMoved = false;
+      if (!isEditor && isMoveTriggered) {
+        thumb.style.pointerEvents = 'none';
+        const droppedEl = document.elementFromPoint(e.clientX, e.clientY);
+        thumb.style.pointerEvents = '';
+
+        const targetCard = droppedEl ? droppedEl.closest('.batch-group-card') : null;
+        const targetPool = droppedEl ? droppedEl.closest('#ungrouped-pool-container') : null;
+
+        document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
+        const poolContainer = document.getElementById('ungrouped-pool-container');
+        if (poolContainer) poolContainer.classList.remove('drag-over');
+
+        if (targetCard) {
+          const targetGIdx = Number(targetCard.dataset.gidx);
+          if (!isNaN(targetGIdx) && state.batchGroups[targetGIdx]) {
+            if (isPool) {
+              const idx = Number(thumb.dataset.idx);
+              if (!isNaN(idx) && state.ungroupedImages[idx]) {
+                const [movedItem] = state.ungroupedImages.splice(idx, 1);
+                state.batchGroups[targetGIdx].push(movedItem);
+                isContainerMoved = true;
+              }
+            } else if (isBatch) {
+              const srcGIdx = Number(thumb.dataset.gidx);
+              const srcIIdx = Number(thumb.dataset.iidx);
+              if (srcGIdx !== targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx] && state.batchGroups[srcGIdx][srcIIdx]) {
+                const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
+                state.batchGroups[targetGIdx].push(movedItem);
+                if (state.batchGroups[srcGIdx].length === 0) {
+                  state.batchGroups.splice(srcGIdx, 1);
+                }
+                isContainerMoved = true;
+              }
+            }
+          }
+        } else if (targetPool && isBatch) {
+          const srcGIdx = Number(thumb.dataset.gidx);
+          const srcIIdx = Number(thumb.dataset.iidx);
+          if (!isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx] && state.batchGroups[srcGIdx][srcIIdx]) {
+            const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
+            state.ungroupedImages.push(movedItem);
+            if (state.batchGroups[srcGIdx].length === 0) {
+              state.batchGroups.splice(srcGIdx, 1);
+            }
+            isContainerMoved = true;
+          }
+        }
+      }
+
+      if (isContainerMoved) {
         renderBatchGroupsUI();
         await syncBatchStateToDB();
+        return;
       }
-      return;
-    }
 
+      thumb.style.transition = 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.15)';
+
+      if (!isMoveTriggered && Math.abs(diffX) < 15 && Math.abs(diffY) < 15 && duration < 350) {
+        thumb.style.transform = 'none';
+        thumb.style.zIndex = '';
+        thumb.style.boxShadow = 'none';
+
+        const imgEl = thumb.querySelector('img');
+        if (imgEl) {
+          const contextType = imgEl.dataset.contextType;
+          let ctxData = null;
+          if (contextType === 'editor-preview') {
+            ctxData = { type: 'editor-preview', idx: Number(imgEl.dataset.idx) };
+          } else if (contextType === 'batch-group') {
+            ctxData = { type: 'batch-group', gidx: Number(imgEl.dataset.gidx), iidx: Number(imgEl.dataset.iidx) };
+          } else if (contextType === 'pool') {
+            ctxData = { type: 'pool', poolIdx: Number(imgEl.dataset.poolIdx) };
+          }
+          openLightbox(imgEl.src, ctxData);
+        }
+        return;
+      }
+
+      if (isMoveTriggered && targetIdx !== -1) {
+        if (isEditor) {
+          const imgEl = thumb.querySelector('img');
+          if (imgEl && imgEl.dataset.idx !== undefined) {
+            const idx = Number(imgEl.dataset.idx);
+            if (!isNaN(idx) && targetIdx !== idx) {
+              const [movedItem] = state.uploadedImages.splice(idx, 1);
+              state.uploadedImages.splice(targetIdx, 0, movedItem);
+              state.activeThumbnailIndex = 0;
+              renderImagePreviewList();
+              return;
+            }
+          }
+        } else if (isBatch) {
+          const gIdx = Number(thumb.dataset.gidx);
+          const iIdx = Number(thumb.dataset.iidx);
+          if (!isNaN(gIdx) && !isNaN(iIdx) && state.batchGroups[gIdx]) {
+            const group = state.batchGroups[gIdx];
+            if (targetIdx !== iIdx) {
+              const [movedItem] = group.splice(iIdx, 1);
+              group.splice(targetIdx, 0, movedItem);
+              renderBatchGroupsUI();
+              await syncBatchStateToDB();
+              return;
+            }
+          }
+        } else if (isPool) {
+          const idx = Number(thumb.dataset.idx);
+          if (!isNaN(idx) && targetIdx !== idx) {
+            const [movedItem] = state.ungroupedImages.splice(idx, 1);
+            state.ungroupedImages.splice(targetIdx, 0, movedItem);
+            renderBatchGroupsUI();
+            await syncBatchStateToDB();
+            return;
+          }
+        }
+      }
+
+      thumb.style.transform = 'none';
+      thumb.style.zIndex = '';
+      thumb.style.boxShadow = 'none';
+    }
+  });
+
+  // --------------------------------------------------
+  // 🖱️ グローバルクリックイベント委譲
+  // --------------------------------------------------
+  document.addEventListener('click', async (e) => {
     if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
       e.stopPropagation();
       e.preventDefault();
@@ -442,19 +859,13 @@ function initApp() {
         alert('APIキーを入力してください。');
         return;
       }
-
       saveApiKey(apiKey);
-
       const msgEl = document.getElementById('api-key-msg');
       if (msgEl) {
         msgEl.style.display = 'block';
-        setTimeout(() => {
-          msgEl.style.display = 'none';
-        }, 3000);
+        setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
       }
-
       await updateModelDropdown(true);
-
       if (state.isGoogleLoggedIn) {
         await syncAllData(true);
       }
@@ -507,6 +918,48 @@ function initApp() {
         if (confirm('本当に実行しますか？この操作によりクラウド・ローカル双方の全ての酒ログと写真が永久に消滅します。')) {
           await destroyAllSellaData();
         }
+      }
+      return;
+    }
+
+    // ✕ ボタン操作 (カード上の✕)
+    const batchRemoveImgBtn = e.target.closest('.btn-batch-remove-img');
+    if (batchRemoveImgBtn) {
+      e.stopPropagation();
+      const gIdx = Number(batchRemoveImgBtn.dataset.gidx);
+      const iIdx = Number(batchRemoveImgBtn.dataset.iidx);
+      if (state.batchGroups[gIdx]) {
+        const detached = state.batchGroups[gIdx].splice(iIdx, 1)[0];
+        if (detached) {
+          state.ungroupedImages.push(detached);
+        }
+        if (state.batchGroups[gIdx].length === 0) {
+          state.batchGroups.splice(gIdx, 1);
+        }
+        renderBatchGroupsUI();
+        await syncBatchStateToDB();
+      }
+      return;
+    }
+
+    // ✕ ボタン操作 (未所属プール上の✕)
+    const ungroupedRemoveBtn = e.target.closest('.btn-ungrouped-remove');
+    if (ungroupedRemoveBtn) {
+      e.stopPropagation();
+      const idx = Number(ungroupedRemoveBtn.dataset.idx);
+      state.ungroupedImages.splice(idx, 1);
+      renderBatchGroupsUI();
+      await syncBatchStateToDB();
+      return;
+    }
+
+    // ✨ 未所属プールからグループ作成
+    if (e.target && e.target.id === 'btn-create-group-from-ungrouped') {
+      if (state.ungroupedImages.length > 0) {
+        state.batchGroups.push([...state.ungroupedImages]);
+        state.ungroupedImages = [];
+        renderBatchGroupsUI();
+        await syncBatchStateToDB();
       }
       return;
     }
@@ -690,10 +1143,10 @@ function initApp() {
           if (rawDate) {
             const dateObj = (rawDate instanceof Date) ? rawDate : new Date(rawDate);
             if (!isNaN(dateObj.getTime())) {
-              const year = dateObj.getFullYear();
-              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-              const day = String(dateObj.getDate()).padStart(2, '0');
-              mainDate = `${year}-${month}-${day}`;
+              const y = dateObj.getFullYear();
+              const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const d = String(dateObj.getDate()).padStart(2, '0');
+              mainDate = `${y}-${m}-${d}`;
             }
           }
 
@@ -1053,26 +1506,6 @@ function initApp() {
         navigateTo(state.currentViewName);
       }
       return;
-    }
-  });
-
-  document.addEventListener('input', async (e) => {
-    if (TRACKED_FIELDS.includes(e.target.id)) {
-      updateFieldRevertUI();
-    }
-    if (e.target.classList.contains('batch-name-input')) {
-      const gIdx = Number(e.target.dataset.gidx);
-      if (state.batchGroups[gIdx]) {
-        state.batchGroups[gIdx].name = e.target.value;
-        await syncBatchStateToDB();
-      }
-    }
-    if (e.target.classList.contains('batch-brewery-input')) {
-      const gIdx = Number(e.target.dataset.gidx);
-      if (state.batchGroups[gIdx]) {
-        state.batchGroups[gIdx].brewery = e.target.value;
-        await syncBatchStateToDB();
-      }
     }
   });
 }
