@@ -1,3 +1,4 @@
+import { formatDateToLocalYYYYMMDD } from './utils/image.js';
 // src/main.js
 import { populateModelDropdown, hasApiKey, analyzeLabelImage, setSavedModel, saveApiKey } from './services/gemini.js';
 import { renderSettingsView } from './views/settings.js';
@@ -256,14 +257,17 @@ export async function loadBatchStateFromDB() {
       const group = [];
 
       for (let i = 0; i < gLog.imageUrls.length; i++) {
-        const previewUrl = gLog.imageUrls[i];
         const blob = groupImages[i];
         const meta = metaList[i] || {};
+        let previewUrl = gLog.imageUrls[i];
+        if (blob instanceof Blob) {
+          previewUrl = URL.createObjectURL(blob);
+        }
         group.push({
           blob,
           base64: meta.base64 || '',
           mimeType: meta.mimeType || 'image/jpeg',
-          previewUrl,
+          previewUrl: previewUrl || (meta.base64 ? `data:${meta.mimeType || 'image/jpeg'};base64,${meta.base64}` : ''),
           date: meta.date ? new Date(meta.date) : null
         });
       }
@@ -519,41 +523,6 @@ function initApp() {
       return;
     }
 
-    // 一括インポート：カードサムネイル右上の「✕」ボタンで未分類プールへ戻す/外す
-    const batchRemoveBtn = e.target.closest('.btn-batch-remove-img');
-    if (batchRemoveBtn && !e.target.closest('.lightbox-overlay')) {
-      e.stopPropagation();
-      e.preventDefault();
-      const gIdx = Number(batchRemoveBtn.dataset.gidx);
-      const iIdx = Number(batchRemoveBtn.dataset.iidx);
-      if (!isNaN(gIdx) && !isNaN(iIdx) && state.batchGroups[gIdx]) {
-        const detached = state.batchGroups[gIdx].splice(iIdx, 1)[0];
-        if (detached) {
-          state.ungroupedImages.push(detached);
-        }
-        if (state.batchGroups[gIdx].length === 0) {
-          state.batchGroups.splice(gIdx, 1);
-        }
-        renderBatchGroupsUI();
-        await syncBatchStateToDB();
-      }
-      return;
-    }
-
-    // 一括インポート：未分類プールサムネイル右上の「✕」ボタンで削除
-    const ungroupedRemoveBtn = e.target.closest('.btn-ungrouped-remove');
-    if (ungroupedRemoveBtn && !e.target.closest('.lightbox-overlay')) {
-      e.stopPropagation();
-      e.preventDefault();
-      const idx = Number(ungroupedRemoveBtn.dataset.idx);
-      if (!isNaN(idx) && state.ungroupedImages[idx]) {
-        state.ungroupedImages.splice(idx, 1);
-        renderBatchGroupsUI();
-        await syncBatchStateToDB();
-      }
-      return;
-    }
-
     // ライトボックス
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]') || (e.target.tagName === 'IMG' && !e.target.closest('button, nav, header, aside, .lightbox-overlay, #sidebar') && (e.target.closest('#app') || e.target.closest('#detail-modal-overlay')) ? e.target : null);
     if (enlargeTarget) {
@@ -731,10 +700,7 @@ function initApp() {
           let mainDate = '';
           const rawDate = group[0]?.date;
           if (rawDate) {
-            const dateObj = (rawDate instanceof Date) ? rawDate : new Date(rawDate);
-            if (!isNaN(dateObj.getTime())) {
-              mainDate = dateObj.toISOString().split('T')[0];
-            }
+            mainDate = formatDateToLocalYYYYMMDD(rawDate);
           }
 
           const logData = {
@@ -775,6 +741,40 @@ function initApp() {
     }
 
     // 一括AI解析実行
+    // 🌟 一括インポート画面上の写真削除（✕）ボタンタップ処理
+    const batchRemoveBtn = e.target.closest('.btn-batch-remove-img');
+    if (batchRemoveBtn) {
+      e.stopPropagation();
+      e.preventDefault();
+      const gIdx = Number(batchRemoveBtn.dataset.gidx);
+      const iIdx = Number(batchRemoveBtn.dataset.iidx);
+      if (!isNaN(gIdx) && !isNaN(iIdx) && state.batchGroups[gIdx]) {
+        const detached = state.batchGroups[gIdx].splice(iIdx, 1)[0];
+        if (detached) {
+          state.ungroupedImages.push(detached);
+        }
+        if (state.batchGroups[gIdx].length === 0) {
+          state.batchGroups.splice(gIdx, 1);
+        }
+        renderBatchGroupsUI();
+        await syncBatchStateToDB();
+      }
+      return;
+    }
+
+    const ungroupedRemoveBtn = e.target.closest('.btn-ungrouped-remove');
+    if (ungroupedRemoveBtn) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = Number(ungroupedRemoveBtn.dataset.idx);
+      if (!isNaN(idx) && state.ungroupedImages[idx]) {
+        state.ungroupedImages.splice(idx, 1);
+        renderBatchGroupsUI();
+        await syncBatchStateToDB();
+      }
+      return;
+    }
+
     const batchAnalyzeBtn = e.target.closest('.btn-batch-analyze');
     if (batchAnalyzeBtn) {
       e.stopPropagation();
