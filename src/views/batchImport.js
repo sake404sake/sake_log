@@ -57,7 +57,7 @@ export function renderBatchGroupsUI() {
         ${state.ungroupedImages.map((item, idx) => {
           let src = item.previewUrl;
           if (!src && item.blob) {
-            try { src = URL.createObjectURL(item.blob); item.previewUrl = src; } catch (e) {}
+            try { src = URL.createObjectURL(item.blob); item.previewUrl = src; } catch(e){}
           }
           if (!src && item.base64) {
             src = `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
@@ -65,9 +65,8 @@ export function renderBatchGroupsUI() {
           return `
             <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
                  style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
-              <img src="${src || ''}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="this.onerror=null; this.style.display='none';" />
-              <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-                      style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+              <img src="${src || ''}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+              <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除">✕</button>
             </div>
           `;
         }).join('')}
@@ -75,13 +74,13 @@ export function renderBatchGroupsUI() {
     `;
 
     ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 12px; right: 12px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px); box-sizing: border-box;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px; flex-shrink: 0;">${state.isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
-            <span style="font-weight: bold; color: var(--text-main); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📂 未所属の画像プール (${state.ungroupedImages.length}枚)</span>
+      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 80px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px;">${state.isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
+            <span style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">📂 未所属の画像プール (${state.ungroupedImages.length}枚)</span>
           </div>
-          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px; flex-shrink: 0;">✨ これらからグループを作成</button>
+          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">✨ これらからグループを作成</button>
         </div>
         ${thumbs}
       </div>
@@ -92,18 +91,12 @@ export function renderBatchGroupsUI() {
 
   const groupsHTML = state.batchGroups.map((group, gIdx) => {
     const mainImg = group[0];
-    let dateStr = '日時不明';
-    if (mainImg && mainImg.date) {
-      const d = (mainImg.date instanceof Date) ? mainImg.date : new Date(mainImg.date);
-      if (!isNaN(d.getTime())) {
-        dateStr = d.toLocaleString();
-      }
-    }
+    const dateStr = mainImg && mainImg.date ? new Date(mainImg.date).toLocaleString() : '日時不明';
 
     const thumbsHTML = group.map((item, iIdx) => {
       let src = item.previewUrl;
       if (!src && item.blob) {
-        try { src = URL.createObjectURL(item.blob); item.previewUrl = src; } catch (e) {}
+        try { src = URL.createObjectURL(item.blob); item.previewUrl = src; } catch(e){}
       }
       if (!src && item.base64) {
         src = `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
@@ -111,10 +104,9 @@ export function renderBatchGroupsUI() {
       return `
         <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
              style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
-          <img src="${src || ''}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="this.onerror=null; this.style.display='none';" />
+          <img src="${src || ''}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
           ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
-          <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-                  style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+          <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す">✕</button>
         </div>
       `;
     }).join('');
@@ -128,7 +120,7 @@ export function renderBatchGroupsUI() {
               <span style="font-size: 0.75rem; color: var(--text-sub);">(${group.length}枚)</span>
             </div>
             <div style="font-size: 0.75rem; color: var(--text-sub); display: flex; align-items: center; gap: 4px; margin-top: 2px;">
-              <span>📅 撮影日時:</span>
+              <span>📅 撮影日時(目安):</span>
               <span style="color: var(--text-main); font-weight: 500;">${dateStr}</span>
             </div>
           </div>
@@ -169,9 +161,6 @@ export function renderBatchGroupsUI() {
   `;
 }
 
-/**
- * 🌟【完全修復版】一括画像投入・自動グルーピング処理
- */
 export async function processFilesForBatch(files, append = true) {
   if (!files || files.length === 0) return;
 
@@ -189,8 +178,7 @@ export async function processFilesForBatch(files, append = true) {
   const failedFiles = [];
 
   for (const file of files) {
-    const isImage = (file.type && file.type.startsWith('image/')) ||
-                    /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
+    const isImage = file.type.startsWith('image/') || /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name);
     if (!isImage) continue;
 
     try {
@@ -207,10 +195,10 @@ export async function processFilesForBatch(files, append = true) {
       items.push({
         file,
         date,
-        blob: compressed.blob || file,
-        base64: compressed.base64 || '',
-        mimeType: compressed.mimeType || file.type || 'image/jpeg',
-        previewUrl: compressed.blob ? URL.createObjectURL(compressed.blob) : URL.createObjectURL(file)
+        blob: compressed.blob,
+        base64: compressed.base64,
+        mimeType: compressed.mimeType,
+        previewUrl: URL.createObjectURL(compressed.blob)
       });
     } catch (e) {
       console.error(`ファイル ${file.name} の処理に失敗しました:`, e);
@@ -233,11 +221,11 @@ export async function processFilesForBatch(files, append = true) {
       }
 
       if (failedFiles.length > 0) {
-        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。：\n\n・ ` + failedFiles.join('\n・ '));
+        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました：\n\n・ ` + failedFiles.join('\n・ '));
       }
     } else {
       if (failedFiles.length > 0) {
-        alert(`画像の読み込みに失敗しました：\n\n・ ` + failedFiles.join('\n・ '));
+        alert(`画像の読み込みに失敗しました。：\n\n・ ` + failedFiles.join('\n・ '));
       } else {
         alert('有効な画像ファイルが見つかりませんでした。');
       }
