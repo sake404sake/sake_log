@@ -361,6 +361,15 @@ a:hover {
 
   .drawer-close-left {
     margin-left: auto;
+    align-self: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    display: grid;
+    place-items: center;
+    font-size: 1.7rem;
   }
 
   .right-panel {
@@ -368,17 +377,70 @@ a:hover {
     top: 0;
     right: 0;
     bottom: 0;
-    display: flex;
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
     width: min(86vw, 340px);
     height: 100vh;
     height: 100dvh;
     min-height: 0;
-    padding: 16px;
+    padding: 12px;
+    box-sizing: border-box;
     overflow-y: auto;
     background-color: var(--panel-bg);
     border-left: 1px solid var(--border-color);
     transform: translateX(100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .right-panel .widget-card {
+    flex: 0 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+  }
+
+  .right-panel .widget-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: var(--accent-color);
+    font-size: 0.9rem;
+  }
+
+  .right-panel .widget-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  .right-panel .ai-chat-body {
+    min-height: 120px;
+    box-sizing: border-box;
+    padding: 12px;
+    margin-bottom: 8px;
+    background-color: var(--bg-color);
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+
+  .drawer-close-right {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    display: grid;
+    place-items: center;
+    font-size: 1.7rem;
+  }
+
+  .right-panel .plugin-btn {
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .right-panel.open {
