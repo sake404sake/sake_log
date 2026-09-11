@@ -2,6 +2,24 @@
 import { state } from '../store/state.js';
 import { compressImage, groupImagesByTime, extractPhotoDateObject, formatDateToLocalYYYYMMDD } from '../utils/image.js';
 
+/**
+ * 🌟 画像アイテムから安全にサムネイル表示用URLを取得する（失効・無効時動的再生成＆Base64フォールバック）
+ */
+function getSafeThumbUrl(item) {
+  if (!item) return '';
+  if (item.previewUrl) return item.previewUrl;
+  if (item.blob instanceof Blob) {
+    try {
+      item.previewUrl = URL.createObjectURL(item.blob);
+      return item.previewUrl;
+    } catch (e) {}
+  }
+  if (item.base64) {
+    return `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+  }
+  return '';
+}
+
 export function renderBatchImportView() {
   return `
     <div class="batch-import-container">
@@ -30,20 +48,6 @@ export function renderBatchImportView() {
   `;
 }
 
-function getSafeThumbSrc(item) {
-  if (item.previewUrl) return item.previewUrl;
-  if (item.blob instanceof Blob) {
-    try {
-      item.previewUrl = URL.createObjectURL(item.blob);
-      return item.previewUrl;
-    } catch (e) {}
-  }
-  if (item.base64) {
-    return `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
-  }
-  return '';
-}
-
 export function renderBatchGroupsUI() {
   const previewSection = document.getElementById('batch-preview-section');
   if (!previewSection) return;
@@ -68,14 +72,20 @@ export function renderBatchGroupsUI() {
   if (state.ungroupedImages.length > 0) {
     const thumbs = state.isPoolCollapsed ? '' : `
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
-        ${state.ungroupedImages.map((item, idx) => `
-          <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
-               style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
-            <img src="${getSafeThumbSrc(item)}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="if(this.dataset.triedBase64 !== 'true' && '${item.base64 || ''}') { this.dataset.triedBase64='true'; this.src='data:${item.mimeType || 'image/jpeg'};base64,${item.base64 || ''}'; } else { this.onerror=null; this.style.display='none'; }" />
-            <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
-          </div>
-        `).join('')}
+        ${state.ungroupedImages.map((item, idx) => {
+          const src = getSafeThumbUrl(item);
+          const fallbackBase64 = item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '';
+          return `
+            <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
+                 style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
+              <img src="${src}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" 
+                   style="width:100%; height:100%; object-fit:cover; cursor:pointer;"
+                   onerror="if(this.src!=='${fallbackBase64}' && '${fallbackBase64}'){this.src='${fallbackBase64}';}" />
+              <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
+                      style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+            </div>
+          `;
+        }).join('')}
       </div>
     `;
 
@@ -97,17 +107,29 @@ export function renderBatchGroupsUI() {
 
   const groupsHTML = state.batchGroups.map((group, gIdx) => {
     const mainImg = group[0];
-    const dateStr = mainImg && mainImg.date ? formatDateToLocalYYYYMMDD(mainImg.date) : '日時不明';
+    let dateStr = '日時不明';
+    if (mainImg && mainImg.date) {
+      const d = (mainImg.date instanceof Date) ? mainImg.date : new Date(mainImg.date);
+      if (!isNaN(d.getTime())) {
+        dateStr = formatDateToLocalYYYYMMDD(d);
+      }
+    }
 
-    const thumbsHTML = group.map((item, iIdx) => `
-      <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
-           style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
-        <img src="${getSafeThumbSrc(item)}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" onerror="if(this.dataset.triedBase64 !== 'true' && '${item.base64 || ''}') { this.dataset.triedBase64='true'; this.src='data:${item.mimeType || 'image/jpeg'};base64,${item.base64 || ''}'; } else { this.onerror=null; this.style.display='none'; }" />
-        ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
-        <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
-      </div>
-    `).join('');
+    const thumbsHTML = group.map((item, iIdx) => {
+      const src = getSafeThumbUrl(item);
+      const fallbackBase64 = item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '';
+      return `
+        <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
+             style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
+          <img src="${src}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" 
+               style="width:100%; height:100%; object-fit:cover; cursor:pointer;"
+               onerror="if(this.src!=='${fallbackBase64}' && '${fallbackBase64}'){this.src='${fallbackBase64}';}" />
+          ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
+          <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
+                  style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
+        </div>
+      `;
+    }).join('');
 
     return `
       <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box;" data-gidx="${gIdx}">
@@ -189,7 +211,7 @@ export async function processFilesForBatch(files, append = true) {
     return;
   }
 
-  // 🌟 Promise.all により全画像を並列超高速処理
+  // 🌟 Promise.all により全画像を並列超高速処理（ハング防止タイムアウト・フォールバック適用）
   const processPromises = imageFiles.map(async (file) => {
     try {
       const [compressed, date] = await Promise.all([
@@ -198,10 +220,7 @@ export async function processFilesForBatch(files, append = true) {
       ]);
 
       const blob = compressed.blob || file;
-      let previewUrl = '';
-      try { previewUrl = URL.createObjectURL(blob); } catch (e) {
-        try { previewUrl = URL.createObjectURL(file); } catch (e2) {}
-      }
+      const previewUrl = URL.createObjectURL(blob);
 
       return {
         file,
@@ -214,16 +233,7 @@ export async function processFilesForBatch(files, append = true) {
     } catch (e) {
       console.error(`ファイル ${file.name} の処理に失敗しました:`, e);
       failedFiles.push(file.name);
-      let previewUrl = '';
-      try { previewUrl = URL.createObjectURL(file); } catch (e2) {}
-      return {
-        file,
-        date: file.lastModified ? new Date(file.lastModified) : null,
-        blob: file,
-        base64: '',
-        mimeType: file.type || 'image/jpeg',
-        previewUrl
-      };
+      return null;
     }
   });
 
