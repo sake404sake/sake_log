@@ -41,7 +41,6 @@ export function extractPhotoDate(file) {
     }
 
     const reader = new FileReader();
-    // 🌟 128KB -> 512KB (524288 bytes) へ拡張し、大きなAPP1ヘッダーでも読み切れを防ぐ
     const slice = file.slice(0, 524288);
     reader.readAsArrayBuffer(slice);
 
@@ -138,7 +137,6 @@ export function extractPhotoDate(file) {
         }
         const dateStr = String.fromCharCode(...dateCharCodes);
 
-        // 正規表現で "YYYY:MM:DD" または "YYYY-MM-DD" を正確に抽出
         const match = dateStr.match(/(\d{4})[:\/\.-](\d{2})[:\/\.-](\d{2})/);
         if (match) {
           resolve(`${match[1]}-${match[2]}-${match[3]}`);
@@ -155,82 +153,161 @@ export function extractPhotoDate(file) {
 }
 
 /**
- * 撮影日時の Date オブジェクトを抽出する非同期関数 (一括インポート用)
+ * 撮影日時の Date オブジェクトを抽出する非同期関数 (一括インポート用・タイムアウト保護付き)
  */
 export function extractPhotoDateObject(file) {
   return new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = (val) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(val);
+      }
+    };
+
+    // 🌟 3秒タイムアウト保護
+    const timer = setTimeout(() => {
+      if (file && file.lastModified) {
+        safeResolve(new Date(file.lastModified));
+      } else {
+        safeResolve(null);
+      }
+    }, 3000);
+
     extractPhotoDate(file).then(dateStr => {
+      clearTimeout(timer);
       if (dateStr) {
         const parts = dateStr.split('-');
         if (parts.length === 3) {
           const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
           if (!isNaN(d.getTime())) {
-            resolve(d);
+            safeResolve(d);
             return;
           }
         }
       }
-      if (file.lastModified) {
-        resolve(new Date(file.lastModified));
+      if (file && file.lastModified) {
+        safeResolve(new Date(file.lastModified));
       } else {
-        resolve(null);
+        safeResolve(null);
       }
     }).catch(() => {
-      if (file.lastModified) {
-        resolve(new Date(file.lastModified));
+      clearTimeout(timer);
+      if (file && file.lastModified) {
+        safeResolve(new Date(file.lastModified));
       } else {
-        resolve(null);
+        safeResolve(null);
       }
     });
   });
 }
 
 /**
- * 銘柄の文字が読める解像度を保ちつつ軽量化圧縮
+ * 銘柄の文字が読める解像度を保ちつつ軽量化圧縮 (完全ハング防止・タイムアウト＆フォールバック保護付き)
  */
 export function compressImage(file, maxWidth = 1600, quality = 0.75) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (e) => {
-      const img = new Image();
-      img.src = e.target.result;
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxWidth || height > maxWidth) {
-          if (width > height) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          } else {
-            width = Math.round((width * maxWidth) / height);
-            height = maxWidth;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-            resolve({
-              blob,
-              base64: compressedBase64.split(',')[1],
-              mimeType: 'image/jpeg'
-            });
-          },
-          'image/jpeg',
-          quality
-        );
-      };
-      img.onerror = (err) => reject(err);
+  return new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = (result) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(result);
+      }
     };
-    reader.onerror = (err) => reject(err);
+
+    // 原画ファイルのままフォールバック返却するヘルパー
+    const fallbackToFile = () => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result || '';
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
+        safeResolve({
+          blob: file,
+          base64: base64,
+          mimeType: file.type || 'image/jpeg'
+        });
+      };
+      reader.onerror = () => {
+        safeResolve({
+          blob: file,
+          base64: '',
+          mimeType: file.type || 'image/jpeg'
+        });
+      };
+      reader.readAsDataURL(file);
+    };
+
+    // 🌟 5秒タイムアウト保護 (Image.onload/onerror がハングする特殊画像・HEIC対策)
+    const timer = setTimeout(() => {
+      console.warn(`[compressImage] Timeout for file: ${file.name || 'unknown'}. Falling back to raw file.`);
+      fallbackToFile();
+    }, 5000);
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target.result;
+        img.onload = () => {
+          clearTimeout(timer);
+          try {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth || height > maxWidth) {
+              if (width > height) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              } else {
+                width = Math.round((width * maxWidth) / height);
+                height = maxWidth;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+
+            // 🌟 白背景でキャンバスを塗りつぶし (JPEG変換時の黒塗りバグ防止)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  fallbackToFile();
+                  return;
+                }
+                const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                safeResolve({
+                  blob,
+                  base64: compressedBase64.includes(',') ? compressedBase64.split(',')[1] : '',
+                  mimeType: 'image/jpeg'
+                });
+              },
+              'image/jpeg',
+              quality
+            );
+          } catch (err) {
+            fallbackToFile();
+          }
+        };
+        img.onerror = () => {
+          clearTimeout(timer);
+          fallbackToFile();
+        };
+      };
+      reader.onerror = () => {
+        clearTimeout(timer);
+        fallbackToFile();
+      };
+    } catch (err) {
+      clearTimeout(timer);
+      fallbackToFile();
+    }
   });
 }
 
