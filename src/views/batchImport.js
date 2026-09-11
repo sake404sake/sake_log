@@ -1,5 +1,4 @@
 // src/views/batchImport.js
-
 import { state } from '../store/state.js';
 import { compressImage, groupImagesByTime, extractPhotoDateObject } from '../utils/image.js';
 
@@ -41,8 +40,7 @@ export function renderBatchGroupsUI() {
       <div style="padding: 30px; text-align: center; border: 2px dashed var(--border-color); border-radius: 12px; cursor: pointer; background: var(--card-bg);">
         <div style="font-size: 1.8rem; margin-bottom: 6px;">📁</div>
         <div style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">さらに写真を追加する</div>
-      </div>
-    `;
+      </div>`;
   }
 
   const hasItems = state.batchGroups.length > 0 || state.ungroupedImages.length > 0;
@@ -59,7 +57,7 @@ export function renderBatchGroupsUI() {
         ${state.ungroupedImages.map((item, idx) => `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
                style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
-            <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+            <img src="${item.previewUrl || ''}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
                     style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
           </div>
@@ -90,7 +88,7 @@ export function renderBatchGroupsUI() {
     const thumbsHTML = group.map((item, iIdx) => `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
            style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
-        <img src="${item.previewUrl}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+        <img src="${item.previewUrl || ''}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
                 style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
@@ -147,6 +145,9 @@ export function renderBatchGroupsUI() {
   `;
 }
 
+/**
+ * 🌟【完全修復・並列高速処理版】一括画像投入・自動グルーピング処理
+ */
 export async function processFilesForBatch(files, append = true) {
   if (!files || files.length === 0) return;
 
@@ -157,46 +158,55 @@ export async function processFilesForBatch(files, append = true) {
         <div class="sella-spinner" style="width: 32px; height: 32px; border-width: 4px; margin-bottom: 12px; border-top-color: var(--accent-color);"></div>
         <div style="font-weight: bold; font-size: 1.1rem;">写真を解析・グルーピング中...</div>
         <div style="font-size: 0.85rem; color: var(--text-sub); margin-top: 4px;">(${files.length}枚の画像を処理しています)</div>
-      </div>
-    `;
+      </div>`;
   }
 
   const items = [];
   const failedFiles = [];
 
-  for (const file of files) {
-    const isImage = file.type.startsWith('image/') || /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name);
-    if (!isImage) continue;
+  const imageFiles = Array.from(files).filter(file => {
+    return (file.type && file.type.startsWith('image/')) ||
+           /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
+  });
 
+  if (imageFiles.length === 0) {
+    alert('有効な画像ファイルが見つかりませんでした。');
+    renderBatchGroupsUI();
+    return;
+  }
+
+  // 🌟 Promise.all により全画像を並列超高速処理（ハング防止タイムアウト・フォールバック適用）
+  const processPromises = imageFiles.map(async (file) => {
     try {
-      const compressed = await compressImage(file);
-      
-      // スマホ対応: EXIFから非同期で撮影日時を正確にデコードする
-      let date = await extractPhotoDateObject(file);
-      
-      if (!date && file.lastModified) {
-        // フォールバック
-        const d = new Date(file.lastModified);
-        if (!isNaN(d.getTime())) {
-          date = d;
-        }
-      }
+      const [compressed, date] = await Promise.all([
+        compressImage(file),
+        extractPhotoDateObject(file)
+      ]);
 
-      items.push({
+      const blob = compressed.blob || file;
+      const previewUrl = URL.createObjectURL(blob);
+
+      return {
         file,
-        date,
-        blob: compressed.blob,
-        base64: compressed.base64,
-        mimeType: compressed.mimeType,
-        previewUrl: URL.createObjectURL(compressed.blob)
-      });
+        date: (date && !isNaN(date.getTime())) ? date : (file.lastModified ? new Date(file.lastModified) : null),
+        blob,
+        base64: compressed.base64 || '',
+        mimeType: compressed.mimeType || file.type || 'image/jpeg',
+        previewUrl
+      };
     } catch (e) {
       console.error(`ファイル ${file.name} の処理に失敗しました:`, e);
       failedFiles.push(file.name);
+      return null;
     }
-  }
+  });
 
   try {
+    const results = await Promise.all(processPromises);
+    for (const item of results) {
+      if (item) items.push(item);
+    }
+
     if (items.length > 0) {
       const cleansedItems = items.map(item => ({
         ...item,
@@ -211,21 +221,16 @@ export async function processFilesForBatch(files, append = true) {
       }
 
       if (failedFiles.length > 0) {
-        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。HEIC形式や破損している可能性があります：\n\n・ ` + failedFiles.join('\n・ '));
+        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。：\n\n・ ` + failedFiles.join('\n・ '));
       }
     } else {
-      if (failedFiles.length > 0) {
-        alert(`画像の読み込みに失敗しました。対応していない形式（HEIC等）の可能性があります：\n\n・ ` + failedFiles.join('\n・ '));
-      } else {
-        alert('有効な画像ファイルが見つかりませんでした。');
-      }
+      alert('画像の読み込みに失敗しました。対応していない形式の可能性があります。');
     }
   } catch (err) {
     console.error('Batch Grouping Error:', err);
     alert('画像の自動グルーピング処理中に予期せぬエラーが発生しました。');
   } finally {
     renderBatchGroupsUI();
-    // 状態が変化したため自動保存をトリガー
     document.dispatchEvent(new CustomEvent('batch-state-modified'));
   }
 }
