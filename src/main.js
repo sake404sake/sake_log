@@ -549,8 +549,9 @@ function initApp() {
     }
   });
 
-  document.addEventListener('batch-state-modified', async () => {
+  document.addEventListener('batch-state-modified', async (e) => {
     await syncBatchStateToDB();
+    e.detail?.resolve?.();
   });
 
   let logSearchRenderTimer = null;

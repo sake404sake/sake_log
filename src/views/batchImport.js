@@ -278,6 +278,11 @@ export async function processFilesForBatch(files, append = true) {
 
       renderBatchGroupsUI();
 
+      // 圧縮完了前でもリロードから復元できるよう、元画像をローカルへ先に退避する。
+      await new Promise(resolve => {
+        document.dispatchEvent(new CustomEvent('batch-state-modified', { detail: { resolve } }));
+      });
+
       const compressibleItems = newGroups.flat();
       let compressedCount = 0;
       let nextCompressIndex = 0;
