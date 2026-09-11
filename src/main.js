@@ -9,6 +9,7 @@ import { renderBatchImportView, renderBatchGroupsUI, processFilesForBatch } from
 import { openLightbox, closeLightbox, triggerLightboxNext, triggerLightboxPrev } from './views/lightbox.js';
 import { state, base64ToBlob, blobToBase64 } from './store/state.js';
 import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth } from './services/googleDrive.js';
+import { formatDateToLocalYYYYMMDD } from './utils/image.js';
 
 function ensureSpinnerStyles() {
   if (document.getElementById('sella-spinner-style')) return;
@@ -20,25 +21,6 @@ function ensureSpinnerStyles() {
     .draggable-thumb, .preview-item { cursor: grab; transition: transform 0.15s, opacity 0.15s; touch-action: none; box-sizing: border-box; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; overflow: visible !important; }
     .draggable-thumb:active, .preview-item:active { cursor: grabbing; }
     .batch-group-card.drag-over, #ungrouped-pool-container.drag-over { border-color: var(--accent-color) !important; background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important; }
-    
-    .btn-img-del, .btn-batch-remove-img, .btn-ungrouped-remove {
-      position: absolute !important;
-      top: 2px !important;
-      right: 2px !important;
-      background: rgba(0, 0, 0, 0.7) !important;
-      color: #fff !important;
-      border: none !important;
-      border-radius: 50% !important;
-      width: 22px !important;
-      height: 22px !important;
-      font-size: 12px !important;
-      cursor: pointer !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      z-index: 10 !important;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
-    }
   `;
   document.head.appendChild(style);
 }
@@ -47,7 +29,6 @@ export function setTheme(themeName) {
   const validThemes = ['dark', 'light', 'sakura', 'gaming', 'japan-modern'];
   let targetTheme = themeName;
   if (!targetTheme || !validThemes.includes(targetTheme)) {
-    console.warn(`無効なテーマ名 "${themeName}" が検出されたため、デフォルトの "dark" テーマに自己復旧しました。`);
     targetTheme = 'dark';
   }
   document.documentElement.setAttribute('data-theme', targetTheme);
@@ -123,14 +104,11 @@ function openSidebar() {
   sidebar?.classList.add('open');
   overlay?.classList.add('active');
 }
+
 function closeSidebar() {
   sidebar?.classList.remove('open');
   overlay?.classList.remove('active');
 }
-
-// ==========================================================================
-// ★一括登録データの IndexedDB 自動保存＆自動復旧システム
-// ==========================================================================
 
 export async function syncBatchStateToDB() {
   try {
@@ -358,17 +336,28 @@ function initApp() {
     }
   });
 
-  // --------------------------------------------------
-  // HTML5 Native Drag & Drop ハンドラー (PC用)
-  // --------------------------------------------------
+  // HTML5 Native Drag & Drop
   document.addEventListener('dragover', (e) => {
     e.preventDefault();
+
+    const fileDropTarget = e.target.closest('#batch-upload-zone, #btn-add-more-batch, #upload-zone, #btn-trigger-upload');
+    const isFileDrag = e.dataTransfer?.types?.includes('Files');
+    document.querySelectorAll('.file-drop-active').forEach(target => target.classList.remove('file-drop-active'));
+    if (fileDropTarget && isFileDrag) {
+      fileDropTarget.classList.add('file-drop-active');
+    }
+
     const card = e.target.closest('.batch-group-card');
     document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
     if (card) card.classList.add('drag-over');
   });
 
   document.addEventListener('dragleave', (e) => {
+    const fileDropTarget = e.target.closest('#batch-upload-zone, #btn-add-more-batch, #upload-zone, #btn-trigger-upload');
+    if (fileDropTarget && !fileDropTarget.contains(e.relatedTarget)) {
+      fileDropTarget.classList.remove('file-drop-active');
+    }
+
     const card = e.target.closest('.batch-group-card');
     if (card && !card.contains(e.relatedTarget)) {
       card.classList.remove('drag-over');
@@ -383,46 +372,40 @@ function initApp() {
         state.draggedItemInfo = { type: 'group', gIdx: Number(thumb.dataset.gidx), iIdx: Number(thumb.dataset.iidx) };
       } else if (sourceType === 'pool') {
         state.draggedItemInfo = { type: 'pool', idx: Number(thumb.dataset.idx) };
-      } else if (sourceType === 'editor' || thumb.classList.contains('preview-item')) {
-        state.draggedItemInfo = { type: 'editor', idx: Number(thumb.dataset.idx) };
+      } else if (thumb.classList.contains('preview-item')) {
+        const imgEl = thumb.querySelector('img');
+        const idx = imgEl ? Number(imgEl.dataset.idx) : Number(thumb.dataset.idx);
+        state.draggedItemInfo = { type: 'editor', idx };
       }
-      if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = 'move';
-        try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
-      }
+      e.dataTransfer.effectAllowed = 'move';
     }
   });
 
   document.addEventListener('drop', async (e) => {
     e.preventDefault();
+    document.querySelectorAll('.file-drop-active').forEach(target => target.classList.remove('file-drop-active'));
     document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
 
-    const batchUploadZone = e.target.closest('#batch-upload-zone');
-    if (batchUploadZone && !state.draggedItemInfo) {
-      const files = e.dataTransfer.files;
-      if (files && files.length > 0) {
-        await processFilesForBatch(files, true);
+    const droppedFiles = e.dataTransfer?.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      if (e.target.closest('#batch-upload-zone, #btn-add-more-batch')) {
+        await processFilesForBatch(droppedFiles, true);
+      } else if (e.target.closest('#upload-zone, #btn-trigger-upload')) {
+        await handleImageFiles(droppedFiles);
       }
-      return;
-    }
-
-    const singleUploadZone = e.target.closest('#upload-zone');
-    if (singleUploadZone && !state.draggedItemInfo) {
-      const files = e.dataTransfer.files;
-      if (files && files.length > 0) {
-        handleImageFiles(files);
-      }
+      state.draggedItemInfo = null;
       return;
     }
 
     if (!state.draggedItemInfo) return;
 
-    // 単体エディタ内のドラッグ＆ドロップ処理
+    // 1. 単体登録エディタ内のドロップ並び替え
     if (state.draggedItemInfo.type === 'editor') {
-      const targetThumb = e.target.closest('.preview-item');
-      if (targetThumb && !targetThumb.classList.contains('add-more-item')) {
+      const targetThumb = e.target.closest('#image-preview-list .preview-item');
+      if (targetThumb) {
+        const targetImg = targetThumb.querySelector('img');
+        const targetIdx = targetImg ? Number(targetImg.dataset.idx) : Number(targetThumb.dataset.idx);
         const srcIdx = state.draggedItemInfo.idx;
-        const targetIdx = Number(targetThumb.dataset.idx);
         if (!isNaN(srcIdx) && !isNaN(targetIdx) && srcIdx !== targetIdx && state.uploadedImages[srcIdx]) {
           const [movedItem] = state.uploadedImages.splice(srcIdx, 1);
           state.uploadedImages.splice(targetIdx, 0, movedItem);
@@ -434,10 +417,10 @@ function initApp() {
       return;
     }
 
-    // 一括インポート画面のドラッグ＆ドロップ処理
+    // 2. 一括インポート画面でのドロップ移動
     const targetGroupCard = e.target.closest('.batch-group-card');
-    const targetThumb = e.target.closest('.draggable-thumb');
     const targetPoolArea = e.target.closest('#ungrouped-pool-container');
+    const targetThumb = e.target.closest('.draggable-thumb');
 
     let movedImage = null;
 
@@ -482,259 +465,134 @@ function initApp() {
     await syncBatchStateToDB();
   });
 
-  // --------------------------------------------------
-  // PointerEvents スワイプ/タッチドラッグハンドラー (スマホ/タッチ対応)
-  // --------------------------------------------------
+  // 🌟 素直で軽量な Touch/PointerEvents スワイプ・タッチドロップ制御
   let pointerStartX = 0;
   let pointerStartY = 0;
-  let pointerStartTime = 0;
-  let isDragging = false;
-  let activeSwipeThumb = null;
-  let isMoveTriggered = false;
+  let activeThumb = null;
+  let isPointerMoving = false;
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
-    if (e.target.closest('button, input, select, textarea, .lightbox-close, .btn-img-del, .btn-batch-remove-img, .btn-ungrouped-remove')) return;
+    if (e.target.closest('button, input, select, textarea, .lightbox-close')) return;
 
-    const lightbox = document.getElementById('lightbox-modal');
-    if (lightbox && lightbox.classList.contains('active')) {
-      const img = lightbox.querySelector('#lightbox-img');
-      const closeBtn = lightbox.querySelector('.lightbox-close');
-      const ctrlBtn = e.target.closest('.lightbox-ctrl-btn, .lightbox-arrow-btn');
-
-      if (closeBtn && (e.target === closeBtn || closeBtn.contains(e.target))) return;
-      if (ctrlBtn) return;
-
+    const thumb = e.target.closest('.preview-item, .draggable-thumb');
+    if (thumb && !e.target.closest('#lightbox-modal')) {
+      activeThumb = thumb;
       pointerStartX = e.clientX;
       pointerStartY = e.clientY;
-      pointerStartTime = Date.now();
-      isDragging = true;
-      isMoveTriggered = false;
-
-      if (img) {
-        img.style.transition = 'none';
-        try { img.setPointerCapture(e.pointerId); } catch(err) {}
-      }
-    } else {
-      const thumb = e.target.closest('.preview-item, .draggable-thumb');
-      if (thumb && !thumb.classList.contains('add-more-item')) {
-        activeSwipeThumb = thumb;
-        pointerStartX = e.clientX;
-        pointerStartY = e.clientY;
-        pointerStartTime = Date.now();
-        isDragging = true;
-        isMoveTriggered = false;
-        activeSwipeThumb.style.transition = 'none';
-      }
+      isPointerMoving = false;
+      try {
+        activeThumb.setPointerCapture(e.pointerId);
+      } catch (err) {}
     }
   });
 
   document.addEventListener('pointermove', (e) => {
-    if (!isDragging) return;
+    if (!activeThumb || !activeThumb.hasPointerCapture(e.pointerId)) return;
     const diffX = e.clientX - pointerStartX;
     const diffY = e.clientY - pointerStartY;
 
-    const lightbox = document.getElementById('lightbox-modal');
-    if (lightbox && lightbox.classList.contains('active')) {
-      const img = lightbox.querySelector('#lightbox-img');
-      if (img) {
-        e.preventDefault();
-        if (Math.abs(diffX) > 8) {
-          isMoveTriggered = true;
-          img.style.transform = `translateX(${diffX}px) scale(0.98)`;
-        }
-      }
-    } else if (activeSwipeThumb) {
-      if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
-        e.preventDefault();
-        if (!isMoveTriggered) {
-          isMoveTriggered = true;
-          try { activeSwipeThumb.setPointerCapture(e.pointerId); } catch(err) {}
-        }
-
-        // 掴んだ要素を指/マウスカーソルに素直に追従させる（過敏な移動計算を廃止して軽快に）
-        activeSwipeThumb.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.05)`;
-        activeSwipeThumb.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
-        activeSwipeThumb.style.zIndex = '9999';
-
-        // ドロップ先ホバー強調
-        activeSwipeThumb.style.pointerEvents = 'none';
-        const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
-        activeSwipeThumb.style.pointerEvents = '';
-
-        document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-        const poolContainer = document.getElementById('ungrouped-pool-container');
-        if (poolContainer) poolContainer.classList.remove('drag-over');
-
-        const targetCard = hoveredEl ? hoveredEl.closest('.batch-group-card') : null;
-        const targetPool = hoveredEl ? hoveredEl.closest('#ungrouped-pool-container') : null;
-        if (targetCard) targetCard.classList.add('drag-over');
-        if (targetPool) targetPool.classList.add('drag-over');
-      }
+    if (Math.abs(diffX) > 12 || Math.abs(diffY) > 12) {
+      isPointerMoving = true;
+      activeThumb.style.transform = `translate(${diffX}px, ${diffY}px)`;
+      activeThumb.style.opacity = '0.8';
+      activeThumb.style.zIndex = '999';
     }
   });
 
   document.addEventListener('pointerup', async (e) => {
-    if (!isDragging) return;
-    isDragging = false;
+    if (!activeThumb) return;
+    const thumb = activeThumb;
+    activeThumb = null;
 
-    const diffX = e.clientX - pointerStartX;
-    const diffY = e.clientY - pointerStartY;
-    const duration = Date.now() - pointerStartTime;
-
-    const lightbox = document.getElementById('lightbox-modal');
-    if (lightbox && lightbox.classList.contains('active')) {
-      const img = lightbox.querySelector('#lightbox-img');
-      if (img) {
-        try { img.releasePointerCapture(e.pointerId); } catch(err) {}
-        img.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-
-        if (!isMoveTriggered) {
-          img.style.transform = 'translateX(0) scale(1)';
-          return;
-        }
-
-        if (Math.abs(diffX) > 55 || (duration < 300 && Math.abs(diffX) > 30)) {
-          if (diffX < 0) {
-            img.style.transform = 'translateX(-120%) scale(0.9)';
-            setTimeout(() => {
-              triggerLightboxNext();
-              const updatedImg = document.getElementById('lightbox-img');
-              if (updatedImg) {
-                updatedImg.style.transition = 'none';
-                updatedImg.style.transform = 'translateX(120%) scale(0.9)';
-                updatedImg.offsetHeight;
-                updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                updatedImg.style.transform = 'translateX(0) scale(1)';
-              }
-            }, 180);
-          } else {
-            img.style.transform = 'translateX(120%) scale(0.9)';
-            setTimeout(() => {
-              triggerLightboxPrev();
-              const updatedImg = document.getElementById('lightbox-img');
-              if (updatedImg) {
-                updatedImg.style.transition = 'none';
-                updatedImg.style.transform = 'translateX(-120%) scale(0.9)';
-                updatedImg.offsetHeight;
-                updatedImg.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                updatedImg.style.transform = 'translateX(0) scale(1)';
-              }
-            }, 180);
-          }
-        } else {
-          img.style.transform = 'translateX(0) scale(1)';
-        }
+    try {
+      if (thumb.hasPointerCapture(e.pointerId)) {
+        thumb.releasePointerCapture(e.pointerId);
       }
-    } else if (activeSwipeThumb) {
-      const thumb = activeSwipeThumb;
-      activeSwipeThumb = null;
-      try { thumb.releasePointerCapture(e.pointerId); } catch(err) {}
+    } catch (err) {}
 
-      thumb.style.transform = 'none';
-      thumb.style.zIndex = '';
-      thumb.style.boxShadow = 'none';
+    thumb.style.transform = '';
+    thumb.style.opacity = '';
+    thumb.style.zIndex = '';
 
-      document.querySelectorAll('.batch-group-card').forEach(c => c.classList.remove('drag-over'));
-      const poolContainer = document.getElementById('ungrouped-pool-container');
-      if (poolContainer) poolContainer.classList.remove('drag-over');
+    if (!isPointerMoving) return;
 
-      // タップ操作（拡大表示）
-      if (!isMoveTriggered && Math.abs(diffX) < 10 && Math.abs(diffY) < 10 && duration < 350) {
+    // 指を離した位置にあるドロップ要素を取得
+    thumb.style.pointerEvents = 'none';
+    const droppedEl = document.elementFromPoint(e.clientX, e.clientY);
+    thumb.style.pointerEvents = '';
+
+    if (!droppedEl) return;
+
+    // 1. 単体登録エディタ内のタッチ並び替え
+    const isEditor = thumb.classList.contains('preview-item');
+    if (isEditor) {
+      const targetThumb = droppedEl.closest('#image-preview-list .preview-item');
+      if (targetThumb) {
+        const targetImg = targetThumb.querySelector('img');
+        const targetIdx = targetImg ? Number(targetImg.dataset.idx) : Number(targetThumb.dataset.idx);
         const imgEl = thumb.querySelector('img');
-        if (imgEl) {
-          const contextType = imgEl.dataset.contextType;
-          let ctxData = null;
-          if (contextType === 'editor-preview') {
-            ctxData = { type: 'editor-preview', idx: Number(imgEl.dataset.idx) };
-          } else if (contextType === 'batch-group') {
-            ctxData = { type: 'batch-group', gidx: Number(imgEl.dataset.gidx), iidx: Number(imgEl.dataset.iidx) };
-          } else if (contextType === 'pool') {
-            ctxData = { type: 'pool', poolIdx: Number(imgEl.dataset.poolIdx) };
-          }
-          openLightbox(imgEl.src, ctxData);
+        const srcIdx = imgEl ? Number(imgEl.dataset.idx) : Number(thumb.dataset.idx);
+
+        if (!isNaN(srcIdx) && !isNaN(targetIdx) && srcIdx !== targetIdx && state.uploadedImages[srcIdx]) {
+          const [movedItem] = state.uploadedImages.splice(srcIdx, 1);
+          state.uploadedImages.splice(targetIdx, 0, movedItem);
+          state.activeThumbnailIndex = 0;
+          renderImagePreviewList();
         }
-        return;
       }
+      return;
+    }
 
-      // ドロップ（移動判定）
-      if (isMoveTriggered) {
-        thumb.style.pointerEvents = 'none';
-        const droppedEl = document.elementFromPoint(e.clientX, e.clientY);
-        thumb.style.pointerEvents = '';
+    // 2. 一括インポート画面でのタッチ移動
+    const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
+    const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
 
-        const isEditor = thumb.classList.contains('preview-item');
-        const isBatch = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'group';
-        const isPool = thumb.classList.contains('draggable-thumb') && thumb.dataset.sourceType === 'pool';
+    const targetCard = droppedEl.closest('.batch-group-card');
+    const targetPool = droppedEl.closest('#ungrouped-pool-container');
 
-        if (isEditor) {
-          const targetThumb = droppedEl ? droppedEl.closest('.preview-item') : null;
-          if (targetThumb && !targetThumb.classList.contains('add-more-item')) {
-            const srcIdx = Number(thumb.dataset.idx);
-            const targetIdx = Number(targetThumb.dataset.idx);
-            if (!isNaN(srcIdx) && !isNaN(targetIdx) && srcIdx !== targetIdx && state.uploadedImages[srcIdx]) {
-              const [movedItem] = state.uploadedImages.splice(srcIdx, 1);
-              state.uploadedImages.splice(targetIdx, 0, movedItem);
-              state.activeThumbnailIndex = 0;
-              renderImagePreviewList();
-              return;
-            }
+    if (targetCard) {
+      const targetGIdx = Number(targetCard.dataset.gidx);
+      if (!isNaN(targetGIdx) && state.batchGroups[targetGIdx]) {
+        if (isPool) {
+          const idx = Number(thumb.dataset.idx);
+          if (!isNaN(idx) && state.ungroupedImages[idx]) {
+            const [movedItem] = state.ungroupedImages.splice(idx, 1);
+            state.batchGroups[targetGIdx].push(movedItem);
+            renderBatchGroupsUI();
+            await syncBatchStateToDB();
           }
-        } else {
-          const targetCard = droppedEl ? droppedEl.closest('.batch-group-card') : null;
-          const targetThumb = droppedEl ? droppedEl.closest('.draggable-thumb') : null;
-          const targetPool = droppedEl ? droppedEl.closest('#ungrouped-pool-container') : null;
-
-          let movedItem = null;
-          if (isBatch) {
-            const srcGIdx = Number(thumb.dataset.gidx);
-            const srcIIdx = Number(thumb.dataset.iidx);
-            if (!isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx]) {
-              movedItem = state.batchGroups[srcGIdx].splice(srcIIdx, 1)[0];
-              if (state.batchGroups[srcGIdx].length === 0) {
-                state.batchGroups.splice(srcGIdx, 1);
-              }
-            }
-          } else if (isPool) {
-            const srcIdx = Number(thumb.dataset.idx);
-            if (!isNaN(srcIdx) && state.ungroupedImages[srcIdx]) {
-              movedItem = state.ungroupedImages.splice(srcIdx, 1)[0];
-            }
-          }
-
-          if (movedItem) {
-            if (targetCard) {
-              const targetGIdx = Number(targetCard.dataset.gidx);
-              if (!isNaN(targetGIdx) && state.batchGroups[targetGIdx]) {
-                const targetGroup = state.batchGroups[targetGIdx];
-                if (targetThumb && targetThumb.dataset.gidx !== undefined && Number(targetThumb.dataset.gidx) === targetGIdx) {
-                  const targetIIdx = Number(targetThumb.dataset.iidx);
-                  targetGroup.splice(targetIIdx, 0, movedItem);
-                } else {
-                  targetGroup.push(movedItem);
-                }
-              } else {
-                state.batchGroups.push([movedItem]);
-              }
-            } else if (targetPool) {
-              state.ungroupedImages.push(movedItem);
-            } else {
-              state.batchGroups.push([movedItem]);
+        } else if (isBatch) {
+          const srcGIdx = Number(thumb.dataset.gidx);
+          const srcIIdx = Number(thumb.dataset.iidx);
+          if (srcGIdx !== targetGIdx && !isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx]) {
+            const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
+            state.batchGroups[targetGIdx].push(movedItem);
+            if (state.batchGroups[srcGIdx].length === 0) {
+              state.batchGroups.splice(srcGIdx, 1);
             }
             renderBatchGroupsUI();
             await syncBatchStateToDB();
-            return;
           }
         }
+      }
+    } else if (targetPool && isBatch) {
+      const srcGIdx = Number(thumb.dataset.gidx);
+      const srcIIdx = Number(thumb.dataset.iidx);
+      if (!isNaN(srcGIdx) && !isNaN(srcIIdx) && state.batchGroups[srcGIdx]) {
+        const [movedItem] = state.batchGroups[srcGIdx].splice(srcIIdx, 1);
+        state.ungroupedImages.push(movedItem);
+        if (state.batchGroups[srcGIdx].length === 0) {
+          state.batchGroups.splice(srcGIdx, 1);
+        }
+        renderBatchGroupsUI();
+        await syncBatchStateToDB();
       }
     }
   });
 
-  // --------------------------------------------------
   // グローバルクリックイベント委譲ハンドラー
-  // --------------------------------------------------
   document.addEventListener('click', async (e) => {
-    // 📂 未分類プールの畳む／展開ボタン
     if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
       e.stopPropagation();
       e.preventDefault();
@@ -743,23 +601,9 @@ function initApp() {
       return;
     }
 
-    // 📂 未所属プールから一括グループを作成ボタン
-    if (e.target && e.target.id === 'btn-create-group-from-ungrouped') {
-      e.stopPropagation();
-      e.preventDefault();
-      if (state.ungroupedImages.length > 0) {
-        const newGroup = [...state.ungroupedImages];
-        state.batchGroups.push(newGroup);
-        state.ungroupedImages = [];
-        renderBatchGroupsUI();
-        await syncBatchStateToDB();
-      }
-      return;
-    }
-
-    // ✕ ボタンの直接タップイベント (一括グループからの外し)
+    // 🌟 カード上の「✕」ボタン (グループから外してプールへ移動)
     const batchRemoveBtn = e.target.closest('.btn-batch-remove-img');
-    if (batchRemoveBtn) {
+    if (batchRemoveBtn && !e.target.closest('#lightbox-modal')) {
       e.stopPropagation();
       e.preventDefault();
       const gIdx = Number(batchRemoveBtn.dataset.gidx);
@@ -778,12 +622,12 @@ function initApp() {
       return;
     }
 
-    // ✕ ボタンの直接タップイベント (未所属プールからの削除)
-    const poolRemoveBtn = e.target.closest('.btn-ungrouped-remove');
-    if (poolRemoveBtn) {
+    // 🌟 プール上の「✕」ボタン (完全削除)
+    const ungroupedRemoveBtn = e.target.closest('.btn-ungrouped-remove');
+    if (ungroupedRemoveBtn && !e.target.closest('#lightbox-modal')) {
       e.stopPropagation();
       e.preventDefault();
-      const idx = Number(poolRemoveBtn.dataset.idx);
+      const idx = Number(ungroupedRemoveBtn.dataset.idx);
       if (!isNaN(idx) && state.ungroupedImages[idx]) {
         state.ungroupedImages.splice(idx, 1);
         renderBatchGroupsUI();
@@ -792,22 +636,22 @@ function initApp() {
       return;
     }
 
-    // ✕ ボタンの直接タップイベント (単体エディタからの削除)
-    const delImgBtn = e.target.closest('.btn-img-del');
-    if (delImgBtn) {
+    // 🌟 未所属プールから「✨ これらからグループを作成」
+    const createGroupFromPoolBtn = e.target.closest('#btn-create-group-from-ungrouped');
+    if (createGroupFromPoolBtn) {
       e.stopPropagation();
       e.preventDefault();
-      const idx = Number(delImgBtn.dataset.idx);
-      if (!isNaN(idx) && state.uploadedImages[idx]) {
-        state.uploadedImages.splice(idx, 1);
-        if (state.activeThumbnailIndex >= state.uploadedImages.length) {
-          state.activeThumbnailIndex = Math.max(0, state.uploadedImages.length - 1);
-        }
-        renderImagePreviewList();
+      if (state.ungroupedImages.length > 0) {
+        const newGroup = [...state.ungroupedImages];
+        state.ungroupedImages = [];
+        state.batchGroups.push(newGroup);
+        renderBatchGroupsUI();
+        await syncBatchStateToDB();
       }
       return;
     }
 
+    // APIキー保存
     if (e.target && e.target.id === 'btn-save-api-key') {
       const apiKeyEl = document.getElementById('gemini-api-key');
       const apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
@@ -828,42 +672,19 @@ function initApp() {
       return;
     }
 
-    if (e.target && e.target.id === 'btn-reload-models') {
-      const originalText = e.target.innerText;
-      e.target.innerText = '取得中...';
-      e.target.disabled = true;
-      try {
-        await updateModelDropdown(true);
-        alert('モデルリストを更新しました！');
-      } catch (err) {
-        console.error(err);
-        alert('モデルリストの取得に失敗しました。APIキーに誤りがないかご確認ください。');
-      } finally {
-        e.target.innerText = originalText;
-        e.target.disabled = false;
-      }
-      return;
-    }
-
-    if (e.target && e.target.id === 'btn-reload-modal-models') {
-      const modalModelSelect = document.getElementById('modal-model-select');
-      if (modalModelSelect) {
-        modalModelSelect.innerHTML = '<option value="">モデルを取得中...</option>';
-        await populateModelDropdown(modalModelSelect, true);
-      }
-      return;
-    }
-
     if (e.target && e.target.id === 'btn-google-login') {
       loginGoogle();
       return;
     }
+
     if (e.target && e.target.id === 'btn-google-logout') {
       const choice = confirm("Googleアカウント同期を切断しますか？\n\n[OK]: 共有端末等のため、ローカルブラウザのデータも完全に消去してログアウトする\n[キャンセル]: ローカルにデータは残したまま安全にログアウトする");
       logoutGoogle(choice);
       return;
     }
-    if (e.target && e.target.id === 'btn-trigger-sync') {
+
+    const triggerSyncBtn = e.target.closest('#btn-trigger-sync');
+    if (triggerSyncBtn) {
       await syncAllData(false);
       return;
     }
@@ -878,7 +699,7 @@ function initApp() {
       return;
     }
 
-    // 拡大画像（ライトボックス）起動
+    // ライトボックス表示
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]') || (e.target.tagName === 'IMG' && !e.target.closest('button, nav, header, aside, .lightbox-overlay, #sidebar') && (e.target.closest('#app') || e.target.closest('#detail-modal-overlay')) ? e.target : null);
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;
@@ -1017,6 +838,7 @@ function initApp() {
       return;
     }
 
+    // --- 一括まとめて保存処理 ---
     const saveAllBtn = e.target.closest('#btn-save-all-batches');
     if (saveAllBtn) {
       if (state.batchGroups.length === 0) {
@@ -1056,10 +878,7 @@ function initApp() {
           if (rawDate) {
             const dateObj = (rawDate instanceof Date) ? rawDate : new Date(rawDate);
             if (!isNaN(dateObj.getTime())) {
-              const year = dateObj.getFullYear();
-              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-              const day = String(dateObj.getDate()).padStart(2, '0');
-              mainDate = `${year}-${month}-${day}`;
+              mainDate = formatDateToLocalYYYYMMDD(dateObj);
             }
           }
 
@@ -1100,6 +919,7 @@ function initApp() {
       return;
     }
 
+    // 一括AI解析実行
     const batchAnalyzeBtn = e.target.closest('.btn-batch-analyze');
     if (batchAnalyzeBtn) {
       e.stopPropagation();
@@ -1161,6 +981,7 @@ function initApp() {
       return;
     }
 
+    // 分割
     const batchSplitBtn = e.target.closest('.btn-batch-split');
     if (batchSplitBtn) {
       e.stopPropagation();
@@ -1179,6 +1000,7 @@ function initApp() {
       return;
     }
 
+    // 削除
     const batchDeleteGroupBtn = e.target.closest('.btn-batch-delete-group');
     if (batchDeleteGroupBtn) {
       e.stopPropagation();
@@ -1193,6 +1015,7 @@ function initApp() {
       return;
     }
 
+    // エディタ
     const batchOpenEditorBtn = e.target.closest('.btn-batch-open-editor');
     if (batchOpenEditorBtn) {
       e.stopPropagation();
@@ -1214,6 +1037,7 @@ function initApp() {
       return;
     }
 
+    // ログ詳細
     const rowItem = e.target.closest('[data-action="open-detail"]');
     if (rowItem) {
       const id = rowItem.dataset.id;
@@ -1226,6 +1050,7 @@ function initApp() {
       return;
     }
 
+    // スライドショーコントロール
     const detailArrow = e.target.closest('.carousel-btn');
     if (detailArrow && (detailArrow.id === 'btn-detail-prev' || detailArrow.id === 'btn-detail-next')) {
       e.stopPropagation();
@@ -1321,6 +1146,17 @@ function initApp() {
         inputEl.value = state.backupFormData[fieldId];
         updateFieldRevertUI();
       }
+      return;
+    }
+
+    const delImgBtn = e.target.closest('.btn-img-del');
+    if (delImgBtn && !e.target.closest('#lightbox-modal')) {
+      const idx = Number(delImgBtn.dataset.idx);
+      state.uploadedImages.splice(idx, 1);
+      if (state.activeThumbnailIndex >= state.uploadedImages.length) {
+        state.activeThumbnailIndex = Math.max(0, state.uploadedImages.length - 1);
+      }
+      renderImagePreviewList();
       return;
     }
 
