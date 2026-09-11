@@ -398,7 +398,7 @@ export async function syncBatchStateToDB() {
       await saveLog(groupLogData, groupBlobs);
     }
 
-    if (state.isGoogleLoggedIn) {
+    if (state.isGoogleLoggedIn && !state.isBatchProcessing) {
       syncAllData(true);
     }
   } catch (err) {

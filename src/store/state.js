@@ -14,6 +14,7 @@ export const state = {
   currentBatchGroupIndex: null,
   draggedItemInfo: null,
   isPoolCollapsed: false,
+  isBatchProcessing: false,
 
   // ライトボックス用
   activeLightboxCtx: null,

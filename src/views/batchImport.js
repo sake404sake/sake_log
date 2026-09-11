@@ -185,6 +185,8 @@ export function renderBatchGroupsUI() {
 export async function processFilesForBatch(files, append = true) {
   if (!files || files.length === 0) return;
 
+  state.isBatchProcessing = true;
+
   const batchUploadZone = document.getElementById('batch-upload-zone');
   if (batchUploadZone) {
     batchUploadZone.innerHTML = `
@@ -315,6 +317,7 @@ export async function processFilesForBatch(files, append = true) {
     console.error('Batch Grouping Error:', err);
     alert('画像の自動グルーピング処理中に予期せぬエラーが発生しました。');
   } finally {
+    state.isBatchProcessing = false;
     renderBatchGroupsUI();
     document.dispatchEvent(new CustomEvent('batch-state-modified'));
   }
