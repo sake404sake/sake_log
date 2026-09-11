@@ -1,14 +1,18 @@
 // src/views/batchImport.js
-import { state } from '../store/state.js';
+import { state, base64ToBlob } from '../store/state.js';
 import { compressImage, groupImagesByTime, extractPhotoDateObject } from '../utils/image.js';
 import { openEditorModal } from './logEditor.js';
-import { hasApiKey, analyzeLabelImage } from '../services/gemini.js';
 import { saveLog, clearAllDrafts } from '../store/db.js';
+import { hasApiKey, analyzeLabelImage } from '../services/gemini.js';
+import { navigateTo } from '../main.js';
 import { syncAllData } from '../services/googleDrive.js';
 
+/**
+ * サムネイル画像の URL を安全に取得するヘルパー関数
+ */
 function getSafeImgSrc(item) {
   if (!item) return '';
-  if (item.previewUrl && typeof item.previewUrl === 'string' && item.previewUrl.startsWith('blob:')) {
+  if (item.previewUrl && typeof item.previewUrl === 'string' && item.previewUrl.trim() !== '') {
     return item.previewUrl;
   }
   if (item.base64) {
@@ -19,20 +23,10 @@ function getSafeImgSrc(item) {
       item.previewUrl = URL.createObjectURL(item.blob);
       return item.previewUrl;
     } catch (e) {
-      console.error('[batchImport] ObjectURL creation failed:', e);
+      console.warn('ObjectURL生成失敗:', e);
     }
   }
   return '';
-}
-
-function formatDate(d) {
-  if (!d) return '';
-  const dateObj = (d instanceof Date) ? d : new Date(d);
-  if (isNaN(dateObj.getTime())) return '';
-  const year = dateObj.getFullYear();
-  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const day = String(dateObj.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 export function renderBatchImportView() {
@@ -89,29 +83,30 @@ export function renderBatchGroupsUI() {
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
         ${state.ungroupedImages.map((item, idx) => {
           const imgSrc = getSafeImgSrc(item);
-          const fallbackDataUri = item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '';
           return `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
-               style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
-            <img src="${imgSrc}" onerror="if('${fallbackDataUri}' && this.src!=='${fallbackDataUri}'){this.src='${fallbackDataUri}';}"
-                 data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}"
+               style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none; flex-shrink: 0;">
+            <img src="${imgSrc}" 
+                 data-base64="${item.base64 || ''}" 
+                 data-mimetype="${item.mimeType || 'image/jpeg'}"
+                 onerror="if(this.dataset.base64){this.src='data:'+(this.dataset.mimetype||'image/jpeg')+';base64,'+this.dataset.base64; this.onerror=null;}"
+                 data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" 
                  style="width:100%; height:100%; object-fit:cover; cursor:pointer; border-radius:7px;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
-                    style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.75); color:#fff; border:none; border-radius:50%; width:24px; height:22px; font-size:12px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center; pointer-events:auto;">✕</button>
+                    style="position:absolute; top:-6px; right:-6px; background:#ef4444; color:#fff; border:2px solid #fff; border-radius:50%; width:24px; height:22px; font-size:12px; font-weight:bold; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.4);">✕</button>
           </div>
-        `;
-        }).join('')}
+        `}).join('')}
       </div>
     `;
 
     ungroupedHTML = `
-      <div id="ungrouped-pool-container" style="position: fixed; bottom: 16px; left: 16px; right: 80px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px;">${state.isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
-            <span style="font-weight: bold; color: var(--text-main); font-size: 0.9rem;">📂 未所属の画像プール (${state.ungroupedImages.length}枚)</span>
+      <div id="ungrouped-pool-container" style="position: fixed; bottom: 12px; left: 12px; right: 12px; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); backdrop-filter: blur(12px); box-sizing: border-box;">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+            <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 3px 8px; flex-shrink: 0;">${state.isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
+            <span style="font-weight: bold; color: var(--text-main); font-size: 0.85rem; white-space: nowrap; word-break: keep-all; overflow: hidden; text-overflow: ellipsis;">📂 未所属プール (${state.ungroupedImages.length}枚)</span>
           </div>
-          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;">✨ これらからグループを作成</button>
+          <button type="button" id="btn-create-group-from-ungrouped" class="btn-secondary" style="font-size: 0.75rem; padding: 4px 10px; flex-shrink: 0; margin-left: auto;">✨ グループ作成</button>
         </div>
         ${thumbs}
       </div>
@@ -122,26 +117,35 @@ export function renderBatchGroupsUI() {
 
   const groupsHTML = state.batchGroups.map((group, gIdx) => {
     const mainImg = group[0];
-    let dateDisplay = '日時不明';
+    let dateStr = '日時不明';
     if (mainImg && mainImg.date) {
-      dateDisplay = formatDate(mainImg.date);
+      const d = (mainImg.date instanceof Date) ? mainImg.date : new Date(mainImg.date);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        dateStr = `${year}/${month}/${day} ${hours}:${mins}`;
+      }
     }
 
     const thumbsHTML = group.map((item, iIdx) => {
       const imgSrc = getSafeImgSrc(item);
-      const fallbackDataUri = item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '';
       return `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
-           style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
-        <img src="${imgSrc}" onerror="if('${fallbackDataUri}' && this.src!=='${fallbackDataUri}'){this.src='${fallbackDataUri}';}"
-             data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}"
+           style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none; flex-shrink: 0;">
+        <img src="${imgSrc}" 
+             data-base64="${item.base64 || ''}" 
+             data-mimetype="${item.mimeType || 'image/jpeg'}"
+             onerror="if(this.dataset.base64){this.src='data:'+(this.dataset.mimetype||'image/jpeg')+';base64,'+this.dataset.base64; this.onerror=null;}"
+             data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" 
              style="width:100%; height:100%; object-fit:cover; cursor:pointer; border-radius:7px;" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
-                style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.75); color:#fff; border:none; border-radius:50%; width:24px; height:22px; font-size:12px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center; pointer-events:auto;">✕</button>
+                style="position:absolute; top:-6px; right:-6px; background:#ef4444; color:#fff; border:2px solid #fff; border-radius:50%; width:24px; height:22px; font-size:12px; font-weight:bold; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.4);">✕</button>
       </div>
-    `;
-    }).join('');
+    `}).join('');
 
     return `
       <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box;" data-gidx="${gIdx}">
@@ -153,7 +157,7 @@ export function renderBatchGroupsUI() {
             </div>
             <div style="font-size: 0.75rem; color: var(--text-sub); display: flex; align-items: center; gap: 4px; margin-top: 2px;">
               <span>📅 撮影日時:</span>
-              <span style="color: var(--text-main); font-weight: 500;">${dateDisplay}</span>
+              <span style="color: var(--text-main); font-weight: 500;">${dateStr}</span>
             </div>
           </div>
           
@@ -194,21 +198,21 @@ export function renderBatchGroupsUI() {
 }
 
 /**
- * 🌟【一括インポート内インターフェース・イベント統合制御】
+ * 🌟 一括インポートUIの操作イベントハンドラー（✕ボタン・プール操作等）
  */
-if (typeof window !== 'undefined' && !window.__batchImportEventsInitialized) {
-  window.__batchImportEventsInitialized = true;
+if (typeof window !== 'undefined' && !window.__batchImportListenersAttached) {
+  window.__batchImportListenersAttached = true;
 
   document.addEventListener('click', async (e) => {
-    // 1. グループサムネイル右上の「✕」ボタン（未所属プールへ移動）
-    const removeGroupImgBtn = e.target.closest('.btn-batch-remove-img');
-    if (removeGroupImgBtn) {
+    // 1. グループ内の写真の「✕」ボタン（未所属プールへ移動）
+    const batchRemoveBtn = e.target.closest('.btn-batch-remove-img');
+    if (batchRemoveBtn) {
       e.stopPropagation();
       e.preventDefault();
-      const gIdx = Number(removeGroupImgBtn.dataset.gidx);
-      const iIdx = Number(removeGroupImgBtn.dataset.iidx);
-      if (state.batchGroups[gIdx] && state.batchGroups[gIdx][iIdx]) {
-        const [detached] = state.batchGroups[gIdx].splice(iIdx, 1);
+      const gIdx = Number(batchRemoveBtn.dataset.gidx);
+      const iIdx = Number(batchRemoveBtn.dataset.iidx);
+      if (state.batchGroups[gIdx]) {
+        const detached = state.batchGroups[gIdx].splice(iIdx, 1)[0];
         if (detached) {
           state.ungroupedImages.push(detached);
         }
@@ -221,12 +225,12 @@ if (typeof window !== 'undefined' && !window.__batchImportEventsInitialized) {
       return;
     }
 
-    // 2. 未所属プールサムネイル右上の「✕」ボタン（完全削除）
-    const removePoolImgBtn = e.target.closest('.btn-ungrouped-remove');
-    if (removePoolImgBtn) {
+    // 2. 未所属プール内の写真の「✕」ボタン（完全削除）
+    const ungroupedRemoveBtn = e.target.closest('.btn-ungrouped-remove');
+    if (ungroupedRemoveBtn) {
       e.stopPropagation();
       e.preventDefault();
-      const idx = Number(removePoolImgBtn.dataset.idx);
+      const idx = Number(ungroupedRemoveBtn.dataset.idx);
       if (state.ungroupedImages[idx]) {
         state.ungroupedImages.splice(idx, 1);
         renderBatchGroupsUI();
@@ -235,209 +239,28 @@ if (typeof window !== 'undefined' && !window.__batchImportEventsInitialized) {
       return;
     }
 
-    // 3. 未所属プールの折りたたみトグル
-    if (e.target && e.target.id === 'btn-toggle-pool-collapse') {
+    // 3. 未所属プールからのグループ作成ボタン
+    const createGroupBtn = e.target.closest('#btn-create-group-from-ungrouped');
+    if (createGroupBtn) {
+      e.stopPropagation();
+      e.preventDefault();
+      if (state.ungroupedImages.length > 0) {
+        const newGroup = [...state.ungroupedImages];
+        state.ungroupedImages = [];
+        state.batchGroups.push(newGroup);
+        renderBatchGroupsUI();
+        document.dispatchEvent(new CustomEvent('batch-state-modified'));
+      }
+      return;
+    }
+
+    // 4. 未所属プールの折りたたみトグルボタン
+    const togglePoolBtn = e.target.closest('#btn-toggle-pool-collapse');
+    if (togglePoolBtn) {
       e.stopPropagation();
       e.preventDefault();
       state.isPoolCollapsed = !state.isPoolCollapsed;
       renderBatchGroupsUI();
-      return;
-    }
-
-    // 4. 未所属プールから一括グループ作成
-    if (e.target && e.target.id === 'btn-create-group-from-ungrouped') {
-      e.stopPropagation();
-      e.preventDefault();
-      if (state.ungroupedImages.length > 0) {
-        state.batchGroups.push([...state.ungroupedImages]);
-        state.ungroupedImages = [];
-        renderBatchGroupsUI();
-        document.dispatchEvent(new CustomEvent('batch-state-modified'));
-      }
-      return;
-    }
-
-    // 5. グループ「詳細編集」ボタン
-    const batchOpenEditorBtn = e.target.closest('.btn-batch-open-editor');
-    if (batchOpenEditorBtn) {
-      e.stopPropagation();
-      e.preventDefault();
-      const gIdx = Number(batchOpenEditorBtn.dataset.gidx);
-      const group = state.batchGroups[gIdx];
-      if (group) {
-        const card = batchOpenEditorBtn.closest('.batch-group-card');
-        const nameInput = card?.querySelector('.batch-name-input');
-        const breweryInput = card?.querySelector('.batch-brewery-input');
-        if (nameInput) group.name = nameInput.value.trim();
-        if (breweryInput) group.brewery = breweryInput.value.trim();
-
-        state.returnToBatchOnClose = true;
-        await openEditorModal(null, group, gIdx);
-      }
-      return;
-    }
-
-    // 6. グループ「AI解析」ボタン
-    const batchAnalyzeBtn = e.target.closest('.btn-batch-analyze');
-    if (batchAnalyzeBtn) {
-      e.stopPropagation();
-      e.preventDefault();
-      const gIdx = Number(batchAnalyzeBtn.dataset.gidx);
-      const group = state.batchGroups[gIdx];
-      if (group && group.length > 0 && hasApiKey()) {
-        const originalText = batchAnalyzeBtn.innerHTML;
-        batchAnalyzeBtn.innerHTML = '<span class="sella-spinner"></span>解析中...';
-        batchAnalyzeBtn.disabled = true;
-
-        try {
-          const targetImg = group[0];
-          let base64Data = targetImg.base64;
-          let mimeType = targetImg.mimeType || 'image/jpeg';
-          if (!base64Data && targetImg.blob) {
-            const reader = new FileReader();
-            base64Data = await new Promise((res) => {
-              reader.onload = () => res(reader.result.split(',')[1]);
-              reader.onerror = () => res('');
-              reader.readAsDataURL(targetImg.blob);
-            });
-          }
-
-          if (base64Data) {
-            const result = await analyzeLabelImage(base64Data, mimeType);
-            if (result) {
-              if (result.name) group.name = result.name;
-              if (result.brewery) group.brewery = result.brewery;
-              if (result.category) group.category = result.category;
-              if (result.productName) group.productName = result.productName;
-              if (result.region) group.region = result.region;
-              if (result.type) group.type = result.type;
-              if (result.abv) group.abv = result.abv;
-              if (result.aiInfo) group.aiInfo = result.aiInfo;
-            }
-          }
-        } catch (err) {
-          console.error('[batchImport] AI Analysis Error:', err);
-          alert('AI解析中にエラーが発生しました。');
-        } finally {
-          batchAnalyzeBtn.innerHTML = originalText;
-          batchAnalyzeBtn.disabled = false;
-          renderBatchGroupsUI();
-          document.dispatchEvent(new CustomEvent('batch-state-modified'));
-        }
-      } else if (!hasApiKey()) {
-        alert('APIキーが設定されていません。設定画面から登録してください。');
-      }
-      return;
-    }
-
-    // 7. グループ「分割」ボタン
-    const batchSplitBtn = e.target.closest('.btn-batch-split');
-    if (batchSplitBtn) {
-      e.stopPropagation();
-      e.preventDefault();
-      const gIdx = Number(batchSplitBtn.dataset.gidx);
-      const group = state.batchGroups[gIdx];
-      if (group && group.length > 1) {
-        const mid = Math.ceil(group.length / 2);
-        const firstHalf = group.slice(0, mid);
-        const secondHalf = group.slice(mid);
-        state.batchGroups.splice(gIdx, 1, firstHalf, secondHalf);
-        renderBatchGroupsUI();
-        document.dispatchEvent(new CustomEvent('batch-state-modified'));
-      } else {
-        alert('これ以上分割できません（1枚のみです）。');
-      }
-      return;
-    }
-
-    // 8. グループ「削除」ボタン
-    const batchDeleteGroupBtn = e.target.closest('.btn-batch-delete-group');
-    if (batchDeleteGroupBtn) {
-      e.stopPropagation();
-      e.preventDefault();
-      const gIdx = Number(batchDeleteGroupBtn.dataset.gidx);
-      const choice = confirm(`お酒グループ #${gIdx + 1} を削除しますか？\n\n[OK]: グループ内の写真も含めて完全に削除する\n[キャンセル]: 写真を「未所属の画像プール」に戻す`);
-      const [removed] = state.batchGroups.splice(gIdx, 1);
-      if (!choice && removed && removed.length > 0) {
-        state.ungroupedImages = state.ungroupedImages.concat(removed);
-      }
-      renderBatchGroupsUI();
-      document.dispatchEvent(new CustomEvent('batch-state-modified'));
-      return;
-    }
-
-    // 9. 一括保存ボタン（🚀 すべてまとめて登録する）
-    const saveAllBtn = e.target.closest('#btn-save-all-batches');
-    if (saveAllBtn) {
-      e.stopPropagation();
-      e.preventDefault();
-      if (state.batchGroups.length === 0) {
-        alert('登録するグループがありません。');
-        return;
-      }
-      if (!confirm(`${state.batchGroups.length}件のお酒を一括登録しますか？`)) return;
-
-      saveAllBtn.disabled = true;
-      const originalBtnText = saveAllBtn.innerHTML;
-      saveAllBtn.innerHTML = `<span class="sella-spinner"></span>一括登録中... (${state.batchGroups.length}件)`;
-
-      try {
-        for (let gIdx = 0; gIdx < state.batchGroups.length; gIdx++) {
-          const group = state.batchGroups[gIdx];
-          if (!group || group.length === 0) continue;
-
-          const card = document.querySelector(`.batch-group-card[data-gidx="${gIdx}"]`);
-          const nameInput = card?.querySelector('.batch-name-input');
-          const breweryInput = card?.querySelector('.batch-brewery-input');
-
-          const cardName = nameInput ? nameInput.value.trim() : '';
-          const cardBrewery = breweryInput ? breweryInput.value.trim() : '';
-
-          const name = cardName !== '' ? cardName : (group.name || `お酒グループ #${gIdx + 1}`);
-          const brewery = cardBrewery !== '' ? cardBrewery : (group.brewery || '');
-
-          const orderedBlobs = group.map(img => img.blob).filter(blob => blob instanceof Blob);
-
-          let mainDate = '';
-          const rawDate = group[0]?.date;
-          if (rawDate) {
-            mainDate = formatDate(rawDate);
-          }
-
-          const logData = {
-            category: group.category || '日本酒',
-            name: name || '名称未設定',
-            productName: group.productName || '',
-            brewery: brewery || '',
-            region: group.region || '',
-            type: group.type || '',
-            abv: group.abv || '',
-            date: mainDate,
-            rating: '4',
-            tags: [],
-            notes: group.notes || '',
-            aiInfo: group.aiInfo || '',
-            status: 'active'
-          };
-          await saveLog(logData, orderedBlobs);
-        }
-
-        alert('すべてのグループの登録が完了しました！');
-        state.batchGroups = [];
-        state.ungroupedImages = [];
-        await clearAllDrafts();
-        renderBatchGroupsUI();
-
-        if (state.isGoogleLoggedIn) {
-          syncAllData(true);
-        }
-        document.dispatchEvent(new CustomEvent('navigation-request', { detail: { view: 'logList' } }));
-      } catch (err) {
-        console.error('[batchImport] Save All Error:', err);
-        alert('一括登録中にエラーが発生しました。');
-        saveAllBtn.disabled = false;
-        saveAllBtn.innerHTML = originalBtnText;
-      }
       return;
     }
   });
@@ -473,7 +296,7 @@ export async function processFilesForBatch(files, append = true) {
     return;
   }
 
-  // 🌟 Promise.all により全画像を並列超高速処理（ハング防止タイムアウト・フォールバック適用）
+  // 🌟 Promise.all により全画像を並列超高速処理
   const processPromises = imageFiles.map(async (file) => {
     try {
       const [compressed, date] = await Promise.all([
