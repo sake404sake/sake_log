@@ -1,6 +1,6 @@
 // src/views/batchImport.js
 import { state } from '../store/state.js';
-import { compressImage, groupImagesByTime, extractPhotoDateObject } from '../utils/image.js';
+import { compressImage, groupImagesByTime, extractPhotoDateObject, formatDateToLocalYYYYMMDD } from '../utils/image.js';
 
 export function renderBatchImportView() {
   return `
@@ -54,14 +54,17 @@ export function renderBatchGroupsUI() {
   if (state.ungroupedImages.length > 0) {
     const thumbs = state.isPoolCollapsed ? '' : `
       <div style="display: flex; gap: 10px; flex-wrap: wrap; min-height: 40px; margin-top: 10px;" class="thumbs-scroll-container">
-        ${state.ungroupedImages.map((item, idx) => `
+        ${state.ungroupedImages.map((item, idx) => {
+          const imgSrc = item.previewUrl || (item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '');
+          return `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
                style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
-            <img src="${item.previewUrl || ''}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+            <img src="${imgSrc}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
                     style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
           </div>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     `;
 
@@ -83,17 +86,20 @@ export function renderBatchGroupsUI() {
 
   const groupsHTML = state.batchGroups.map((group, gIdx) => {
     const mainImg = group[0];
-    const dateStr = mainImg && mainImg.date ? new Date(mainImg.date).toLocaleString() : '日時不明';
+    const dateStr = mainImg && mainImg.date ? formatDateToLocalYYYYMMDD(mainImg.date) : '日時不明';
 
-    const thumbsHTML = group.map((item, iIdx) => `
+    const thumbsHTML = group.map((item, iIdx) => {
+      const imgSrc = item.previewUrl || (item.base64 ? `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}` : '');
+      return `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
            style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
-        <img src="${item.previewUrl || ''}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+        <img src="${imgSrc}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
                 style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     return `
       <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box;" data-gidx="${gIdx}">
@@ -145,9 +151,6 @@ export function renderBatchGroupsUI() {
   `;
 }
 
-/**
- * 🌟【完全修復・並列高速処理版】一括画像投入・自動グルーピング処理
- */
 export async function processFilesForBatch(files, append = true) {
   if (!files || files.length === 0) return;
 
@@ -175,7 +178,6 @@ export async function processFilesForBatch(files, append = true) {
     return;
   }
 
-  // 🌟 Promise.all により全画像を並列超高速処理（ハング防止タイムアウト・フォールバック適用）
   const processPromises = imageFiles.map(async (file) => {
     try {
       const [compressed, date] = await Promise.all([
@@ -221,7 +223,7 @@ export async function processFilesForBatch(files, append = true) {
       }
 
       if (failedFiles.length > 0) {
-        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました。：\n\n・ ` + failedFiles.join('\n・ '));
+        alert(`一部の画像（${failedFiles.length}枚）の読み込みに失敗しました：\n\n・ ` + failedFiles.join('\n・ '));
       }
     } else {
       alert('画像の読み込みに失敗しました。対応していない形式の可能性があります。');

@@ -2,7 +2,7 @@
 import { getAllTags, getLogById } from '../store/db.js';
 import { getApiKey, getSavedModel, populateModelDropdown, hasApiKey, analyzeLabelImage } from '../services/gemini.js';
 import { state, resetEditorState, blobToBase64, base64ToBlob } from '../store/state.js';
-import { compressImage, extractPhotoDate } from '../utils/image.js';
+import { compressImage, extractPhotoDate, formatDateToLocalYYYYMMDD } from '../utils/image.js';
 
 export const TRACKED_FIELDS = [
   'sake-category', 'sake-name', 'sake-product', 'sake-brewery', 
@@ -10,7 +10,7 @@ export const TRACKED_FIELDS = [
 ];
 
 export async function renderLogEditorModal(logId = null) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatDateToLocalYYYYMMDD(new Date());
   const existingTags = await getAllTags();
   const tagChipsHTML = existingTags.map(tag => `<button type="button" class="tag-chip-btn" data-tag="${tag}">+ ${tag}</button>`).join('');
 
@@ -225,8 +225,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
     setVal('sake-type', initialBatchGroup.type || '');
     setVal('sake-abv', initialBatchGroup.abv || '');
     if (initialBatchGroup[0] && initialBatchGroup[0].date) {
-      const d = initialBatchGroup[0].date instanceof Date ? initialBatchGroup[0].date : new Date(initialBatchGroup[0].date);
-      setVal('sake-date', !isNaN(d) ? d.toISOString().split('T')[0] : '');
+      setVal('sake-date', formatDateToLocalYYYYMMDD(initialBatchGroup[0].date));
     }
     setVal('sake-notes', initialBatchGroup.notes || '');
     setVal('sake-ai-info', initialBatchGroup.aiInfo || '');
@@ -273,7 +272,7 @@ export function fillEditorForm(log) {
   setVal('sake-region', log.region);
   setVal('sake-type', log.type);
   setVal('sake-abv', log.abv);
-  setVal('sake-date', log.date);
+  setVal('sake-date', log.date ? formatDateToLocalYYYYMMDD(log.date) : '');
   setVal('sake-rating', log.rating || '4');
   setVal('sake-tags', (log.tags || []).join(' '));
   setVal('sake-notes', log.notes);
@@ -311,14 +310,15 @@ export function renderImagePreviewList() {
     btnAnalyze.style.display = (hasApiKey() && state.uploadedImages.length > 0) ? 'inline-flex' : 'none';
   }
 
-  const itemsHTML = state.uploadedImages.map((img, idx) =>
-    `<div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
-      <img src="${img.previewUrl}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
+  const itemsHTML = state.uploadedImages.map((img, idx) => {
+    const imgSrc = img.previewUrl || (img.base64 ? `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}` : '');
+    return `<div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
+      <img src="${imgSrc}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none;" />
       <div class="preview-actions">
         <button type="button" class="btn-img-del" data-idx="${idx}" title="削除">✕</button>
       </div>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 
   const addMoreHTML = `<div class="preview-item add-more-item" id="btn-trigger-upload">
     <div class="add-more-content">
@@ -375,9 +375,6 @@ export function updateFieldRevertUI() {
   });
 }
 
-/**
- * 🌟 AIラベル解析の実行関数 (エディタ用)
- */
 export async function runAIAnalysis(targetImg) {
   if (!targetImg) {
     alert('解析する画像を選択してください。');
@@ -442,23 +439,16 @@ export async function runAIAnalysis(targetImg) {
   }
 }
 
-/**
- * 🌟【完全修復版】画像ファイル選択時の処理
- * 1枚目の画像での EXIF 日時抽出を非同期・ノンブロッキング（1秒タイムアウト保護付き）で実行し、
- * 画像圧縮・配列追加を何があっても絶対に妨げない構造に修復。
- */
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
-    // HEIC/HEIF・一部ブラウザ対応の代替拡張子チェック
     const isImage = (file.type && file.type.startsWith('image/')) || 
                     /\.(heic|heif|png|jpe?g|webp|gif)$/i.test(file.name || '');
     if (!isImage) continue;
 
-    // 🌟 ノンブロッキング EXIF 撮影日時抽出 (1枚目の写真撮影日を確実反映)
     if (i === 0 && state.uploadedImages.length === 0) {
       extractPhotoDate(file).then(extractedDate => {
         if (extractedDate) {
@@ -466,27 +456,33 @@ export async function handleImageFiles(files) {
           if (dateInput) dateInput.value = extractedDate;
         }
       }).catch(err => {
-        console.warn('1枚目の写真からのEXIF撮影日時抽出をスキップしました:', err);
+        console.warn('1枚目の写真からのEXIF撮影日時抽出スキップ:', err);
       });
     }
 
-    // 画像の圧縮とプレビュー登録 (即時・遅延なし)
     try {
       const compressed = await compressImage(file);
-      const previewUrl = URL.createObjectURL(compressed.blob);
+      const blob = compressed.blob || file;
+      const previewUrl = URL.createObjectURL(blob);
 
       state.uploadedImages.push({
-        blob: compressed.blob,
-        base64: compressed.base64,
-        mimeType: compressed.mimeType,
-        previewUrl
+        blob: blob,
+        base64: compressed.base64 || '',
+        mimeType: compressed.mimeType || file.type || 'image/jpeg',
+        previewUrl: previewUrl
       });
     } catch (e) {
-      console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
+      console.error(`画像 [${file.name || i}] の圧縮・登録処理エラー:`, e);
+      const previewUrl = URL.createObjectURL(file);
+      state.uploadedImages.push({
+        blob: file,
+        base64: '',
+        mimeType: file.type || 'image/jpeg',
+        previewUrl: previewUrl
+      });
     }
   }
 
-  // アクティブサムネイルインデックスの初期化を保証
   if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {
     state.activeThumbnailIndex = 0;
   }
