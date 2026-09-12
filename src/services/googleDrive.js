@@ -15,6 +15,7 @@ let resolveSilentRefresh = null;
 let rejectSilentRefresh = null;
 let silentRefreshTimeoutId = null;
 let syncQueued = false;
+let syncPromise = null;
 
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
@@ -570,9 +571,10 @@ export async function syncAllData(silent = false) {
 
   if (state.isSyncing) {
     syncQueued = true;
-    return;
+    return syncPromise;
   }
   state.isSyncing = true;
+  syncPromise = (async () => {
   document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: true } }));
 
   try {
@@ -804,7 +806,6 @@ export async function syncAllData(silent = false) {
       }
     }
 
-    // 2. 🌟 IndexedDB 内に存在するすべての画像（未保存グループ・未分類プール等）も必須追加！
     const localImageIds = await new Promise((res) => {
       const tx = db.transaction(['images'], 'readonly');
       const req = tx.objectStore('images').getAllKeys();
@@ -812,10 +813,6 @@ export async function syncAllData(silent = false) {
       req.onerror = () => res([]);
     });
     const localImageIdsSet = new Set(localImageIds.map(Number));
-
-    for (const imgId of localImageIdsSet) {
-      requiredImageIds.add(imgId);
-    }
 
     const uploadTargets = [];
     for (const imgId of requiredImageIds) {
@@ -938,9 +935,14 @@ export async function syncAllData(silent = false) {
     document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: false } }));
     if (syncQueued) {
       syncQueued = false;
-      setTimeout(() => syncAllData(true), 0);
+      syncPromise = null;
+      setTimeout(() => { syncAllData(true); }, 0);
+    } else {
+      syncPromise = null;
     }
   }
+  })();
+  return syncPromise;
 }
 
 export async function destroyAllSellaData() {

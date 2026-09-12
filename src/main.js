@@ -1407,7 +1407,7 @@ function initApp() {
       return;
     }
 
-    const enlargeTarget = e.target.closest('[data-action="enlarge-image"]') || (e.target.tagName === 'IMG' && !e.target.closest('button, nav, header, aside, .lightbox-overlay, #sidebar') && (e.target.closest('#app') || e.target.closest('#detail-modal-overlay')) ? e.target : null);
+    const enlargeTarget = e.target.closest('img[data-action="enlarge-image"]');
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;
       let ctxData = null;
@@ -1645,7 +1645,11 @@ function initApp() {
             targetImg.blob = base64ToBlob(targetImg.base64, targetImg.mimeType || 'image/jpeg');
           }
 
-          const result = await analyzeLabelImage(targetImg.base64, targetImg.mimeType);
+          const base64 = targetImg.base64 || (targetImg.blob ? await blobToBase64(targetImg.blob) : '');
+          if (!base64) {
+            throw new Error('解析する画像データを読み込めませんでした');
+          }
+          const result = await analyzeLabelImage(base64, targetImg.mimeType);
 
           if (result) {
             const resolvedName = result.name || result.productName || group.name || '';
