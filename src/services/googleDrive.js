@@ -745,10 +745,10 @@ export async function syncAllData(silent = false) {
 
     const isCloudReady = (log) => !Array.isArray(log?.imageIds)
       || log.imageIds.every(imgId => cloudImageFilesMap.has(Number(imgId)));
-    const completeCloudLogs = (cloudIndex.logs || []).filter(isCloudReady);
+    const cloudIndexLogs = Array.isArray(cloudIndex.logs) ? cloudIndex.logs : [];
     const mergedLogsMap = new Map();
     const localLogsMap = new Map(localLogs.map(l => [l.id, l]));
-    const cloudLogsMap = new Map(completeCloudLogs.map(l => [l.id, l]));
+    const cloudLogsMap = new Map(cloudIndexLogs.map(l => [l.id, l]));
 
     const allIds = new Set([...localLogsMap.keys(), ...cloudLogsMap.keys()]);
 
@@ -763,7 +763,9 @@ export async function syncAllData(silent = false) {
         const localTime = new Date(local.updatedAt || 0).getTime();
         const cloudTime = new Date(cloud.updatedAt || 0).getTime();
 
-        if (localTime > cloudTime) {
+        if (!isCloudReady(cloud)) {
+          mergedLogsMap.set(id, local);
+        } else if (localTime > cloudTime) {
           mergedLogsMap.set(id, local);
           hasLocalLogsChanges = true;
         } else if (cloudTime > localTime) {
@@ -774,8 +776,7 @@ export async function syncAllData(silent = false) {
         }
       } else if (local) {
         mergedLogsMap.set(id, local);
-        hasLocalLogsChanges = true;
-      } else if (cloud) {
+      } else if (cloud && isCloudReady(cloud)) {
         mergedLogsMap.set(id, cloud);
         hasCloudLogsChanges = true;
       }
@@ -800,6 +801,12 @@ export async function syncAllData(silent = false) {
 
     // 1. 保存済み・ドラフトログ内の全画像IDを追加
     for (const log of mergedLogsMap.values()) {
+      if (log.isDeleted) continue;
+      if (Array.isArray(log.imageIds)) {
+        log.imageIds.forEach(id => requiredImageIds.add(Number(id)));
+      }
+    }
+    for (const log of cloudIndexLogs) {
       if (log.isDeleted) continue;
       if (Array.isArray(log.imageIds)) {
         log.imageIds.forEach(id => requiredImageIds.add(Number(id)));
@@ -849,6 +856,25 @@ export async function syncAllData(silent = false) {
       await runWithConcurrency(downloadTargets, async (imgId) => {
         const cloudFile = cloudImageFilesMap.get(imgId);
         await downloadImageFile(cloudFile.id, imgId);
+      });
+    }
+
+    const cloudLogsToApply = [];
+    for (const cloudLog of cloudIndexLogs) {
+      if (!mergedLogsMap.has(cloudLog.id) && isCloudReady(cloudLog)) {
+        mergedLogsMap.set(cloudLog.id, cloudLog);
+        hasCloudLogsChanges = true;
+        cloudLogsToApply.push(cloudLog);
+      }
+    }
+    if (cloudLogsToApply.length > 0) {
+      const tx = db.transaction(['logs'], 'readwrite');
+      const logStore = tx.objectStore('logs');
+      cloudLogsToApply.forEach(log => logStore.put(log));
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error || new Error('Failed to apply downloaded cloud logs'));
+        tx.onabort = () => reject(tx.error || new Error('Downloaded cloud log transaction was aborted'));
       });
     }
 
