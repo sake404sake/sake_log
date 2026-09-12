@@ -134,22 +134,72 @@ function bindLightboxGestures(lightbox) {
   const image = lightbox.querySelector('#lightbox-img');
   if (!image) return;
 
+  image.addEventListener('error', () => {
+    const ctx = state.activeLightboxCtx;
+    const fallbackFile = ctx?.type === 'editor-preview'
+      ? state.uploadedImages[ctx.idx]?.originalFile
+      : ctx?.type === 'batch-group'
+        ? state.batchGroups[ctx.gidx]?.[ctx.iidx]?.file
+        : ctx?.type === 'pool'
+          ? state.ungroupedImages[ctx.poolIdx]?.file
+          : null;
+    if (fallbackFile && image.dataset.fallbackApplied !== 'true') {
+      image.dataset.fallbackApplied = 'true';
+      image.src = URL.createObjectURL(fallbackFile);
+    }
+  });
+
   let startX = 0;
   let startY = 0;
   let moved = false;
+  let scale = 1;
+  const pointers = new Map();
+  let pinchDistance = 0;
+  let pinchScale = 1;
+  const distance = (first, second) => Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+  const applyScale = () => {
+    scale = Math.min(4, Math.max(1, scale));
+    image.style.transform = `scale(${scale})`;
+    image.classList.toggle('lightbox-image-zoomed', scale > 1);
+  };
+
+  image.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    scale += event.deltaY < 0 ? 0.2 : -0.2;
+    applyScale();
+  }, { passive: false });
 
   image.addEventListener('pointerdown', (event) => {
+    pointers.set(event.pointerId, event);
     startX = event.clientX;
     startY = event.clientY;
     moved = false;
+    if (pointers.size === 2) {
+      const [first, second] = pointers.values();
+      pinchDistance = distance(first, second);
+      pinchScale = scale;
+    }
     image.setPointerCapture?.(event.pointerId);
   });
 
   image.addEventListener('pointermove', (event) => {
+    pointers.set(event.pointerId, event);
+    if (pointers.size === 2 && pinchDistance > 0) {
+      const [first, second] = pointers.values();
+      scale = pinchScale * distance(first, second) / pinchDistance;
+      applyScale();
+      moved = true;
+      return;
+    }
     moved = Math.abs(event.clientX - startX) > 12 || Math.abs(event.clientY - startY) > 12;
   });
 
   image.addEventListener('pointerup', (event) => {
+    pointers.delete(event.pointerId);
+    if (pointers.size > 0) {
+      pinchDistance = 0;
+      return;
+    }
     const deltaX = event.clientX - startX;
     const deltaY = event.clientY - startY;
     if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
@@ -157,7 +207,10 @@ function bindLightboxGestures(lightbox) {
       else triggerLightboxPrev();
       return;
     }
-    if (!moved) image.classList.toggle('lightbox-image-zoomed');
+    if (!moved) {
+      scale = scale > 1 ? 1 : 2;
+      applyScale();
+    }
   });
 }
 

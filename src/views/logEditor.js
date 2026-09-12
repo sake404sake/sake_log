@@ -332,6 +332,16 @@ export function renderImagePreviewList() {
   </div>`;
 
   container.innerHTML = itemsHTML + addMoreHTML;
+  container.querySelectorAll('img[data-idx]').forEach((image) => {
+    image.addEventListener('error', () => {
+      const index = Number(image.dataset.idx);
+      const fallbackFile = state.uploadedImages[index]?.originalFile;
+      if (fallbackFile && image.dataset.fallbackApplied !== 'true') {
+        image.dataset.fallbackApplied = 'true';
+        image.src = URL.createObjectURL(fallbackFile);
+      }
+    });
+  });
 }
 
 export function saveCurrentFormBackup() {
@@ -477,6 +487,7 @@ export async function handleImageFiles(files) {
 
       state.uploadedImages.push({
         blob: compressed.blob,
+        originalFile: file,
         base64: compressed.base64,
         mimeType: compressed.mimeType,
         metadata: compressed.metadata || {},

@@ -177,6 +177,18 @@ export function renderBatchGroupsUI() {
     </div>
     ${ungroupedHTML}
   `;
+
+  previewSection.querySelectorAll('img[data-context-type="pool"], img[data-context-type="batch-group"]').forEach((image) => {
+    image.addEventListener('error', () => {
+      const item = image.dataset.contextType === 'pool'
+        ? state.ungroupedImages[Number(image.dataset.poolIdx)]
+        : state.batchGroups[Number(image.dataset.gidx)]?.[Number(image.dataset.iidx)];
+      if (item?.file && image.dataset.fallbackApplied !== 'true') {
+        image.dataset.fallbackApplied = 'true';
+        image.src = URL.createObjectURL(item.file);
+      }
+    });
+  });
 }
 
 /**

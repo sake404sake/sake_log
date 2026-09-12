@@ -1671,6 +1671,16 @@ a:hover {
   pointer-events: none;
 }
 
+.preview-item.reorder-shift-left,
+.draggable-thumb.reorder-shift-left {
+  transform: translateX(-14px);
+}
+
+.preview-item.reorder-shift-right,
+.draggable-thumb.reorder-shift-right {
+  transform: translateX(14px);
+}
+
 .preview-item img {
   width: 100% !important;
   height: 100% !important;
@@ -1811,15 +1821,15 @@ a:hover {
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8);
-  touch-action: pan-y;
-  transition: transform 0.2s ease;
+  touch-action: none;
+  transform: scale(1);
+  transform-origin: center center;
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
   cursor: zoom-in;
 }
 
 .lightbox-content img.lightbox-image-zoomed {
-  max-width: none !important;
-  max-height: none !important;
-  transform: scale(1.8);
+  transform: scale(2);
   cursor: zoom-out;
 }
 

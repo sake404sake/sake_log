@@ -676,6 +676,30 @@ function initApp() {
   let nativeDropHandled = false;
   let nativeDragSource = null;
   let nativeDropTarget = null;
+  let shiftedReorderItems = [];
+
+  const resetReorderShifts = () => {
+    shiftedReorderItems.forEach(item => item.classList.remove('reorder-shift-left', 'reorder-shift-right'));
+    shiftedReorderItems = [];
+  };
+
+  const updateReorderShifts = (sourceThumb, targetThumb) => {
+    resetReorderShifts();
+    if (!sourceThumb || !targetThumb || sourceThumb === targetThumb || sourceThumb.parentElement !== targetThumb.parentElement) return;
+    const items = [...sourceThumb.parentElement.querySelectorAll('.draggable-thumb, .preview-item')];
+    const sourceIndex = items.indexOf(sourceThumb);
+    const targetIndex = items.indexOf(targetThumb);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const start = Math.min(sourceIndex, targetIndex);
+    const end = Math.max(sourceIndex, targetIndex);
+    const className = sourceIndex < targetIndex ? 'reorder-shift-left' : 'reorder-shift-right';
+    items.slice(start, end + 1).forEach(item => {
+      if (item !== sourceThumb) {
+        item.classList.add(className);
+        shiftedReorderItems.push(item);
+      }
+    });
+  };
 
   document.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -709,6 +733,7 @@ function initApp() {
       activeReorderTarget?.classList.remove('reorder-target');
       activeReorderTarget = nextReorderTarget;
       activeReorderTarget?.classList.add('reorder-target');
+      updateReorderShifts(nativeDragSource, activeReorderTarget);
     }
     nativeDropTarget = targetThumb || card || pool;
   });
@@ -766,6 +791,7 @@ function initApp() {
     activeDragOverCard?.classList.remove('drag-over');
     activeDragOverPool?.classList.remove('drag-over');
     activeReorderTarget?.classList.remove('reorder-target');
+    resetReorderShifts();
     activeFileDropTarget = null;
     activeDragOverCard = null;
     activeDragOverPool = null;
@@ -782,6 +808,7 @@ function initApp() {
     activeDragOverCard?.classList.remove('drag-over');
     activeDragOverPool?.classList.remove('drag-over');
     activeReorderTarget?.classList.remove('reorder-target');
+    resetReorderShifts();
     activeFileDropTarget = null;
     activeDragOverCard = null;
     activeDragOverPool = null;
@@ -967,6 +994,7 @@ function initApp() {
           activePointerTarget?.classList.remove('reorder-target');
           activePointerTarget = nextPointerTarget;
           activePointerTarget?.classList.add('reorder-target');
+          updateReorderShifts(activeThumb, activePointerTarget);
         }
       }
     });
@@ -996,6 +1024,7 @@ function initApp() {
       pointerFrameId = 0;
     }
     activePointerTarget?.classList.remove('reorder-target');
+    resetReorderShifts();
     activePointerTarget = null;
     activePointerPool?.classList.remove('drag-over');
     activePointerPool = null;
