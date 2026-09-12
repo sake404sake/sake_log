@@ -27,6 +27,7 @@ function ensureSpinnerStyles() {
     @keyframes sellaSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     .sella-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: sellaSpin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
     .draggable-thumb, .preview-item { cursor: grab; transition: transform 0.15s, opacity 0.15s; touch-action: none; box-sizing: border-box; -webkit-touch-callout: none !important; -webkit-user-select: none !important; user-select: none !important; overflow: visible !important; }
+    .pointer-dragging { transition: none !important; will-change: transform; }
     .draggable-thumb:active, .preview-item:active { cursor: grabbing; }
     .batch-group-card.drag-over, #ungrouped-pool-container.drag-over { border-color: var(--accent-color) !important; background: var(--card-hover-bg, rgba(255,255,255,0.06)) !important; }
   `;
@@ -907,6 +908,8 @@ function initApp() {
   let activePointerTarget = null;
   let activePointerPool = null;
   let activePointerCard = null;
+  let pointerFrameId = 0;
+  let latestPointerEvent = null;
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -919,6 +922,7 @@ function initApp() {
       pointerStartX = e.clientX;
       pointerStartY = e.clientY;
       isPointerMoving = false;
+      activeThumb.classList.add('pointer-dragging');
       try {
         activeThumb.setPointerCapture(e.pointerId);
       } catch (err) {}
@@ -927,38 +931,45 @@ function initApp() {
 
   document.addEventListener('pointermove', (e) => {
     if (!activeThumb || !activeThumb.hasPointerCapture(e.pointerId)) return;
-    const diffX = e.clientX - pointerStartX;
-    const diffY = e.clientY - pointerStartY;
+    latestPointerEvent = e;
+    if (pointerFrameId) return;
+    pointerFrameId = requestAnimationFrame(() => {
+      pointerFrameId = 0;
+      if (!activeThumb || !latestPointerEvent) return;
+      const currentEvent = latestPointerEvent;
+      const diffX = currentEvent.clientX - pointerStartX;
+      const diffY = currentEvent.clientY - pointerStartY;
 
-    if (Math.abs(diffX) > 12 || Math.abs(diffY) > 12) {
-      isPointerMoving = true;
-      activeThumb.style.transform = `translate3d(${diffX}px, ${diffY}px, 0)`;
-      activeThumb.style.opacity = '0.8';
-      activeThumb.style.zIndex = '999';
+      if (Math.abs(diffX) > 12 || Math.abs(diffY) > 12) {
+        isPointerMoving = true;
+        activeThumb.style.transform = `translate3d(${diffX}px, ${diffY}px, 0)`;
+        activeThumb.style.opacity = '0.8';
+        activeThumb.style.zIndex = '999';
 
-      activeThumb.style.pointerEvents = 'none';
-      const droppedTarget = document.elementFromPoint(e.clientX, e.clientY);
-      const targetThumb = droppedTarget?.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb, #ungrouped-pool-container .draggable-thumb');
-      const targetPool = droppedTarget?.closest('#ungrouped-pool-container');
-      const targetCard = droppedTarget?.closest('.batch-group-card');
-      activeThumb.style.pointerEvents = '';
-      if (activePointerPool !== targetPool) {
-        activePointerPool?.classList.remove('drag-over');
-        activePointerPool = targetPool;
-        activePointerPool?.classList.add('drag-over');
+        activeThumb.style.pointerEvents = 'none';
+        const droppedTarget = document.elementFromPoint(currentEvent.clientX, currentEvent.clientY);
+        const targetThumb = droppedTarget?.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb, #ungrouped-pool-container .draggable-thumb');
+        const targetPool = droppedTarget?.closest('#ungrouped-pool-container');
+        const targetCard = droppedTarget?.closest('.batch-group-card');
+        activeThumb.style.pointerEvents = '';
+        if (activePointerPool !== targetPool) {
+          activePointerPool?.classList.remove('drag-over');
+          activePointerPool = targetPool;
+          activePointerPool?.classList.add('drag-over');
+        }
+        if (activePointerCard !== targetCard) {
+          activePointerCard?.classList.remove('drag-over');
+          activePointerCard = targetCard;
+          activePointerCard?.classList.add('drag-over');
+        }
+        const nextPointerTarget = targetThumb && targetThumb !== activeThumb ? targetThumb : null;
+        if (activePointerTarget !== nextPointerTarget) {
+          activePointerTarget?.classList.remove('reorder-target');
+          activePointerTarget = nextPointerTarget;
+          activePointerTarget?.classList.add('reorder-target');
+        }
       }
-      if (activePointerCard !== targetCard) {
-        activePointerCard?.classList.remove('drag-over');
-        activePointerCard = targetCard;
-        activePointerCard?.classList.add('drag-over');
-      }
-      const nextPointerTarget = targetThumb && targetThumb !== activeThumb ? targetThumb : null;
-      if (activePointerTarget !== nextPointerTarget) {
-        activePointerTarget?.classList.remove('reorder-target');
-        activePointerTarget = nextPointerTarget;
-        activePointerTarget?.classList.add('reorder-target');
-      }
-    }
+    });
   });
 
   document.addEventListener('pointerup', async (e) => {
@@ -978,6 +989,12 @@ function initApp() {
     thumb.style.transform = '';
     thumb.style.opacity = '';
     thumb.style.zIndex = '';
+    thumb.classList.remove('pointer-dragging');
+    latestPointerEvent = null;
+    if (pointerFrameId) {
+      cancelAnimationFrame(pointerFrameId);
+      pointerFrameId = 0;
+    }
     activePointerTarget?.classList.remove('reorder-target');
     activePointerTarget = null;
     activePointerPool?.classList.remove('drag-over');
@@ -1296,6 +1313,10 @@ function initApp() {
     }
 
     // ライトボックス表示
+    if (e.target.closest('#lightbox-img')) {
+      return;
+    }
+
     const enlargeTarget = e.target.closest('[data-action="enlarge-image"]') || (e.target.tagName === 'IMG' && !e.target.closest('button, nav, header, aside, .lightbox-overlay, #sidebar') && (e.target.closest('#app') || e.target.closest('#detail-modal-overlay')) ? e.target : null);
     if (enlargeTarget) {
       const contextType = enlargeTarget.dataset.contextType;

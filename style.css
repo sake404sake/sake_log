@@ -1811,6 +1811,16 @@ a:hover {
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8);
+  touch-action: pan-y;
+  transition: transform 0.2s ease;
+  cursor: zoom-in;
+}
+
+.lightbox-content img.lightbox-image-zoomed {
+  max-width: none !important;
+  max-height: none !important;
+  transform: scale(1.8);
+  cursor: zoom-out;
 }
 
 .lightbox-arrow-btn {

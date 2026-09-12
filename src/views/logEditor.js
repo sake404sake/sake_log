@@ -482,6 +482,10 @@ export async function handleImageFiles(files) {
         metadata: compressed.metadata || {},
         previewUrl
       });
+      if (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined) {
+        state.activeThumbnailIndex = 0;
+      }
+      renderImagePreviewList();
     } catch (e) {
       console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
     }

@@ -127,6 +127,38 @@ export function openLightbox(imageSrc, ctx) {
     </div>
   `;
   lightbox.classList.add('active');
+  bindLightboxGestures(lightbox);
+}
+
+function bindLightboxGestures(lightbox) {
+  const image = lightbox.querySelector('#lightbox-img');
+  if (!image) return;
+
+  let startX = 0;
+  let startY = 0;
+  let moved = false;
+
+  image.addEventListener('pointerdown', (event) => {
+    startX = event.clientX;
+    startY = event.clientY;
+    moved = false;
+    image.setPointerCapture?.(event.pointerId);
+  });
+
+  image.addEventListener('pointermove', (event) => {
+    moved = Math.abs(event.clientX - startX) > 12 || Math.abs(event.clientY - startY) > 12;
+  });
+
+  image.addEventListener('pointerup', (event) => {
+    const deltaX = event.clientX - startX;
+    const deltaY = event.clientY - startY;
+    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX < 0) triggerLightboxNext();
+      else triggerLightboxPrev();
+      return;
+    }
+    if (!moved) image.classList.toggle('lightbox-image-zoomed');
+  });
 }
 
 export function closeLightbox() {
