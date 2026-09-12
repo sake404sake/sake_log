@@ -87,6 +87,7 @@ const EXCLUDED_LOCAL_KEYS = [
   'sella_image_compress_quality',
   'sella_google_token',
   'sella_google_token_acquired_at',
+  'sella_google_token_expires_at',
   'sella_google_logged_in',
   'sella_google_user_name',
   'sella_google_user_avatar',
@@ -181,6 +182,9 @@ export async function initGoogleAuth() {
       state.googleAccessToken = response.access_token;
       localStorage.setItem('sella_google_token', response.access_token);
       localStorage.setItem('sella_google_token_acquired_at', Date.now().toString());
+      const expiresInSeconds = Number(response.expires_in) || 3600;
+      localStorage.setItem('sella_google_token_expires_at', String(Date.now() + Math.max(60, expiresInSeconds - 60) * 1000));
+      state.googleAuthNeedsReauth = false;
 
       try {
         const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -271,6 +275,7 @@ export function logoutGoogle(clearLocal = false) {
   state.googleUserSub = '';
   localStorage.removeItem('sella_google_token');
   localStorage.removeItem('sella_google_token_acquired_at');
+  localStorage.removeItem('sella_google_token_expires_at');
   localStorage.removeItem('sella_google_logged_in');
   localStorage.removeItem('sella_google_user_name');
   localStorage.removeItem('sella_google_user_avatar');
@@ -297,10 +302,15 @@ export function logoutGoogle(clearLocal = false) {
 }
 
 export function isTokenExpired() {
+  const expiresAt = Number(localStorage.getItem('sella_google_token_expires_at'));
+  if (Number.isFinite(expiresAt) && expiresAt > 0) {
+    return Date.now() >= expiresAt;
+  }
+
   const acquiredAt = localStorage.getItem('sella_google_token_acquired_at');
   if (!acquiredAt) return true;
   
-  const oneHourMs = 3600 * 1000;
+  const oneHourMs = 55 * 60 * 1000;
   const timePassed = Date.now() - parseInt(acquiredAt, 10);
   return timePassed >= oneHourMs;
 }
@@ -336,17 +346,18 @@ function refreshTokenSilently() {
 
 function handleTokenExpired() {
   state.isGoogleLoggedIn = false;
+  state.googleAuthNeedsReauth = true;
   state.googleAccessToken = null;
   localStorage.removeItem('sella_google_token');
   localStorage.removeItem('sella_google_token_acquired_at');
+  localStorage.removeItem('sella_google_token_expires_at');
   localStorage.removeItem('sella_google_logged_in');
   
-  document.dispatchEvent(new CustomEvent('google-logout-success'));
-  
   state.isSyncing = false;
+  document.dispatchEvent(new CustomEvent('google-logout-success'));
   document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: false } }));
-  
-  alert('Googleアカウントのセッション有効期限が切れました。安全な同期のため、お手数ですが再度ログインを行ってください。');
+
+  alert('Google同期の認証が期限切れになりました。ローカルデータは保持されています。同期を再開するには、設定画面からGoogleに再接続してください。');
 }
 
 async function driveFetch(url, options = {}, allowTokenRefresh = true) {
@@ -722,9 +733,20 @@ export async function syncAllData(silent = false) {
       }
     }
 
+    const cloudImageFilesMap = new Map();
+    cloudImageFiles.forEach(f => {
+      const match = f.name.match(/^sella_img_(\d+)\.bin$/);
+      if (match) {
+        cloudImageFilesMap.set(Number(match[1]), f);
+      }
+    });
+
+    const isCloudReady = (log) => !Array.isArray(log?.imageIds)
+      || log.imageIds.every(imgId => cloudImageFilesMap.has(Number(imgId)));
+    const completeCloudLogs = (cloudIndex.logs || []).filter(isCloudReady);
     const mergedLogsMap = new Map();
     const localLogsMap = new Map(localLogs.map(l => [l.id, l]));
-    const cloudLogsMap = new Map((cloudIndex.logs || []).map(l => [l.id, l]));
+    const cloudLogsMap = new Map(completeCloudLogs.map(l => [l.id, l]));
 
     const allIds = new Set([...localLogsMap.keys(), ...cloudLogsMap.keys()]);
 
@@ -795,14 +817,6 @@ export async function syncAllData(silent = false) {
       requiredImageIds.add(imgId);
     }
 
-    const cloudImageFilesMap = new Map();
-    cloudImageFiles.forEach(f => {
-      const match = f.name.match(/^sella_img_(\d+)\.bin$/);
-      if (match) {
-        cloudImageFilesMap.set(Number(match[1]), f);
-      }
-    });
-
     const uploadTargets = [];
     for (const imgId of requiredImageIds) {
       if (localImageIdsSet.has(imgId) && !cloudImageFilesMap.has(imgId)) {
@@ -820,7 +834,8 @@ export async function syncAllData(silent = false) {
           req.onerror = () => res(null);
         });
         if (blobRecord && blobRecord.blob) {
-          await uploadImageFile(imgId, blobRecord.blob);
+          const uploadedFile = await uploadImageFile(imgId, blobRecord.blob);
+          cloudImageFilesMap.set(imgId, uploadedFile);
         }
       });
     }
@@ -840,8 +855,21 @@ export async function syncAllData(silent = false) {
       });
     }
 
+    const publishableLogs = [];
+    for (const [id, log] of mergedLogsMap) {
+      if (isCloudReady(log)) {
+        publishableLogs.push(log);
+        continue;
+      }
+
+      const previousCloudLog = cloudLogsMap.get(id);
+      if (previousCloudLog && isCloudReady(previousCloudLog)) {
+        publishableLogs.push(previousCloudLog);
+      }
+    }
+
     const updatedIndex = {
-      logs: Array.from(mergedLogsMap.values()).map(stripEmbeddedImageData),
+      logs: publishableLogs.map(stripEmbeddedImageData),
       lastSynced: new Date().toISOString()
     };
     await uploadJsonFile('sella_index.json', updatedIndex, indexFile?.id);

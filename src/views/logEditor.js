@@ -9,6 +9,21 @@ export const TRACKED_FIELDS = [
   'sake-region', 'sake-type', 'sake-abv', 'sake-notes', 'sake-ai-info'
 ];
 
+export function getImagePreviewSrc(item) {
+  if (!item) return '';
+  if (item.previewUrl) return item.previewUrl;
+  if (item.base64) return `data:${item.mimeType || 'image/jpeg'};base64,${item.base64}`;
+  if (item.blob instanceof Blob) {
+    item.previewUrl = URL.createObjectURL(item.blob);
+    return item.previewUrl;
+  }
+  if (item.originalFile instanceof Blob) {
+    item.previewUrl = URL.createObjectURL(item.originalFile);
+    return item.previewUrl;
+  }
+  return '';
+}
+
 export async function renderLogEditorModal(logId = null) {
   const today = formatDateToLocalYYYYMMDD(new Date());
   const existingTags = await getAllTags();
@@ -314,7 +329,7 @@ export function renderImagePreviewList() {
   }
 
   const itemsHTML = state.uploadedImages.map((img, idx) => {
-    const imgSrc = img.previewUrl || (img.base64 ? `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}` : '');
+    const imgSrc = getImagePreviewSrc(img);
     return `
       <div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" draggable="true" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
         <img src="${imgSrc}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none; width: 100%; height: 100%; object-fit: cover; cursor: pointer;" />

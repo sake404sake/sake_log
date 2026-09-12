@@ -1656,19 +1656,21 @@ a:hover {
 
 .preview-item.reorder-target::after,
 .draggable-thumb.reorder-target::after {
-  content: 'ここに移動';
-  position: absolute;
-  inset: auto 2px 2px;
-  z-index: 20;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: var(--accent-color);
-  color: #08110d;
-  font-size: 10px;
-  font-weight: bold;
-  line-height: 1.2;
-  text-align: center;
-  pointer-events: none;
+  display: none;
+}
+
+.preview-item.reorder-gap-left,
+.draggable-thumb.reorder-gap-left {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 45%, transparent) !important;
+  transform: translateX(-14px) !important;
+}
+
+.preview-item.reorder-gap-right,
+.draggable-thumb.reorder-gap-right {
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 45%, transparent) !important;
+  transform: translateX(14px) !important;
 }
 
 .preview-item.reorder-shift-left,

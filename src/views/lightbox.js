@@ -1,7 +1,7 @@
 // src/views/lightbox.js
 
 import { state } from '../store/state.js';
-import { renderImagePreviewList } from './logEditor.js';
+import { getImagePreviewSrc, renderImagePreviewList } from './logEditor.js';
 import { renderBatchGroupsUI } from './batchImport.js';
 
 export function openLightbox(imageSrc, ctx) {
@@ -14,6 +14,14 @@ export function openLightbox(imageSrc, ctx) {
   }
 
   state.activeLightboxCtx = ctx;
+
+  if (!imageSrc && ctx?.type === 'editor-preview') {
+    imageSrc = getImagePreviewSrc(state.uploadedImages[ctx.idx]);
+  } else if (!imageSrc && ctx?.type === 'batch-group') {
+    imageSrc = getImagePreviewSrc(state.batchGroups[ctx.gidx]?.[ctx.iidx]);
+  } else if (!imageSrc && ctx?.type === 'pool') {
+    imageSrc = getImagePreviewSrc(state.ungroupedImages[ctx.poolIdx]);
+  }
 
   let controlsHTML = '';
   let indicatorHTML = '';
@@ -230,7 +238,7 @@ export function triggerLightboxNext() {
     if (idx < state.uploadedImages.length - 1) {
       const nextIdx = idx + 1;
       ctx.idx = nextIdx;
-      openLightbox(state.uploadedImages[nextIdx].previewUrl, ctx);
+      openLightbox(getImagePreviewSrc(state.uploadedImages[nextIdx]), ctx);
     }
   } else if (ctx.type === 'batch-group') {
     const gIdx = ctx.gidx;
@@ -239,14 +247,14 @@ export function triggerLightboxNext() {
     if (group && iIdx < group.length - 1) {
       const nextIIdx = iIdx + 1;
       ctx.iidx = nextIIdx;
-      openLightbox(group[nextIIdx].previewUrl, ctx);
+      openLightbox(getImagePreviewSrc(group[nextIIdx]), ctx);
     }
   } else if (ctx.type === 'pool') {
     const idx = ctx.poolIdx;
     if (idx < state.ungroupedImages.length - 1) {
       const nextIdx = idx + 1;
       ctx.poolIdx = nextIdx;
-      openLightbox(state.ungroupedImages[nextIdx].previewUrl, ctx);
+      openLightbox(getImagePreviewSrc(state.ungroupedImages[nextIdx]), ctx);
     }
   } else if (ctx.type === 'detail-preview') {
     const idx = ctx.idx;
@@ -266,7 +274,7 @@ export function triggerLightboxPrev() {
     if (idx > 0) {
       const prevIdx = idx - 1;
       ctx.idx = prevIdx;
-      openLightbox(state.uploadedImages[prevIdx].previewUrl, ctx);
+      openLightbox(getImagePreviewSrc(state.uploadedImages[prevIdx]), ctx);
     }
   } else if (ctx.type === 'batch-group') {
     const gIdx = ctx.gidx;
@@ -275,14 +283,14 @@ export function triggerLightboxPrev() {
     if (group && iIdx > 0) {
       const prevIIdx = iIdx - 1;
       ctx.iidx = prevIIdx;
-      openLightbox(group[prevIIdx].previewUrl, ctx);
+      openLightbox(getImagePreviewSrc(group[prevIIdx]), ctx);
     }
   } else if (ctx.type === 'pool') {
     const idx = ctx.poolIdx;
     if (idx > 0) {
       const prevIdx = idx - 1;
       ctx.poolIdx = prevIdx;
-      openLightbox(state.ungroupedImages[prevIdx].previewUrl, ctx);
+      openLightbox(getImagePreviewSrc(state.ungroupedImages[prevIdx]), ctx);
     }
   } else if (ctx.type === 'detail-preview') {
     const idx = ctx.idx;

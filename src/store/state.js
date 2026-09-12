@@ -37,6 +37,7 @@ export const state = {
   googleUserName: '',
   googleUserAvatar: '',
   isSyncing: false,
+  googleAuthNeedsReauth: false,
   lastSyncedTime: '',
   lastSyncedAt: '',
   batchLocalUpdatedAt: ''

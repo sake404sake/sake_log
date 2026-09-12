@@ -19,6 +19,10 @@ function getSafeImgSrc(item) {
       return url;
     } catch (e) {}
   }
+  if (item.file instanceof Blob) {
+    item.previewUrl = URL.createObjectURL(item.file);
+    return item.previewUrl;
+  }
   return '';
 }
 
@@ -119,7 +123,7 @@ export function renderBatchGroupsUI() {
       const imgSrc = getSafeImgSrc(item);
       return `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
-           style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '1px solid var(--border-color)'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : 'none'}; box-sizing: border-box; touch-action: none;">
+         style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '2px solid color-mix(in srgb, var(--accent-color) 45%, var(--border-color))'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : '0 0 5px color-mix(in srgb, var(--accent-color) 18%, transparent)'}; box-sizing: border-box; touch-action: none;">
         <img src="${imgSrc}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"

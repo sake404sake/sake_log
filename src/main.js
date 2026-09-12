@@ -499,6 +499,17 @@ function initApp() {
     syncAllData(true);
   }
 
+  const requestBackgroundSync = () => {
+    if (state.isGoogleLoggedIn && !state.googleAuthNeedsReauth && navigator.onLine !== false) {
+      syncAllData(true);
+    }
+  };
+  window.addEventListener('online', requestBackgroundSync);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestBackgroundSync();
+  });
+  setInterval(requestBackgroundSync, 5 * 60 * 1000);
+
   document.getElementById('btn-menu-toggle')?.addEventListener('click', openSidebar);
   document.getElementById('btn-right-panel-toggle')?.addEventListener('click', openRightPanel);
   overlay?.addEventListener('click', closeDrawers);
@@ -677,28 +688,53 @@ function initApp() {
   let nativeDragSource = null;
   let nativeDropTarget = null;
   let shiftedReorderItems = [];
+  let nativeDropInsertionIndex = null;
+
+  const findGapTarget = (container, clientX, clientY, sourceThumb) => {
+    if (!container) return null;
+    const items = [...container.querySelectorAll('.draggable-thumb, .preview-item')]
+      .filter(item => item !== sourceThumb);
+    if (items.length === 0) return null;
+    const candidates = items.map(item => {
+      const rect = item.getBoundingClientRect();
+      const verticalDistance = clientY < rect.top ? rect.top - clientY : clientY > rect.bottom ? clientY - rect.bottom : 0;
+      return { item, distance: Math.hypot(Math.max(rect.left - clientX, clientX - rect.right, 0), verticalDistance), rect };
+    }).sort((left, right) => left.distance - right.distance);
+    const nearest = candidates[0];
+    const itemsInContainer = [...container.querySelectorAll('.draggable-thumb, .preview-item')];
+    const nearestIndex = itemsInContainer.indexOf(nearest.item);
+    return {
+      item: nearest.item,
+      insertionIndex: nearestIndex + (clientX >= nearest.rect.left + nearest.rect.width / 2 ? 1 : 0)
+    };
+  };
 
   const resetReorderShifts = () => {
-    shiftedReorderItems.forEach(item => item.classList.remove('reorder-shift-left', 'reorder-shift-right'));
+    shiftedReorderItems.forEach(item => item.classList.remove('reorder-shift-left', 'reorder-shift-right', 'reorder-gap-side', 'reorder-gap-left', 'reorder-gap-right'));
     shiftedReorderItems = [];
   };
 
-  const updateReorderShifts = (sourceThumb, targetThumb) => {
+  const updateReorderShifts = (sourceThumb, targetThumb, insertionIndex = null) => {
     resetReorderShifts();
     if (!sourceThumb || !targetThumb || sourceThumb === targetThumb || sourceThumb.parentElement !== targetThumb.parentElement) return;
     const items = [...sourceThumb.parentElement.querySelectorAll('.draggable-thumb, .preview-item')];
     const sourceIndex = items.indexOf(sourceThumb);
     const targetIndex = items.indexOf(targetThumb);
     if (sourceIndex < 0 || targetIndex < 0) return;
-    const start = Math.min(sourceIndex, targetIndex);
-    const end = Math.max(sourceIndex, targetIndex);
-    const className = sourceIndex < targetIndex ? 'reorder-shift-left' : 'reorder-shift-right';
-    items.slice(start, end + 1).forEach(item => {
-      if (item !== sourceThumb) {
-        item.classList.add(className);
-        shiftedReorderItems.push(item);
-      }
-    });
+    const rawInsertionIndex = insertionIndex ?? targetIndex + (sourceIndex < targetIndex ? 1 : 0);
+    const itemsWithoutSource = items.filter(item => item !== sourceThumb);
+    const adjustedInsertionIndex = rawInsertionIndex - (sourceIndex < rawInsertionIndex ? 1 : 0);
+    const leftItem = itemsWithoutSource[adjustedInsertionIndex - 1];
+    const rightItem = itemsWithoutSource[adjustedInsertionIndex];
+
+    if (leftItem) {
+      leftItem.classList.add('reorder-gap-left');
+      shiftedReorderItems.push(leftItem);
+    }
+    if (rightItem && rightItem !== leftItem) {
+      rightItem.classList.add('reorder-gap-right');
+      shiftedReorderItems.push(rightItem);
+    }
   };
 
   document.addEventListener('dragover', (e) => {
@@ -728,13 +764,22 @@ function initApp() {
     }
 
     const targetThumb = e.target.closest('#image-preview-list .preview-item, .batch-group-card .draggable-thumb, #ungrouped-pool-container .draggable-thumb');
-    const nextReorderTarget = state.draggedItemInfo && targetThumb ? targetThumb : null;
+    const gapTarget = state.draggedItemInfo && !targetThumb
+      ? findGapTarget(nativeDragSource?.parentElement, e.clientX, e.clientY, nativeDragSource)
+      : null;
+    const nextReorderTarget = state.draggedItemInfo ? (targetThumb || gapTarget?.item || null) : null;
+    nativeDropInsertionIndex = gapTarget?.insertionIndex ?? null;
     if (activeReorderTarget !== nextReorderTarget) {
       activeReorderTarget?.classList.remove('reorder-target');
       activeReorderTarget = nextReorderTarget;
       activeReorderTarget?.classList.add('reorder-target');
-      updateReorderShifts(nativeDragSource, activeReorderTarget);
     }
+    const targetRect = activeReorderTarget?.getBoundingClientRect();
+    const targetIndex = activeReorderTarget ? [...activeReorderTarget.parentElement.querySelectorAll('.draggable-thumb, .preview-item')].indexOf(activeReorderTarget) : -1;
+    const hoverInsertionIndex = targetRect && targetIndex >= 0
+      ? targetIndex + (e.clientX >= targetRect.left + targetRect.width / 2 ? 1 : 0)
+      : nativeDropInsertionIndex;
+    updateReorderShifts(nativeDragSource, activeReorderTarget, hoverInsertionIndex);
     nativeDropTarget = targetThumb || card || pool;
   });
 
@@ -796,6 +841,7 @@ function initApp() {
     activeDragOverCard = null;
     activeDragOverPool = null;
     activeReorderTarget = null;
+    nativeDropInsertionIndex = null;
   });
 
   document.addEventListener('drop', async (e) => {
@@ -804,6 +850,7 @@ function initApp() {
     const lastDragOverCard = activeDragOverCard;
     const lastDragOverPool = activeDragOverPool;
     const lastReorderTarget = activeReorderTarget;
+    const lastDropInsertionIndex = nativeDropInsertionIndex;
     activeFileDropTarget?.classList.remove('file-drop-active');
     activeDragOverCard?.classList.remove('drag-over');
     activeDragOverPool?.classList.remove('drag-over');
@@ -847,10 +894,10 @@ function initApp() {
 
     // 1. 単体登録エディタ内のドロップ並び替え
     if (dragInfo.type === 'editor') {
-      const targetThumb = e.target.closest('#image-preview-list .preview-item');
+      const targetThumb = e.target.closest('#image-preview-list .preview-item') || lastReorderTarget;
       if (targetThumb) {
         const targetImg = targetThumb.querySelector('img');
-        const targetIdx = targetImg ? Number(targetImg.dataset.idx) : Number(targetThumb.dataset.idx);
+        const targetIdx = lastDropInsertionIndex ?? (targetImg ? Number(targetImg.dataset.idx) : Number(targetThumb.dataset.idx));
         const srcIdx = dragInfo.idx;
         if (!isNaN(srcIdx) && !isNaN(targetIdx) && srcIdx !== targetIdx && state.uploadedImages[srcIdx]) {
           moveArrayItem(state.uploadedImages, srcIdx, targetIdx);
@@ -886,7 +933,7 @@ function initApp() {
       const targetGroupIndex = Number(targetGroupCard.dataset.gidx);
       targetItems = state.batchGroups[targetGroupIndex] || null;
       if (targetThumb?.dataset.gidx !== undefined && Number(targetThumb.dataset.gidx) === targetGroupIndex) {
-        targetIndex = Number(targetThumb.dataset.iidx);
+        targetIndex = lastDropInsertionIndex ?? Number(targetThumb.dataset.iidx);
       }
     } else if (targetPoolArea) {
       targetItems = state.ungroupedImages;
@@ -935,6 +982,7 @@ function initApp() {
   let activePointerTarget = null;
   let activePointerPool = null;
   let activePointerCard = null;
+  let activePointerInsertionIndex = null;
   let pointerFrameId = 0;
   let latestPointerEvent = null;
 
@@ -989,13 +1037,24 @@ function initApp() {
           activePointerCard = targetCard;
           activePointerCard?.classList.add('drag-over');
         }
-        const nextPointerTarget = targetThumb && targetThumb !== activeThumb ? targetThumb : null;
+        const pointerGapTarget = !targetThumb
+          ? findGapTarget(activeThumb.parentElement, currentEvent.clientX, currentEvent.clientY, activeThumb)
+          : null;
+        const nextPointerTarget = targetThumb && targetThumb !== activeThumb
+          ? targetThumb
+          : pointerGapTarget?.item || null;
+        activePointerInsertionIndex = pointerGapTarget?.insertionIndex ?? null;
         if (activePointerTarget !== nextPointerTarget) {
           activePointerTarget?.classList.remove('reorder-target');
           activePointerTarget = nextPointerTarget;
           activePointerTarget?.classList.add('reorder-target');
-          updateReorderShifts(activeThumb, activePointerTarget);
         }
+        const targetRect = activePointerTarget?.getBoundingClientRect();
+        const targetIndex = activePointerTarget ? [...activePointerTarget.parentElement.querySelectorAll('.draggable-thumb, .preview-item')].indexOf(activePointerTarget) : -1;
+        const hoverInsertionIndex = targetRect && targetIndex >= 0
+          ? targetIndex + (currentEvent.clientX >= targetRect.left + targetRect.width / 2 ? 1 : 0)
+          : activePointerInsertionIndex;
+        updateReorderShifts(activeThumb, activePointerTarget, hoverInsertionIndex);
       }
     });
   });
@@ -1007,6 +1066,7 @@ function initApp() {
     const lastPointerTarget = activePointerTarget;
     const lastPointerPool = activePointerPool;
     const lastPointerCard = activePointerCard;
+    const lastPointerInsertionIndex = activePointerInsertionIndex;
 
     try {
       if (thumb.hasPointerCapture(e.pointerId)) {
@@ -1026,6 +1086,7 @@ function initApp() {
     activePointerTarget?.classList.remove('reorder-target');
     resetReorderShifts();
     activePointerTarget = null;
+    activePointerInsertionIndex = null;
     activePointerPool?.classList.remove('drag-over');
     activePointerPool = null;
     activePointerCard?.classList.remove('drag-over');
@@ -1046,7 +1107,7 @@ function initApp() {
       const targetThumb = droppedEl.closest('#image-preview-list .preview-item');
       if (targetThumb) {
         const targetImg = targetThumb.querySelector('img');
-        const targetIdx = targetImg ? Number(targetImg.dataset.idx) : Number(targetThumb.dataset.idx);
+        const targetIdx = lastPointerInsertionIndex ?? (targetImg ? Number(targetImg.dataset.idx) : Number(targetThumb.dataset.idx));
         const imgEl = thumb.querySelector('img');
         const srcIdx = imgEl ? Number(imgEl.dataset.idx) : Number(thumb.dataset.idx);
 
@@ -1066,7 +1127,7 @@ function initApp() {
     const sourceItems = dragInfo.type === 'group' ? state.batchGroups[dragInfo.gIdx] : state.ungroupedImages;
     const targetCard = droppedEl.closest('.batch-group-card');
     const targetPool = droppedEl.closest('#ungrouped-pool-container');
-    const targetThumb = droppedEl.closest('.draggable-thumb');
+    const targetThumb = droppedEl.closest('.draggable-thumb') || lastPointerTarget;
     let targetItems = null;
     let targetIndex = null;
 
@@ -1074,7 +1135,7 @@ function initApp() {
       const targetGIdx = Number(targetCard.dataset.gidx);
       targetItems = state.batchGroups[targetGIdx] || null;
       if (targetThumb?.dataset.gidx !== undefined && Number(targetThumb.dataset.gidx) === targetGIdx) {
-        targetIndex = Number(targetThumb.dataset.iidx);
+        targetIndex = lastPointerInsertionIndex ?? Number(targetThumb.dataset.iidx);
       }
     } else if (targetPool) {
       targetItems = state.ungroupedImages;
