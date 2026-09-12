@@ -288,8 +288,11 @@ function renderAiChatControls() {
   }
 
   controls.innerHTML = `
-    <input type="text" id="ai-chat-input" placeholder="AIに質問・検索..." aria-label="AIに質問・検索">
-    <button type="button" class="send-btn" title="送信" aria-label="送信">➔</button>`;
+    <div class="ai-chat-composer">
+      <span class="ai-chat-composer-icon" aria-hidden="true">⌕</span>
+      <input type="text" id="ai-chat-input" placeholder="記録を質問・検索" aria-label="AIに質問・検索">
+      <button type="button" class="send-btn" title="送信" aria-label="送信">➜</button>
+    </div>`;
   document.getElementById('ai-chat-input')?.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter' && !e.isComposing) {
       e.preventDefault();
