@@ -165,7 +165,7 @@ export async function renderLogListView() {
         const extractThumbUrl = (obj) => {
           if (!obj) return null;
           if (Array.isArray(obj.imageUrls) && obj.imageUrls.length > 0) {
-            return obj.imageUrls[0];
+            return obj.imageUrls.find(Boolean) || null;
           }
           return null;
         };

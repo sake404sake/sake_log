@@ -154,7 +154,9 @@ export async function openDetailModal(logId) {
   const log = await getLogById(logId);
   if (!log) return;
 
-  state.detailImages = (log.images || []).map(blob => URL.createObjectURL(blob));
+  state.detailImages = (log.images || [])
+    .filter(blob => blob instanceof Blob)
+    .map(blob => URL.createObjectURL(blob));
   state.detailActiveIndex = 0;
 
   const detailHTML = renderLogDetailModal(log);

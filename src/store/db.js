@@ -65,6 +65,7 @@ export async function saveLog(logData, imageBlobs = []) {
   const tx = db.transaction(['logs', 'images'], 'readwrite');
   const logStore = tx.objectStore('logs');
   const imgStore = tx.objectStore('images');
+  const validImageBlobs = imageBlobs.filter(blob => blob instanceof Blob && blob.size > 0);
 
   // IDの自動決定・数値文字列対応
   const isUpdate = Boolean(logData.id);
@@ -92,7 +93,7 @@ export async function saveLog(logData, imageBlobs = []) {
 
   // 画像Blobを格納
   const imageIds = await Promise.all(
-    imageBlobs.map(blob => new Promise((res, rej) => {
+    validImageBlobs.map(blob => new Promise((res, rej) => {
       const req = imgStore.add({ blob, createdAt: new Date().toISOString() });
       req.onsuccess = () => res(req.result);
       req.onerror = () => rej(req.error);
