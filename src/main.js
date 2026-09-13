@@ -339,7 +339,9 @@ export async function syncBatchStateToDB() {
   try {
     const localUpdatedAt = new Date().toISOString();
     state.batchLocalUpdatedAt = localUpdatedAt;
-    state.batchGroups.forEach(group => { group._updatedAt = localUpdatedAt; });
+    state.batchGroups.forEach(group => {
+      if (!group._updatedAt) group._updatedAt = localUpdatedAt;
+    });
     await clearAllDrafts();
 
     if (state.ungroupedImages.length > 0) {
@@ -359,7 +361,7 @@ export async function syncBatchStateToDB() {
           });
         }
       }
-      const poolLogData = { id: 'system_image_pool', status: 'draft', isPool: true, name: '画像プール', poolItemsMeta };
+      const poolLogData = { id: 'system_image_pool', status: 'draft', isPool: true, name: '画像プール', poolItemsMeta, updatedAt: localUpdatedAt };
       await saveLog(poolLogData, poolBlobs);
     }
 
@@ -397,6 +399,7 @@ export async function syncBatchStateToDB() {
         notes: group.notes || '',
         aiInfo: group.aiInfo || '',
         backupFormData: group.backupFormData ? { ...group.backupFormData } : null,
+        updatedAt: group._updatedAt || localUpdatedAt,
         groupItemsMeta
       };
       await saveLog(groupLogData, groupBlobs);
@@ -624,6 +627,7 @@ function initApp() {
       const gIdx = Number(e.target.dataset.gidx);
       if (state.batchGroups[gIdx]) {
         state.batchGroups[gIdx].name = e.target.value;
+        state.batchGroups[gIdx]._updatedAt = new Date().toISOString();
         await syncBatchStateToDB();
       }
     }
@@ -631,6 +635,7 @@ function initApp() {
       const gIdx = Number(e.target.dataset.gidx);
       if (state.batchGroups[gIdx]) {
         state.batchGroups[gIdx].brewery = e.target.value;
+        state.batchGroups[gIdx]._updatedAt = new Date().toISOString();
         await syncBatchStateToDB();
       }
     }
@@ -1465,6 +1470,7 @@ function initApp() {
         if (state.batchGroups[gIdx] && iIdx > 0) {
           const item = state.batchGroups[gIdx].splice(iIdx, 1)[0];
           state.batchGroups[gIdx].unshift(item);
+          state.batchGroups[gIdx]._updatedAt = new Date().toISOString();
           renderBatchGroupsUI();
           state.activeLightboxCtx.iidx = 0;
           openLightbox(state.batchGroups[gIdx][0].previewUrl, state.activeLightboxCtx);

@@ -83,7 +83,7 @@ export function renderBatchGroupsUI() {
           return `
           <div class="draggable-thumb" draggable="true" data-source-type="pool" data-idx="${idx}"
                style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border:1px solid var(--border-color); box-shadow: none; box-sizing: border-box; touch-action: none;">
-            <img src="${imgSrc}" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+            <img src="${imgSrc}" draggable="false" data-action="enlarge-image" data-context-type="pool" data-pool-idx="${idx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
             <button type="button" class="btn-ungrouped-remove" data-idx="${idx}" title="削除"
                     style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
           </div>
@@ -94,7 +94,7 @@ export function renderBatchGroupsUI() {
 
     ungroupedHTML = `
       <div id="ungrouped-pool-container" style="position: sticky; bottom: 16px; width: 100%; max-width: 720px; margin: 0 auto; z-index: 100; background: var(--card-bg); border: 2px dashed var(--accent-color); border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); backdrop-filter: blur(10px); box-sizing: border-box;">
-        ${renderSyncDot(state.batchLocalUpdatedAt, '未所属画像', state.ungroupedImages.every(item => item.blob instanceof Blob || item.previewUrl))}
+        ${renderSyncDot(state.batchLocalUpdatedAt, '未所属画像', state.ungroupedImages.every(item => item.blob instanceof Blob || item.previewUrl), 'system_image_pool')}
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
             <button type="button" id="btn-toggle-pool-collapse" class="btn-secondary" style="font-size: 0.75rem; padding: 2px 6px; flex-shrink: 0;">${state.isPoolCollapsed ? '▶ 展開' : '▼ 畳む'}</button>
@@ -124,7 +124,7 @@ export function renderBatchGroupsUI() {
       return `
       <div class="draggable-thumb" draggable="true" data-source-type="group" data-gidx="${gIdx}" data-iidx="${iIdx}"
          style="position:relative; width:90px; height:90px; border-radius:8px; overflow:visible; border: ${iIdx === 0 ? '3px solid var(--accent-color)' : '2px solid color-mix(in srgb, var(--accent-color) 45%, var(--border-color))'}; box-shadow: ${iIdx === 0 ? '0 0 10px rgba(var(--accent-color-rgb, 16, 185, 129), 0.3)' : '0 0 5px color-mix(in srgb, var(--accent-color) 18%, transparent)'}; box-sizing: border-box; touch-action: none;">
-        <img src="${imgSrc}" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
+        <img src="${imgSrc}" draggable="false" data-action="enlarge-image" data-context-type="batch-group" data-gidx="${gIdx}" data-iidx="${iIdx}" style="width:100%; height:100%; object-fit:cover; cursor:pointer;" />
         ${iIdx === 0 ? '<span style="position:absolute; bottom:2px; left:2px; background:rgba(16,185,129,0.85); color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:bold; z-index:5;">★メイン</span>' : ''}
         <button type="button" class="btn-batch-remove-img" data-gidx="${gIdx}" data-iidx="${iIdx}" title="この写真をグループから外す"
                 style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
@@ -134,7 +134,7 @@ export function renderBatchGroupsUI() {
 
     return `
       <div class="batch-group-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; transition: border-color 0.2s; margin-bottom: 12px; box-sizing: border-box;" data-gidx="${gIdx}">
-        ${renderSyncDot(group._updatedAt || state.batchLocalUpdatedAt, '未保存グループ', group.every(item => item.blob instanceof Blob || item.previewUrl))}
+        ${renderSyncDot(group._updatedAt || state.batchLocalUpdatedAt, '未保存グループ', group.every(item => item.blob instanceof Blob || item.previewUrl), `draft_group_${gIdx}`)}
         <div class="batch-group-card-header" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); width: 100%; box-sizing: border-box;">
           <div style="width: 100%; display: flex; flex-direction: column; gap: 4px;">
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">

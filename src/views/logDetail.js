@@ -23,7 +23,7 @@ export function renderLogDetailModal(log) {
               <div class="sella-scroll-viewport" id="detail-carousel-scroll" style="display: flex !important; overflow-x: auto !important; scroll-snap-type: x mandatory !important; width: 100% !important; height: 100% !important; scrollbar-width: none !important; -ms-overflow-style: none !important; scroll-behavior: smooth !important; -webkit-overflow-scrolling: touch !important; padding: 0 !important; margin: 0 !important;">
                 ${imageUrls.map((url, i) => `
                   <div class="sella-slide-pane" style="flex: 0 0 100% !important; width: 100% !important; height: 100% !important; scroll-snap-align: start !important; display: flex !important; align-items: center !important; justify-content: center !important; position: relative !important; padding: 0 !important; margin: 0 !important;">
-                    <img src="${url}" alt="お酒の写真" class="sella-slide-photo" 
+                    <img src="${url}" alt="お酒の写真" class="sella-slide-photo" draggable="false"
                          data-action="enlarge-image" data-context-type="detail-preview" data-idx="${i}" 
                          style="max-width: 100% !important; max-height: 220px !important; width: auto !important; height: auto !important; object-fit: contain !important; cursor: pointer; display: block !important; -webkit-user-drag: none; user-drag: none; padding: 0 !important; margin: 0 !important;" />
                   </div>

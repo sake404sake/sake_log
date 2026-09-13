@@ -1800,10 +1800,10 @@ a:hover {
 
 .preview-item:hover .preview-actions {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .preview-actions button {
+  pointer-events: auto;
   font-size: 0.65rem;
   padding: 2px 4px;
   background: var(--card-bg);

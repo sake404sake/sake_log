@@ -192,6 +192,7 @@ export function syncEditorFormToCurrentBatchGroup() {
     group.notes = getVal('sake-notes');
     group.aiInfo = getVal('sake-ai-info');
     group.backupFormData = { ...state.backupFormData };
+    group._updatedAt = new Date().toISOString();
   }
 }
 
@@ -216,6 +217,7 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
       if (log.images && log.images.length > 0) {
         for (let imageIndex = 0; imageIndex < log.images.length; imageIndex++) {
           const blob = log.images[imageIndex];
+          if (!(blob instanceof Blob)) continue;
           try {
             const base64 = await blobToBase64(blob);
             state.uploadedImages.push({
@@ -332,7 +334,7 @@ export function renderImagePreviewList() {
     const imgSrc = getImagePreviewSrc(img);
     return `
       <div class="preview-item ${idx === state.activeThumbnailIndex ? 'is-thumb' : ''}" draggable="true" data-idx="${idx}" style="position: relative; overflow: hidden; user-select: none; touch-action: none;">
-        <img src="${imgSrc}" alt="Preview" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none; width: 100%; height: 100%; object-fit: cover; cursor: pointer;" />
+        <img src="${imgSrc}" alt="Preview" draggable="false" data-action="enlarge-image" data-context-type="editor-preview" data-idx="${idx}" style="user-drag: none; -webkit-user-drag: none; width: 100%; height: 100%; object-fit: cover; cursor: pointer;" />
         <div class="preview-actions">
           <button type="button" class="btn-img-del" data-idx="${idx}" title="削除" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:50%; width:22px; height:22px; font-size:12px; cursor:pointer; z-index:10;">✕</button>
         </div>

@@ -1,11 +1,11 @@
 // src/services/googleDrive.js
-import { state } from '../store/state.js';
+import { state, markSyncedLogVersions } from '../store/state.js';
 import { openDB, getAllLogs, saveLog, permanentlyDeleteLog } from '../store/db.js';
 
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=drive&version=v3';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 const DRIVE_REQUEST_TIMEOUT_MS = 60 * 1000;
-const IMAGE_SYNC_CONCURRENCY = 4;
+const IMAGE_SYNC_CONCURRENCY = 8;
 
 export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
@@ -421,14 +421,25 @@ async function driveFetch(url, options = {}, allowTokenRefresh = true) {
 }
 
 async function listCloudFiles() {
-  const url = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,mimeType)';
-  const res = await driveFetch(url);
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    throw new Error(`Failed to list cloud files (HTTP ${res.status}): ${errText}`);
-  }
-  const data = await res.json();
-  return data.files || [];
+  const files = [];
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({
+      spaces: 'appDataFolder',
+      pageSize: '1000',
+      fields: 'nextPageToken,files(id,name,mimeType)'
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Failed to list cloud files (HTTP ${res.status}): ${errText}`);
+    }
+    const data = await res.json();
+    files.push(...(data.files || []));
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+  return files;
 }
 
 async function uploadJsonFile(fileName, dataObj, existingFileId = null) {
@@ -896,6 +907,7 @@ export async function syncAllData(silent = false) {
       lastSynced: new Date().toISOString()
     };
     await uploadJsonFile('sella_index.json', updatedIndex, indexFile?.id);
+    markSyncedLogVersions(publishableLogs);
 
     const draftLogsToMigrate = Array.from(mergedLogsMap.values())
       .filter(log => log.status === 'draft')

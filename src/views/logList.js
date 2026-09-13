@@ -175,7 +175,7 @@ export async function renderLogListView() {
         return `
           <div class="log-row-item" data-action="open-detail" data-id="${log.id}" 
                style="display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; margin-bottom: 8px;">
-            ${renderSyncDot(log.updatedAt, '酒ログ', !Array.isArray(log.imageIds) || log.imageIds.length === (log.imageUrls || []).length)}
+            ${renderSyncDot(log.updatedAt, '酒ログ', !Array.isArray(log.imageIds) || (log.imageIds.length === (log.imageUrls || []).length && (log.imageUrls || []).every(Boolean)), log.id)}
             
             <!-- 上段：サムネイル、日付、評価、矢印 -->
             <div style="display: flex; align-items: center; gap: 12px; width: 100%;">

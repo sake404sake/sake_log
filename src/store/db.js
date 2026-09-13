@@ -51,9 +51,7 @@ export async function getLogById(id, includeDeleted = false) {
         req.onsuccess = () => res(req.result);
         req.onerror = () => res(null);
       });
-      if (imgRecord && imgRecord.blob) {
-        images.push(imgRecord.blob);
-      }
+      images.push(imgRecord?.blob || null);
     }
   }
   return { ...log, images };
@@ -107,7 +105,7 @@ export async function saveLog(logData, imageBlobs = []) {
     imageIds,
     status: logData.status || 'active',
     isDeleted: logData.isDeleted || false,
-    updatedAt: new Date().toISOString()
+    updatedAt: logData.updatedAt || new Date().toISOString()
   };
 
   if (!isUpdate) {
@@ -154,10 +152,9 @@ export async function getAllLogs(includeDrafts = false, includeDeleted = false) 
           req.onsuccess = () => res(req.result);
           req.onerror = () => res(null);
         });
-        if (imgRecord && imgRecord.blob) {
-          images.push(imgRecord.blob);
-          imageUrls.push(URL.createObjectURL(imgRecord.blob));
-        }
+        const blob = imgRecord?.blob || null;
+        images.push(blob);
+        imageUrls.push(blob ? URL.createObjectURL(blob) : '');
       }
     }
     return { ...log, images, imageUrls };
