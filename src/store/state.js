@@ -15,6 +15,8 @@ export const state = {
   draggedItemInfo: null,
   isPoolCollapsed: false,
   isBatchProcessing: false,
+  batchProgress: null,
+  batchDraftSaveError: '',
 
   // ライトボックス用
   activeLightboxCtx: null,
@@ -37,6 +39,7 @@ export const state = {
   googleUserName: '',
   googleUserAvatar: '',
   isSyncing: false,
+  lastSyncError: '',
   googleAuthNeedsReauth: false,
   lastSyncedTime: '',
   lastSyncedAt: '',

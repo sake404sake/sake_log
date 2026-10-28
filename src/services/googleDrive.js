@@ -16,6 +16,7 @@ let rejectSilentRefresh = null;
 let silentRefreshTimeoutId = null;
 let syncQueued = false;
 let syncPromise = null;
+let dataDestructionInProgress = false;
 
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
@@ -362,6 +363,9 @@ function handleTokenExpired() {
 }
 
 async function driveFetch(url, options = {}, allowTokenRefresh = true) {
+  if (localStorage.getItem('sella_data_destroy_pending') === 'true' && !dataDestructionInProgress) {
+    throw new Error('DATA_DESTRUCTION_IN_PROGRESS');
+  }
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) {
     throw new Error('Not authenticated with Google');
@@ -544,7 +548,7 @@ async function downloadImageFile(fileId, imgId) {
 async function deleteCloudFile(fileId) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}`;
   const res = await driveFetch(url, { method: 'DELETE' });
-  if (!res.ok) {
+  if (!res.ok && res.status !== 404) {
     const errText = await res.text().catch(() => '');
     throw new Error(`Failed to delete cloud file ${fileId} (HTTP ${res.status}): ${errText}`);
   }
@@ -577,6 +581,7 @@ function stripEmbeddedImageData(log) {
 }
 
 export async function syncAllData(silent = false) {
+  if (localStorage.getItem('sella_data_destroy_pending') === 'true') return;
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
   if (!token) return;
 
@@ -585,6 +590,7 @@ export async function syncAllData(silent = false) {
     return syncPromise;
   }
   state.isSyncing = true;
+  state.lastSyncError = '';
   syncPromise = (async () => {
   document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: true } }));
 
@@ -632,20 +638,24 @@ export async function syncAllData(silent = false) {
     const indexFile = cloudFiles.find(f => f.name === 'sella_index.json');
     const configFile = cloudFiles.find(f => f.name === 'sella_config.json');
     const cloudImageFiles = cloudFiles.filter(f => f.name.startsWith('sella_img_'));
-
     const googleUserId = state.googleUserSub || localStorage.getItem('sella_google_user_sub') || localStorage.getItem('sella_google_sub');
+    const cloudSettingsPromise = configFile && googleUserId
+      ? downloadJsonFile(configFile.id).catch(err => {
+          console.error('[GoogleDriveSync] Failed to parse sella_config.json, recreating...', err);
+          return null;
+        })
+      : Promise.resolve(null);
+    const cloudIndexPromise = indexFile
+      ? downloadJsonFile(indexFile.id).catch(err => {
+          console.error('[GoogleDriveSync] Failed to parse cloud index, recreating...', err);
+          return null;
+        })
+        : Promise.resolve(null);
 
     if (googleUserId) {
       console.log('[GoogleDriveSync] Initializing settings sync with Zero-Knowledge encryption...');
 
-      let cloudSettings = null;
-      if (configFile) {
-        try {
-          cloudSettings = await downloadJsonFile(configFile.id);
-        } catch (err) {
-          console.error('[GoogleDriveSync] Failed to parse sella_config.json, recreating...', err);
-        }
-      }
+      const cloudSettings = await cloudSettingsPromise;
 
       let shouldUploadConfig = false;
       
@@ -737,14 +747,9 @@ export async function syncAllData(silent = false) {
       req.onerror = () => res([]);
     });
 
-    let cloudIndex = { logs: [], lastSynced: '' };
-    if (indexFile) {
-      try {
-        cloudIndex = await downloadJsonFile(indexFile.id);
-      } catch (err) {
-        console.error('[GoogleDriveSync] Failed to parse cloud index, recreating...', err);
-      }
-    }
+    const downloadedCloudIndex = await cloudIndexPromise;
+    const cloudIndex = downloadedCloudIndex || { logs: [], lastSynced: '' };
+    const cloudIndexIsValid = Array.isArray(downloadedCloudIndex?.logs);
 
     const cloudImageFilesMap = new Map();
     cloudImageFiles.forEach(f => {
@@ -754,7 +759,7 @@ export async function syncAllData(silent = false) {
       }
     });
 
-    const isCloudReady = (log) => !Array.isArray(log?.imageIds)
+    const isCloudReady = (log) => log?.isDeleted || !Array.isArray(log?.imageIds)
       || log.imageIds.every(imgId => cloudImageFilesMap.has(Number(imgId)));
     const cloudIndexLogs = Array.isArray(cloudIndex.logs) ? cloudIndex.logs : [];
     const mergedLogsMap = new Map();
@@ -774,7 +779,23 @@ export async function syncAllData(silent = false) {
         const localTime = new Date(local.updatedAt || 0).getTime();
         const cloudTime = new Date(cloud.updatedAt || 0).getTime();
 
-        if (!isCloudReady(cloud)) {
+        if (local.isDeleted || cloud.isDeleted) {
+          if (local.isDeleted && cloud.isDeleted) {
+            if (cloudTime > localTime) {
+              mergedLogsMap.set(id, cloud);
+              hasCloudLogsChanges = true;
+            } else {
+              mergedLogsMap.set(id, local);
+              hasLocalLogsChanges = localTime > cloudTime;
+            }
+          } else if (local.isDeleted) {
+            mergedLogsMap.set(id, local);
+            hasLocalLogsChanges = true;
+          } else {
+            mergedLogsMap.set(id, cloud);
+            hasCloudLogsChanges = true;
+          }
+        } else if (!isCloudReady(cloud)) {
           mergedLogsMap.set(id, local);
         } else if (localTime > cloudTime) {
           mergedLogsMap.set(id, local);
@@ -784,9 +805,13 @@ export async function syncAllData(silent = false) {
           hasCloudLogsChanges = true;
         } else {
           mergedLogsMap.set(id, local);
+          if (JSON.stringify(stripEmbeddedImageData(local)) !== JSON.stringify(stripEmbeddedImageData(cloud))) {
+            hasLocalLogsChanges = true;
+          }
         }
       } else if (local) {
         mergedLogsMap.set(id, local);
+        hasLocalLogsChanges = true;
       } else if (cloud && isCloudReady(cloud)) {
         mergedLogsMap.set(id, cloud);
         hasCloudLogsChanges = true;
@@ -902,11 +927,13 @@ export async function syncAllData(silent = false) {
       }
     }
 
-    const updatedIndex = {
-      logs: publishableLogs.map(stripEmbeddedImageData),
-      lastSynced: new Date().toISOString()
-    };
-    await uploadJsonFile('sella_index.json', updatedIndex, indexFile?.id);
+    if (hasLocalLogsChanges || !indexFile || !cloudIndexIsValid) {
+      const updatedIndex = {
+        logs: publishableLogs.map(stripEmbeddedImageData),
+        lastSynced: new Date().toISOString()
+      };
+      await uploadJsonFile('sella_index.json', updatedIndex, indexFile?.id);
+    }
     markSyncedLogVersions(publishableLogs);
 
     const draftLogsToMigrate = Array.from(mergedLogsMap.values())
@@ -947,6 +974,7 @@ export async function syncAllData(silent = false) {
     localStorage.setItem('sella_last_synced_at', syncedAt);
     state.lastSyncedTime = timeStr;
     state.lastSyncedAt = syncedAt;
+    state.lastSyncError = '';
 
     console.log('[GoogleDriveSync] Sync session completed successfully.');
     if (!silent) alert('Googleアカウント上のデータと正常に同期されました！');
@@ -954,6 +982,7 @@ export async function syncAllData(silent = false) {
     document.dispatchEvent(new CustomEvent('sync-completed'));
 
   } catch (err) {
+    state.lastSyncError = err.message || '同期に失敗しました';
     console.error('[GoogleDriveSync] Critical error during synchronization:', err);
     if (err.message === 'OFFLINE_NETWORK_ERROR') {
       if (!silent) {
@@ -986,22 +1015,41 @@ export async function syncAllData(silent = false) {
 export async function destroyAllSellaData() {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
 
-  indexedDB.deleteDatabase('SellaDB');
-
-  if (token) {
-    try {
-      const files = await listCloudFiles();
-      for (const f of files) {
-        console.log(`[GoogleDrive] Purging cloud file on destroy: ${f.name}`);
-        await deleteCloudFile(f.id);
-      }
-    } catch (err) {
-      console.error('[GoogleDrive] Failed to clean cloud data:', err);
+  localStorage.setItem('sella_data_destroy_pending', 'true');
+  dataDestructionInProgress = true;
+  syncQueued = false;
+  try {
+    if (!token) {
+      throw new Error('Google Driveに接続してから、クラウドを含む完全消去を実行してください。');
     }
+    if (syncPromise) await syncPromise;
+
+    let remainingFiles = await listCloudFiles();
+    while (remainingFiles.length > 0) {
+      for (const file of remainingFiles) {
+        console.log(`[GoogleDrive] Purging cloud file on destroy: ${file.name}`);
+        await deleteCloudFile(file.id);
+      }
+      remainingFiles = await listCloudFiles();
+    }
+
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.deleteDatabase('SellaDB');
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error || new Error('ローカルデータベースを削除できませんでした。'));
+      request.onblocked = () => {
+        console.warn('[GoogleDrive] Waiting for other tabs to release the local database before deletion.');
+      };
+    });
+
+    localStorage.clear();
+
+    alert('すべての酒ログデータ、画像、およびクラウドバックアップを完全に消去しました。システムを初期状態から再起動します。');
+    window.location.reload();
+  } catch (error) {
+    console.error('[GoogleDrive] Failed to completely erase SakeLog data:', error);
+    throw error;
+  } finally {
+    dataDestructionInProgress = false;
   }
-
-  localStorage.clear();
-
-  alert('すべての酒ログデータ、画像、およびクラウドバックアップを完全に消去しました。システムを初期状態から再起動します。');
-  window.location.reload();
 }

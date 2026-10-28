@@ -14,6 +14,8 @@
   --text-main: #f0f1f5;
   --text-sub: #8e929e;
   --drawer-overlay-bg: rgba(0, 0, 0, 0.7);
+  --theme-bg-image: radial-gradient(ellipse at 12% 0%, rgba(212, 163, 89, 0.12), transparent 42%), radial-gradient(ellipse at 92% 84%, rgba(94, 72, 118, 0.1), transparent 38%), linear-gradient(135deg, #121316, #191a1f 52%, #111215);
+  --theme-bg-size: cover;
 }
 
 /* ☀️ ライト */
@@ -29,6 +31,8 @@ html[data-theme="light"] {
   --text-main: #111827;
   --text-sub: #4b5563;
   --drawer-overlay-bg: rgba(0, 0, 0, 0.4);
+  --theme-bg-image: radial-gradient(ellipse at 8% 0%, rgba(189, 145, 78, 0.13), transparent 42%), radial-gradient(ellipse at 92% 86%, rgba(101, 135, 116, 0.1), transparent 40%), linear-gradient(135deg, #f8f6f1, #eef1f2 54%, #f7f3ed);
+  --theme-bg-size: cover;
 }
 
 /* 🌸 桜（さくら） */
@@ -44,7 +48,8 @@ html[data-theme="sakura"] {
   --text-main: #2d1820;
   --text-sub: #7a5865;
   --drawer-overlay-bg: rgba(45, 24, 32, 0.4);
-  --theme-bg-image: radial-gradient(ellipse at 12% 16%, rgba(216, 74, 117, 0.16) 0 5px, transparent 6px), radial-gradient(ellipse at 84% 28%, rgba(246, 177, 198, 0.22) 0 7px, transparent 8px), radial-gradient(ellipse at 62% 78%, rgba(216, 74, 117, 0.1) 0 4px, transparent 5px);
+  --theme-bg-image: radial-gradient(ellipse at 12% 8%, rgba(216, 74, 117, 0.13), transparent 40%), radial-gradient(ellipse at 92% 90%, rgba(246, 177, 198, 0.32), transparent 42%), linear-gradient(135deg, #fbf3f5, #f8e9ed 52%, #fff8f8);
+  --theme-bg-size: cover;
 }
 
 /* 🎮 ゲーム（サイバーネオン） */
@@ -60,8 +65,8 @@ html[data-theme="gaming"] {
   --text-main: #e0e6ed;
   --text-sub: #7d8b9b;
   --drawer-overlay-bg: rgba(0, 0, 0, 0.8);
-  --theme-bg-image: radial-gradient(circle, rgba(255, 221, 87, 0.16) 0 3px, transparent 4px), linear-gradient(90deg, rgba(0, 255, 204, 0.08) 1px, transparent 1px);
-  --theme-bg-size: 34px 34px, 34px 34px;
+  --theme-bg-image: radial-gradient(ellipse at 16% 4%, rgba(0, 255, 204, 0.13), transparent 38%), radial-gradient(ellipse at 88% 92%, rgba(112, 95, 235, 0.16), transparent 42%), linear-gradient(90deg, rgba(0, 255, 204, 0.035) 1px, transparent 1px), linear-gradient(0deg, rgba(0, 255, 204, 0.035) 1px, transparent 1px), linear-gradient(135deg, #0d0e15, #141624 54%, #0b1015);
+  --theme-bg-size: cover, cover, 42px 42px, 42px 42px, cover;
 }
 
 /* 🏯 モダン（墨・朱・金） */
@@ -77,50 +82,56 @@ html[data-theme="japan-modern"] {
   --text-main: #f0ebd8;
   --text-sub: #8d99ae;
   --drawer-overlay-bg: rgba(0, 0, 0, 0.75);
-  --theme-bg-image: repeating-linear-gradient(135deg, rgba(200, 75, 49, 0.07) 0 1px, transparent 1px 18px);
+  --theme-bg-image: radial-gradient(ellipse at 8% 0%, rgba(200, 75, 49, 0.15), transparent 42%), radial-gradient(ellipse at 94% 88%, rgba(203, 160, 91, 0.08), transparent 40%), repeating-linear-gradient(135deg, rgba(200, 75, 49, 0.035) 0 1px, transparent 1px 24px), linear-gradient(135deg, #161a1d, #202326 52%, #141719);
+  --theme-bg-size: cover, cover, auto, cover;
 }
 
 html[data-theme="moon"] {
   --bg-color: #111827; --panel-bg: #172033; --card-bg: #202b42; --border-color: #35435d;
   --accent-color: #f5d98b; --accent-hover: #ffe8ab; --text-main: #eef2ff; --text-sub: #9ba8c1;
   --drawer-overlay-bg: rgba(4, 8, 20, 0.72);
-  --theme-bg-image: radial-gradient(circle at 78% 12%, rgba(245, 217, 139, 0.2) 0 34px, transparent 35px), radial-gradient(circle at 18% 30%, rgba(151, 168, 205, 0.1) 0 1px, transparent 2px);
+  --theme-bg-image: radial-gradient(circle at 80% 12%, rgba(245, 217, 139, 0.2) 0 30px, transparent 31px), radial-gradient(ellipse at 14% 82%, rgba(88, 116, 170, 0.16), transparent 44%), radial-gradient(ellipse at 50% 0%, rgba(151, 168, 205, 0.07), transparent 55%), linear-gradient(145deg, #111827, #182236 54%, #101723);
+  --theme-bg-size: cover;
 }
 
 html[data-theme="maple"] {
   --bg-color: #21191a; --panel-bg: #2b2020; --card-bg: #382829; --border-color: #59403b;
   --accent-color: #e18a4a; --accent-hover: #f0aa70; --text-main: #fff3e4; --text-sub: #c7a99b;
   --drawer-overlay-bg: rgba(32, 18, 16, 0.72);
-  --theme-bg-image: radial-gradient(ellipse at 14% 16%, rgba(225, 138, 74, 0.14) 0 5px, transparent 6px), radial-gradient(ellipse at 88% 28%, rgba(177, 61, 42, 0.14) 0 7px, transparent 8px);
+  --theme-bg-image: radial-gradient(ellipse at 12% 2%, rgba(225, 138, 74, 0.16), transparent 43%), radial-gradient(ellipse at 92% 90%, rgba(177, 61, 42, 0.17), transparent 40%), linear-gradient(145deg, #21191a, #302020 54%, #1c1718);
+  --theme-bg-size: cover;
 }
 
 html[data-theme="nature"] {
   --bg-color: #17221c; --panel-bg: #1e2d24; --card-bg: #273a2d; --border-color: #3b5942;
   --accent-color: #a9c66b; --accent-hover: #c7df8d; --text-main: #eef5e8; --text-sub: #aabda5;
   --drawer-overlay-bg: rgba(12, 24, 16, 0.7);
-  --theme-bg-image: radial-gradient(circle at 8% 10%, rgba(169, 198, 107, 0.13) 0 26px, transparent 27px), radial-gradient(circle at 90% 80%, rgba(87, 145, 92, 0.14) 0 40px, transparent 41px);
+  --theme-bg-image: radial-gradient(ellipse at 10% 0%, rgba(169, 198, 107, 0.16), transparent 42%), radial-gradient(ellipse at 92% 92%, rgba(87, 145, 92, 0.19), transparent 45%), radial-gradient(ellipse at 52% 42%, rgba(51, 92, 68, 0.13), transparent 60%), linear-gradient(140deg, #17221c, #223328 54%, #141e19);
+  --theme-bg-size: cover;
 }
 
 html[data-theme="water"] {
   --bg-color: #10232b; --panel-bg: #16313b; --card-bg: #1d3e49; --border-color: #35606b;
   --accent-color: #7fd1d5; --accent-hover: #a4e6e8; --text-main: #e8fbfc; --text-sub: #9bc2c8;
   --drawer-overlay-bg: rgba(7, 22, 28, 0.7);
-  --theme-bg-image: repeating-linear-gradient(8deg, rgba(127, 209, 213, 0.06) 0 1px, transparent 1px 18px);
+  --theme-bg-image: radial-gradient(ellipse at 12% 0%, rgba(127, 209, 213, 0.16), transparent 43%), radial-gradient(ellipse at 92% 88%, rgba(69, 139, 170, 0.18), transparent 45%), repeating-linear-gradient(8deg, rgba(127, 209, 213, 0.025) 0 1px, transparent 1px 24px), linear-gradient(145deg, #10232b, #183540 54%, #0d2028);
+  --theme-bg-size: cover, cover, auto, cover;
 }
 
 html[data-theme="bar"] {
   --bg-color: #211a19; --panel-bg: #2c211f; --card-bg: #3a2a25; --border-color: #5b4033;
   --accent-color: #d9a45f; --accent-hover: #f0c27e; --text-main: #fff2df; --text-sub: #c3a998;
   --drawer-overlay-bg: rgba(24, 14, 12, 0.74);
-  --theme-bg-image: radial-gradient(circle at 84% 10%, rgba(217, 164, 95, 0.18) 0 30px, transparent 31px), linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  --theme-bg-size: auto, 36px 36px;
+  --theme-bg-image: radial-gradient(ellipse at 86% 4%, rgba(237, 177, 91, 0.2), transparent 40%), radial-gradient(ellipse at 15% 92%, rgba(149, 83, 53, 0.18), transparent 43%), linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px), linear-gradient(145deg, #211a19, #31231e 54%, #1a1717);
+  --theme-bg-size: cover, cover, 48px 48px, cover;
 }
 
 html[data-theme="kominka"] {
   --bg-color: #29251e; --panel-bg: #383127; --card-bg: #463c2f; --border-color: #675846;
   --accent-color: #d3a85f; --accent-hover: #ebc77f; --text-main: #f8f0dc; --text-sub: #c6b99d;
   --drawer-overlay-bg: rgba(35, 27, 18, 0.7);
-  --theme-bg-image: repeating-linear-gradient(90deg, rgba(211, 168, 95, 0.045) 0 2px, transparent 2px 26px);
+  --theme-bg-image: radial-gradient(ellipse at 84% 2%, rgba(211, 168, 95, 0.14), transparent 44%), radial-gradient(ellipse at 12% 92%, rgba(114, 91, 60, 0.18), transparent 45%), repeating-linear-gradient(90deg, rgba(211, 168, 95, 0.025) 0 1px, transparent 1px 34px), linear-gradient(145deg, #29251e, #373026 54%, #242119);
+  --theme-bg-size: cover, cover, auto, cover;
 }
 
 /* ==========================================================================
@@ -590,6 +601,180 @@ a:hover {
 
 .calendar-widget {
   flex-shrink: 0;
+}
+
+.brewery-map-widget {
+  flex-shrink: 0;
+  padding: 14px;
+}
+
+.brewery-map-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.brewery-map-header h3 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 0.95rem;
+}
+
+.brewery-map-count,
+.brewery-map-description,
+.brewery-map-status,
+.brewery-map-empty {
+  color: var(--text-sub);
+  font-size: 0.7rem;
+}
+
+.brewery-map-description {
+  margin: 0 0 10px;
+}
+
+.brewery-map-search-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-sub);
+  font-size: 0.72rem;
+}
+
+.brewery-map-place-search-form {
+  margin-bottom: 8px;
+}
+
+.brewery-map-place-search-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.brewery-map-place-search-controls .brewery-map-search {
+  min-width: 0;
+  flex: 1;
+}
+
+.brewery-map-place-search-button {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #fff;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.brewery-map-place-search-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.brewery-map-search {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.8rem;
+  box-sizing: border-box;
+}
+
+.brewery-map-results {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 150px;
+  margin: 6px 0 8px;
+  overflow-y: auto;
+}
+
+.brewery-map-result {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.brewery-map-result:hover,
+.brewery-map-result:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--card-bg));
+}
+
+.brewery-map-result-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brewery-map-result-count {
+  color: var(--text-sub);
+  font-size: 0.68rem;
+}
+
+.brewery-map-empty {
+  padding: 5px 7px;
+}
+
+.brewery-map-canvas.leaflet-container {
+  width: 100%;
+  height: 330px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: #17191f;
+  z-index: 0;
+}
+
+.brewery-map-canvas.leaflet-container .leaflet-control-attribution {
+  margin: 0;
+  padding: 2px 5px;
+  background: rgb(20 22 28 / 78%);
+  color: #aab0bc;
+  font-size: 8px;
+}
+
+.brewery-map-canvas .leaflet-control-attribution a {
+  color: #c9ced8;
+}
+
+.brewery-map-status {
+  min-height: 1.2em;
+  margin-top: 6px;
+}
+
+.brewery-map-status.is-error {
+  color: #ef4444;
+}
+
+.brewery-map-popup {
+  min-width: 150px;
+  color: #222;
+  line-height: 1.45;
+}
+
+.brewery-map-popup ul {
+  margin: 5px 0;
+  padding-left: 18px;
+}
+
+.brewery-map-popup a {
+  color: #2563eb;
 }
 
 .calendar-loading {

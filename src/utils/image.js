@@ -225,96 +225,119 @@ export function extractPhotoDateObject(file) {
 /**
  * 銘柄の文字が読める解像度を保ちつつ軽量化圧縮 (白背景補完で透過黒化防止)
  */
-export function compressImage(file, maxWidth = 1600, quality = 0.84, maxBytes = 700 * 1024) {
-  return new Promise((resolve) => {
-    const sourceMetadata = {
-      originalFileName: file?.name || '',
-      originalMimeType: file?.type || '',
-      originalLastModified: file?.lastModified || 0
-    };
+export async function compressImage(file, maxWidth = 1600, quality = 0.84, maxBytes = 700 * 1024) {
+  if (!(file instanceof Blob) || file.size === 0) {
+    throw new Error('画像ファイルが空か、読み込めません。');
+  }
 
-    const fallbackReturn = () => {
-      resolve({ blob: file, base64: '', mimeType: file.type || 'image/jpeg', metadata: sourceMetadata });
+  const sourceMetadata = {
+    originalFileName: file.name || '',
+    originalMimeType: file.type || '',
+    originalLastModified: file.lastModified || 0
+  };
+  if (file.size <= maxBytes && ['image/jpeg', 'image/png', 'image/webp'].includes(file.type.toLowerCase())) {
+    return {
+      blob: file,
+      base64: '',
+      mimeType: file.type,
+      metadata: sourceMetadata
     };
+  }
 
-    if (!file || !file.type || !file.type.startsWith('image/')) {
-      fallbackReturn();
-      return;
+  let source = null;
+  let sourceUrl = '';
+
+  try {
+    if (typeof createImageBitmap === 'function') {
+      try {
+        source = await createImageBitmap(file);
+      } catch {
+        // 古いブラウザーや一部の画像形式では Image 要素で再試行する。
+      }
     }
 
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (e) => {
-      const img = new Image();
-      img.src = e.target.result;
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
+    if (!source) {
+      sourceUrl = URL.createObjectURL(file);
+      const image = new Image();
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error('この画像形式をブラウザーで読み込めません。'));
+        image.src = sourceUrl;
+      });
+      source = image;
+    }
 
-        if (width > maxWidth || height > maxWidth) {
-          if (width > height) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          } else {
-            width = Math.round((width * maxWidth) / height);
-            height = maxWidth;
-          }
+    const sourceWidth = source.width || source.naturalWidth;
+    const sourceHeight = source.height || source.naturalHeight;
+    if (!sourceWidth || !sourceHeight) {
+      throw new Error('画像のサイズを読み取れません。');
+    }
+
+    const scale = Math.min(1, maxWidth / Math.max(sourceWidth, sourceHeight));
+    let width = Math.max(1, Math.round(sourceWidth * scale));
+    let height = Math.max(1, Math.round(sourceHeight * scale));
+    let targetQuality = quality;
+
+    const encode = (targetWidth, targetHeight, targetQuality) => new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('画像処理用のCanvasを作成できません。'));
+        return;
+      }
+
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, targetWidth, targetHeight);
+      context.drawImage(source, 0, 0, targetWidth, targetHeight);
+      canvas.toBlob(webpBlob => {
+        if (webpBlob) {
+          resolve(webpBlob);
+          return;
         }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-
-        // 白背景塗りつぶし (PNGや透過背景での黒化を防止)
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const encode = (targetWidth, targetHeight, targetQuality) => new Promise((encodeResolve) => {
-          const outputCanvas = targetWidth === width && targetHeight === height ? canvas : document.createElement('canvas');
-          if (outputCanvas !== canvas) {
-            outputCanvas.width = targetWidth;
-            outputCanvas.height = targetHeight;
-            outputCanvas.getContext('2d').drawImage(img, 0, 0, targetWidth, targetHeight);
+        canvas.toBlob(jpegBlob => {
+          if (jpegBlob) {
+            resolve(jpegBlob);
+          } else {
+            reject(new Error('画像の圧縮に失敗しました。'));
           }
-          outputCanvas.toBlob((webpBlob) => {
-            if (webpBlob) {
-              encodeResolve({ blob: webpBlob, mimeType: 'image/webp' });
-              return;
-            }
-            outputCanvas.toBlob((jpegBlob) => {
-              encodeResolve(jpegBlob ? { blob: jpegBlob, mimeType: 'image/jpeg' } : null);
-            }, 'image/jpeg', targetQuality);
-          }, 'image/webp', targetQuality);
-        });
+        }, 'image/jpeg', targetQuality);
+      }, 'image/webp', targetQuality);
+    });
 
-        const compressToTarget = async (targetWidth, targetHeight, targetQuality) => {
-          const encoded = await encode(targetWidth, targetHeight, targetQuality);
-          if (!encoded) {
-            fallbackReturn();
-            return;
-          }
-          if (encoded.blob.size > maxBytes && targetQuality > 0.72) {
-            await compressToTarget(targetWidth, targetHeight, Math.max(0.72, targetQuality - 0.06));
-            return;
-          }
-          if (encoded.blob.size > maxBytes && targetWidth > 1280) {
-            const reducedWidth = Math.round(targetWidth * 0.85);
-            const reducedHeight = Math.round(targetHeight * 0.85);
-            await compressToTarget(reducedWidth, reducedHeight, 0.78);
-            return;
-          }
-          resolve({ blob: encoded.blob, base64: '', mimeType: encoded.mimeType, metadata: sourceMetadata });
-        };
+    let compressedBlob;
+    while (true) {
+      try {
+        compressedBlob = await encode(width, height, targetQuality);
+      } catch (error) {
+        if (targetQuality > 0.72) {
+          targetQuality = Math.max(0.72, targetQuality - 0.06);
+          continue;
+        }
+        throw error;
+      }
 
-        compressToTarget(width, height, quality);
-      };
-      img.onerror = () => fallbackReturn();
+      if (compressedBlob.size <= maxBytes || (width <= 960 && height <= 960)) break;
+      if (targetQuality > 0.72) {
+        targetQuality = Math.max(0.72, targetQuality - 0.06);
+      } else {
+        width = Math.max(1, Math.round(width * 0.85));
+        height = Math.max(1, Math.round(height * 0.85));
+        targetQuality = 0.78;
+      }
+    }
+
+    return {
+      blob: compressedBlob,
+      base64: '',
+      mimeType: compressedBlob.type || 'image/jpeg',
+      metadata: sourceMetadata
     };
-    reader.onerror = () => fallbackReturn();
-  });
+  } finally {
+    if (source && typeof source.close === 'function') source.close();
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+  }
 }
 
 /**

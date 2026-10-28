@@ -1,11 +1,12 @@
 // src/store/db.js
 
 const DB_NAME = 'SellaDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let wasBlocked = false;
 
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
@@ -16,10 +17,87 @@ export function openDB() {
       if (!db.objectStoreNames.contains('images')) {
         db.createObjectStore('images', { keyPath: 'id', autoIncrement: true });
       }
+      if (!db.objectStoreNames.contains('breweryLocations')) {
+        db.createObjectStore('breweryLocations', { keyPath: 'key' });
+      }
     };
 
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      if (wasBlocked) {
+        request.result.close();
+        return;
+      }
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onblocked = () => {
+      wasBlocked = true;
+      reject(new Error('データベースを更新できません。開いているSakeLogのタブを閉じて再読み込みしてください。'));
+    };
     request.onerror = () => reject(request.error);
+  });
+}
+
+export async function getBreweryMapLogs() {
+  const db = await openDB();
+  const tx = db.transaction(['logs'], 'readonly');
+  return new Promise((resolve, reject) => {
+    const request = tx.objectStore('logs').getAll();
+    request.onsuccess = () => {
+      resolve(request.result
+        .filter(log => log && log.status !== 'draft' && !log.isDeleted && log.brewery)
+        .map(log => ({
+          id: log.id,
+          name: log.name || '',
+          brewery: log.brewery,
+          region: log.region || '',
+          date: log.date || ''
+        })));
+    };
+    request.onerror = () => reject(request.error || new Error('酒造マップ用のログを読み込めませんでした。'));
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error || new Error('酒造マップ用のログを読み込めませんでした。'));
+    };
+  });
+}
+
+export async function getBreweryLocations() {
+  const db = await openDB();
+  const tx = db.transaction(['breweryLocations'], 'readonly');
+  return new Promise((resolve, reject) => {
+    const request = tx.objectStore('breweryLocations').getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error || new Error('酒造の位置情報を読み込めませんでした。'));
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error || new Error('酒造の位置情報を読み込めませんでした。'));
+    };
+  });
+}
+
+export async function saveBreweryLocation(location) {
+  const db = await openDB();
+  const tx = db.transaction(['breweryLocations'], 'readwrite');
+  tx.objectStore('breweryLocations').put({
+    ...location,
+    updatedAt: new Date().toISOString()
+  });
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error || new Error('酒造の位置情報を保存できませんでした。'));
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error || new Error('酒造の位置情報の保存を中断しました。'));
+    };
   });
 }
 
@@ -123,6 +201,94 @@ export async function saveLog(logData, imageBlobs = []) {
 }
 
 /**
+ * Persist the complete batch-draft snapshot, reusing image records for unchanged drafts.
+ */
+export async function saveDraftLogs(entries) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['logs', 'images'], 'readwrite');
+    const logStore = tx.objectStore('logs');
+    const imageStore = tx.objectStore('images');
+    const request = logStore.getAll();
+    let changed = false;
+
+    request.onerror = () => reject(request.error || new Error('下書きの読み込みに失敗しました。'));
+    request.onsuccess = () => {
+      try {
+        const existingDrafts = request.result.filter(log => log.status === 'draft');
+        const existingById = new Map(existingDrafts.map(log => [log.id, log]));
+        const retainedIds = new Set();
+
+        for (const entry of entries) {
+          const { logData, imageBlobs, signature } = entry;
+          const blobs = imageBlobs.filter(blob => blob instanceof Blob && blob.size > 0);
+          if (blobs.length === 0) continue;
+
+          const id = logData.id;
+          retainedIds.add(id);
+          const existing = existingById.get(id);
+          if (existing?.draftSignature === signature &&
+              Array.isArray(existing.imageIds) &&
+              existing.imageIds.length === blobs.length) {
+            continue;
+          }
+
+          if (existing && Array.isArray(existing.imageIds)) {
+            existing.imageIds.forEach(imageId => imageStore.delete(imageId));
+          }
+          const collectedImageIds = new Array(blobs.length);
+          let completedImages = 0;
+          blobs.forEach((blob, index) => {
+            const imageRequest = imageStore.add({ blob, createdAt: new Date().toISOString() });
+            imageRequest.onsuccess = () => {
+              collectedImageIds[index] = imageRequest.result;
+              completedImages += 1;
+              if (completedImages === blobs.length) {
+                logStore.put({
+                  ...logData,
+                  id,
+                  imageIds: collectedImageIds,
+                  status: 'draft',
+                  isDeleted: false,
+                  draftSignature: signature,
+                  updatedAt: new Date().toISOString()
+                });
+              }
+            };
+          });
+          changed = true;
+        }
+
+        for (const draft of existingDrafts) {
+          if (retainedIds.has(draft.id)) continue;
+          if (Array.isArray(draft.imageIds)) {
+            draft.imageIds.forEach(imageId => imageStore.delete(imageId));
+          }
+          logStore.delete(draft.id);
+          changed = true;
+        }
+      } catch (error) {
+        reject(error);
+        tx.abort();
+      }
+    };
+
+    tx.oncomplete = () => {
+      db.close();
+      resolve(changed);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error || new Error('下書きを保存できませんでした。'));
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error || new Error('下書きの保存を中断しました。'));
+    };
+  });
+}
+
+/**
  * 全てのログ(画像URL付き)を取得する
  */
 export async function getAllLogs(includeDrafts = false, includeDeleted = false) {
@@ -144,20 +310,17 @@ export async function getAllLogs(includeDrafts = false, includeDeleted = false) 
   });
 
   const logsWithImages = await Promise.all(filteredLogs.map(async (log) => {
-    const imageUrls = [];
-    const images = [];
-    if (Array.isArray(log.imageIds) && log.imageIds.length > 0) {
-      for (const imgId of log.imageIds) {
-        const imgRecord = await new Promise((res) => {
-          const req = imgStore.get(imgId);
-          req.onsuccess = () => res(req.result);
-          req.onerror = () => res(null);
-        });
-        const blob = imgRecord?.blob || null;
-        images.push(blob);
-        imageUrls.push(blob ? URL.createObjectURL(blob) : '');
-      }
-    }
+    const imageRecords = await Promise.all((Array.isArray(log.imageIds) ? log.imageIds : []).map(imgId =>
+      new Promise((res) => {
+        const req = imgStore.get(imgId);
+        req.onsuccess = () => res(req.result);
+        req.onerror = () => res(null);
+      })
+    ));
+    const images = imageRecords.map(record => record?.blob || null);
+    const imageUrls = images.map(blob =>
+      blob && log.status !== 'draft' ? URL.createObjectURL(blob) : ''
+    );
     return { ...log, images, imageUrls };
   }));
 

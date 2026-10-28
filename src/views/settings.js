@@ -9,6 +9,26 @@ export function renderSettingsView() {
   const lastSynced = localStorage.getItem('sella_last_synced_time') || '未同期';
 
   const isGoogleConnected = state.isGoogleLoggedIn || localStorage.getItem('sella_google_logged_in') === 'true';
+  const syncStatus = state.isSyncing
+    ? 'Google Drive 同期中'
+    : navigator.onLine === false
+      ? 'オフライン・ローカル保存中'
+      : state.googleAuthNeedsReauth
+        ? 'Google Drive 再ログインが必要'
+        : state.lastSyncError
+          ? '同期失敗・ローカル保存中'
+      : isGoogleConnected && lastSynced !== '未同期'
+        ? 'Google Drive 同期済み'
+        : isGoogleConnected
+          ? 'Google Drive 未同期'
+          : '未連携・ローカル保存';
+  const syncStatusColor = state.isSyncing
+    ? 'var(--accent-color)'
+    : state.googleAuthNeedsReauth || state.lastSyncError
+      ? '#ef4444'
+    : isGoogleConnected && lastSynced !== '未同期' && navigator.onLine !== false
+      ? '#10b981'
+      : 'var(--text-sub)';
 
   return `
     <style>
@@ -159,8 +179,8 @@ export function renderSettingsView() {
           <div class="settings-sync-status" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div>
               <div style="font-weight: bold; color: var(--text-main); font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
-                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${isGoogleConnected ? '#10b981' : '#ef4444'};"></span>
-                連携状態: ${isGoogleConnected ? 'Google Drive 同期中' : '未連携・オフライン'}
+                <span id="settings-sync-indicator" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${syncStatusColor};"></span>
+                状態: <span id="settings-sync-status">${syncStatus}</span>
               </div>
               <div style="font-size: 0.75rem; color: var(--text-sub); margin-top: 4px;">
                 最終同期: <span id="sync-time-lbl" style="font-weight: bold; color: var(--text-main);">${lastSynced}</span>

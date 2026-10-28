@@ -218,18 +218,13 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
         for (let imageIndex = 0; imageIndex < log.images.length; imageIndex++) {
           const blob = log.images[imageIndex];
           if (!(blob instanceof Blob)) continue;
-          try {
-            const base64 = await blobToBase64(blob);
-            state.uploadedImages.push({
-              blob,
-              base64,
-              mimeType: blob.type || 'image/jpeg',
-              metadata: log.imageMetadata?.[imageIndex] || {},
-              previewUrl: URL.createObjectURL(blob)
-            });
-          } catch (e) {
-            console.error('Base64変換エラー:', e);
-          }
+          state.uploadedImages.push({
+            blob,
+            base64: '',
+            mimeType: blob.type || 'image/jpeg',
+            metadata: log.imageMetadata?.[imageIndex] || {},
+            previewUrl: URL.createObjectURL(blob)
+          });
         }
         renderImagePreviewList();
       }
@@ -272,7 +267,8 @@ export async function openEditorModal(logId = null, initialBatchGroup = null, ba
         state.uploadedImages.push({
           blob: blob,
           base64: item.base64,
-          mimeType: item.mimeType || 'image/jpeg',
+          mimeType: item.mimeType || blob?.type || 'image/jpeg',
+          originalFile: item.file || item.originalFile,
           previewUrl: previewUrl
         });
       } catch (e) {
@@ -479,6 +475,7 @@ export async function runAIAnalysis(targetImg) {
 export async function handleImageFiles(files) {
   if (!files || files.length === 0) return;
 
+  const failedFiles = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     
@@ -516,7 +513,12 @@ export async function handleImageFiles(files) {
       renderImagePreviewList();
     } catch (e) {
       console.error(`画像 [${file.name || i}] の圧縮・登録に失敗しました:`, e);
+      failedFiles.push(file.name || `画像 ${i + 1}`);
     }
+  }
+
+  if (failedFiles.length > 0) {
+    alert(`一部の画像を読み込めませんでした。対応形式のJPEG、PNG、WebP画像をお試しください。\n\n・${failedFiles.join('\n・')}`);
   }
 
   if (state.uploadedImages.length > 0 && (state.activeThumbnailIndex === null || state.activeThumbnailIndex === undefined)) {

@@ -5,8 +5,9 @@ import { renderLogEditorModal, openEditorModal, closeEditorModal, handleImageFil
 import { renderLogDetailModal, openDetailModal, closeDetailModal } from './views/logDetail.js';
 import { renderLogListView } from './views/logList.js';
 import { renderAnalyticsView, runAnalyticsAI } from './views/analytics.js';
-import { saveLog, deleteLog, clearAllDrafts, openDB, getDraftLogs, getAllLogs, getAllLogDates } from './store/db.js';
-import { renderBatchImportView, renderBatchGroupsUI, processFilesForBatch } from './views/batchImport.js';
+import { renderBreweryMap } from './views/breweryMap.js';
+import { saveLog, saveDraftLogs, deleteLog, clearAllDrafts, openDB, getDraftLogs, getAllLogs, getAllLogDates } from './store/db.js';
+import { renderBatchImportView, renderBatchGroupsUI, processFilesForBatch, cancelBatchImport, showMoreBatchGroups, showMorePoolImages } from './views/batchImport.js';
 import { openLightbox, closeLightbox, triggerLightboxNext, triggerLightboxPrev } from './views/lightbox.js';
 import { state, base64ToBlob, blobToBase64 } from './store/state.js';
 import { syncAllData, loginGoogle, logoutGoogle, destroyAllSellaData, initGoogleAuth } from './services/googleDrive.js';
@@ -249,6 +250,9 @@ async function renderSidebarCalendar() {
     }
     calendar.innerHTML = '<div class="calendar-loading">カレンダーを表示できませんでした</div>';
   }
+  void renderBreweryMap().catch(err => {
+    console.error('[BreweryMap] Failed to refresh:', err);
+  });
 }
 
 function openSidebar() {
@@ -261,6 +265,9 @@ function openRightPanel() {
   sidebar?.classList.remove('open');
   rightPanel?.classList.add('open');
   overlay?.classList.add('active');
+  void renderBreweryMap().catch(err => {
+    console.error('[BreweryMap] Failed to open:', err);
+  });
 }
 
 function closeDrawers() {
@@ -338,54 +345,62 @@ async function sendAiChatMessage() {
 export async function syncBatchStateToDB() {
   try {
     const localUpdatedAt = new Date().toISOString();
-    state.batchLocalUpdatedAt = localUpdatedAt;
     state.batchGroups.forEach(group => {
       if (!group._updatedAt) group._updatedAt = localUpdatedAt;
     });
-    await clearAllDrafts();
-
-    if (state.ungroupedImages.length > 0) {
-      const poolBlobs = [];
-      const poolItemsMeta = [];
-      for (const item of state.ungroupedImages) {
+    const entries = [];
+    const createEntry = (logData, items, metaKey) => {
+      const imageBlobs = [];
+      const itemMetadata = [];
+      for (const item of items) {
         let blob = item.blob;
         if (!blob && item.base64) {
           blob = base64ToBlob(item.base64, item.mimeType || 'image/jpeg');
         }
-        if (blob instanceof Blob) {
-          poolBlobs.push(blob);
-          poolItemsMeta.push({
-            mimeType: item.mimeType || 'image/jpeg',
-            metadata: item.metadata || {},
-            date: item.date ? item.date.toISOString() : null
-          });
-        }
+        if (!(blob instanceof Blob) || blob.size === 0) continue;
+
+        const date = item.date ? new Date(item.date) : null;
+        const meta = {
+          mimeType: item.mimeType || blob.type || 'image/jpeg',
+          metadata: item.metadata || {},
+          date: date && !isNaN(date.getTime()) ? date.toISOString() : null,
+          contentRevision: item.contentRevision || null,
+          size: blob.size,
+          blobType: blob.type
+        };
+        imageBlobs.push(blob);
+        itemMetadata.push(meta);
       }
-      const poolLogData = { id: 'system_image_pool', status: 'draft', isPool: true, name: '画像プール', poolItemsMeta, updatedAt: localUpdatedAt };
-      await saveLog(poolLogData, poolBlobs);
+      if (imageBlobs.length === 0) return;
+
+      logData[metaKey] = itemMetadata.map(({ mimeType, metadata, date, contentRevision }) => ({
+        mimeType,
+        metadata,
+        date,
+        contentRevision
+      }));
+      const signature = JSON.stringify({
+        logData: Object.fromEntries(Object.entries(logData).filter(([key]) => key !== 'updatedAt')),
+        itemMetadata
+      });
+      entries.push({ logData, imageBlobs, signature });
+    };
+
+    if (state.ungroupedImages.length > 0) {
+      createEntry({
+        id: 'system_image_pool',
+        status: 'draft',
+        isPool: true,
+        name: '画像プール',
+        updatedAt: localUpdatedAt
+      }, state.ungroupedImages, 'poolItemsMeta');
     }
 
     for (let gIdx = 0; gIdx < state.batchGroups.length; gIdx++) {
       const group = state.batchGroups[gIdx];
       if (!group || group.length === 0) continue;
 
-      const groupBlobs = [];
-      const groupItemsMeta = [];
-      for (const item of group) {
-        let blob = item.blob;
-        if (!blob && item.base64) {
-          blob = base64ToBlob(item.base64, item.mimeType || 'image/jpeg');
-        }
-        if (blob instanceof Blob) {
-          groupBlobs.push(blob);
-          groupItemsMeta.push({
-            mimeType: item.mimeType || 'image/jpeg',
-            metadata: item.metadata || {},
-            date: item.date ? item.date.toISOString() : null
-          });
-        }
-      }
-      const groupLogData = {
+      createEntry({
         id: 'draft_group_' + gIdx,
         status: 'draft',
         isGrouped: true,
@@ -400,16 +415,26 @@ export async function syncBatchStateToDB() {
         aiInfo: group.aiInfo || '',
         backupFormData: group.backupFormData ? { ...group.backupFormData } : null,
         updatedAt: group._updatedAt || localUpdatedAt,
-        groupItemsMeta
-      };
-      await saveLog(groupLogData, groupBlobs);
+      }, group, 'groupItemsMeta');
     }
 
-    if (state.isGoogleLoggedIn && !state.isBatchProcessing) {
+    const draftsChanged = await saveDraftLogs(entries);
+    state.batchDraftSaveError = '';
+    const saveErrorElement = document.getElementById('batch-draft-save-error');
+    if (saveErrorElement) saveErrorElement.style.display = 'none';
+    state.batchLocalUpdatedAt = localUpdatedAt;
+    if (draftsChanged && state.isGoogleLoggedIn && !state.isBatchProcessing) {
       syncAllData(true);
     }
   } catch (err) {
     console.error('[DraftSync] Autosave failed:', err);
+    state.batchDraftSaveError = `下書きの保存に失敗しました: ${err.message}`;
+    const saveErrorElement = document.getElementById('batch-draft-save-error');
+    if (saveErrorElement) {
+      saveErrorElement.textContent = state.batchDraftSaveError;
+      saveErrorElement.style.display = 'block';
+    }
+    throw err;
   }
 }
 
@@ -435,7 +460,8 @@ export async function loadBatchStateFromDB() {
           mimeType: meta.mimeType || 'image/jpeg',
           metadata: meta.metadata || {},
           previewUrl,
-          date: meta.date ? new Date(meta.date) : null
+          date: meta.date ? new Date(meta.date) : null,
+          contentRevision: meta.contentRevision || null
         });
       }
     }
@@ -462,7 +488,8 @@ export async function loadBatchStateFromDB() {
           mimeType: meta.mimeType || 'image/jpeg',
           metadata: meta.metadata || {},
           previewUrl,
-          date: meta.date ? new Date(meta.date) : null
+          date: meta.date ? new Date(meta.date) : null,
+          contentRevision: meta.contentRevision || null
         });
       }
 
@@ -492,6 +519,11 @@ export async function loadBatchStateFromDB() {
 
 function initApp() {
   ensureSpinnerStyles();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(err => {
+      console.error('[ServiceWorker] Offline support could not be initialized:', err);
+    });
+  }
   initGoogleAuth().then(() => {
     updateSidebarProfile();
   }).catch(err => {
@@ -543,6 +575,11 @@ function initApp() {
   });
 
   document.addEventListener('sync-completed', async () => {
+    updateSidebarProfile();
+    updateSettingsSyncStatus();
+    void renderBreweryMap().catch(err => {
+      console.error('[BreweryMap] Failed to refresh after sync:', err);
+    });
     if (state.currentViewName === 'batchimport') {
       renderBatchGroupsUI();
     } else if (state.currentViewName === 'loglist' || state.currentViewName === 'log-list' || state.currentViewName === 'dashboard') {
@@ -551,6 +588,8 @@ function initApp() {
   });
 
   document.addEventListener('sync-state-change', async () => {
+    updateSidebarProfile();
+    updateSettingsSyncStatus();
     if (state.currentViewName === 'batchimport') {
       renderBatchGroupsUI();
     } else if (state.currentViewName === 'loglist' || state.currentViewName === 'log-list' || state.currentViewName === 'dashboard') {
@@ -568,8 +607,12 @@ function initApp() {
   });
 
   document.addEventListener('batch-state-modified', async (e) => {
-    await syncBatchStateToDB();
-    e.detail?.resolve?.();
+    try {
+      await syncBatchStateToDB();
+      e.detail?.resolve?.();
+    } catch (error) {
+      e.detail?.reject?.(error);
+    }
   });
 
   let logSearchRenderTimer = null;
@@ -1173,6 +1216,19 @@ function initApp() {
 
   // グローバルクリックイベント委譲ハンドラー
   document.addEventListener('click', async (e) => {
+    if (e.target.closest('#btn-cancel-batch-import')) {
+      cancelBatchImport();
+      return;
+    }
+    if (e.target.closest('#btn-load-more-batch-groups')) {
+      showMoreBatchGroups();
+      return;
+    }
+    if (e.target.closest('#btn-load-more-pool')) {
+      showMorePoolImages();
+      return;
+    }
+
     if (e.target.closest('#btn-open-gemini-api-key')) {
       window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener,noreferrer');
       return;
@@ -1404,7 +1460,11 @@ function initApp() {
       const input = document.getElementById('destroy-validation-input')?.value.trim();
       if (input === 'データをすべて消去する') {
         if (confirm('本当に実行しますか？この操作によりクラウド・ローカル双方の全ての酒ログと写真が永久に消滅します。')) {
-          await destroyAllSellaData();
+          try {
+            await destroyAllSellaData();
+          } catch (error) {
+            alert(`完全消去を完了できませんでした。\n同期は安全のため停止しています。Google Driveへの接続と、他のSakeLogタブを確認して再度お試しください。\n\n詳細: ${error.message}`);
+          }
         }
       }
       return;
@@ -1658,7 +1718,7 @@ function initApp() {
           if (!base64) {
             throw new Error('解析する画像データを読み込めませんでした');
           }
-          const result = await analyzeLabelImage(base64, targetImg.mimeType);
+          const result = await analyzeLabelImage(base64, targetImg.mimeType || targetImg.blob?.type || 'image/jpeg');
 
           if (result) {
             const resolvedName = result.name || result.productName || group.name || '';
@@ -1981,8 +2041,26 @@ export function updateSidebarProfile() {
 
     usernameEl.innerText = name;
     if (statusEl) {
-      statusEl.innerText = 'Google同期 有効';
-      statusEl.style.color = '#10b981';
+      const syncedAt = localStorage.getItem('sella_last_synced_time') || '';
+      if (state.isSyncing) {
+        statusEl.innerText = 'Google Drive 同期中…';
+        statusEl.style.color = 'var(--accent-color)';
+      } else if (navigator.onLine === false) {
+        statusEl.innerText = 'オフライン・ローカル保存';
+        statusEl.style.color = 'var(--text-sub)';
+      } else if (state.googleAuthNeedsReauth) {
+        statusEl.innerText = '再ログインが必要';
+        statusEl.style.color = '#ef4444';
+      } else if (state.lastSyncError) {
+        statusEl.innerText = '同期失敗・ローカル保存中';
+        statusEl.style.color = '#ef4444';
+      } else if (syncedAt) {
+        statusEl.innerText = `同期済み ${syncedAt}`;
+        statusEl.style.color = '#10b981';
+      } else {
+        statusEl.innerText = 'Google Drive 未同期';
+        statusEl.style.color = 'var(--text-sub)';
+      }
     }
 
     if (avatarUrl) {
@@ -1999,6 +2077,48 @@ export function updateSidebarProfile() {
     avatarEl.innerHTML = '<span id="sidebar-avatar-text" style="color: #000;">G</span>';
   }
 }
+
+function updateSettingsSyncStatus() {
+  const statusEl = document.getElementById('settings-sync-status');
+  const indicatorEl = document.getElementById('settings-sync-indicator');
+  const syncedAtEl = document.getElementById('sync-time-lbl');
+  if (!statusEl || !indicatorEl) return;
+
+  const isConnected = state.isGoogleLoggedIn || localStorage.getItem('sella_google_logged_in') === 'true';
+  const lastSynced = localStorage.getItem('sella_last_synced_time') || '未同期';
+  if (state.isSyncing) {
+    statusEl.textContent = 'Google Drive 同期中';
+    indicatorEl.style.background = 'var(--accent-color)';
+  } else if (navigator.onLine === false) {
+    statusEl.textContent = 'オフライン・ローカル保存中';
+    indicatorEl.style.background = 'var(--text-sub)';
+  } else if (state.googleAuthNeedsReauth) {
+    statusEl.textContent = 'Google Drive 再ログインが必要';
+    indicatorEl.style.background = '#ef4444';
+  } else if (state.lastSyncError) {
+    statusEl.textContent = '同期失敗・ローカル保存中';
+    indicatorEl.style.background = '#ef4444';
+  } else if (isConnected && lastSynced !== '未同期') {
+    statusEl.textContent = 'Google Drive 同期済み';
+    indicatorEl.style.background = '#10b981';
+  } else if (isConnected) {
+    statusEl.textContent = 'Google Drive 未同期';
+    indicatorEl.style.background = 'var(--text-sub)';
+  } else {
+    statusEl.textContent = '未連携・ローカル保存';
+    indicatorEl.style.background = 'var(--text-sub)';
+  }
+  if (syncedAtEl) syncedAtEl.textContent = lastSynced;
+}
+
+window.addEventListener('online', () => {
+  updateSidebarProfile();
+  updateSettingsSyncStatus();
+});
+window.addEventListener('offline', () => {
+  updateSidebarProfile();
+  updateSettingsSyncStatus();
+});
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
