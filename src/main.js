@@ -648,7 +648,8 @@ function initApp() {
   document.addEventListener('input', async (e) => {
     if (e.target.id === 'destroy-validation-input') {
       const destroyButton = document.getElementById('btn-destroy-all-data');
-      const isConfirmed = e.target.value.trim() === 'データをすべて消去する';
+      const isConfirmed = e.target.value.trim() === 'データをすべて消去する' &&
+        destroyButton?.dataset.googleConnected === 'true';
       if (destroyButton) {
         destroyButton.disabled = !isConfirmed;
         destroyButton.style.opacity = isConfirmed ? '1' : '0.3';

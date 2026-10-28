@@ -16,6 +16,8 @@
   --drawer-overlay-bg: rgba(0, 0, 0, 0.7);
   --theme-bg-image: radial-gradient(ellipse at 12% 0%, rgba(212, 163, 89, 0.12), transparent 42%), radial-gradient(ellipse at 92% 84%, rgba(94, 72, 118, 0.1), transparent 38%), linear-gradient(135deg, #121316, #191a1f 52%, #111215);
   --theme-bg-size: cover;
+  --brewery-map-tile-filter: invert(1) grayscale(1) brightness(0.3) contrast(0.75);
+  --brewery-map-world-filter: none;
 }
 
 /* ☀️ ライト */
@@ -33,6 +35,8 @@ html[data-theme="light"] {
   --drawer-overlay-bg: rgba(0, 0, 0, 0.4);
   --theme-bg-image: radial-gradient(ellipse at 8% 0%, rgba(189, 145, 78, 0.13), transparent 42%), radial-gradient(ellipse at 92% 86%, rgba(101, 135, 116, 0.1), transparent 40%), linear-gradient(135deg, #f8f6f1, #eef1f2 54%, #f7f3ed);
   --theme-bg-size: cover;
+  --brewery-map-tile-filter: none;
+  --brewery-map-world-filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(1.1);
 }
 
 /* 🌸 桜（さくら） */
@@ -50,6 +54,8 @@ html[data-theme="sakura"] {
   --drawer-overlay-bg: rgba(45, 24, 32, 0.4);
   --theme-bg-image: radial-gradient(ellipse at 12% 8%, rgba(216, 74, 117, 0.13), transparent 40%), radial-gradient(ellipse at 92% 90%, rgba(246, 177, 198, 0.32), transparent 42%), linear-gradient(135deg, #fbf3f5, #f8e9ed 52%, #fff8f8);
   --theme-bg-size: cover;
+  --brewery-map-tile-filter: none;
+  --brewery-map-world-filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(1.1);
 }
 
 /* 🎮 ゲーム（サイバーネオン） */
@@ -737,20 +743,49 @@ a:hover {
   height: 330px;
   border: 1px solid var(--border-color);
   border-radius: 9px;
-  background: #17191f;
+  background: var(--bg-color);
   z-index: 0;
 }
 
-.brewery-map-canvas.leaflet-container .leaflet-control-attribution {
-  margin: 0;
-  padding: 2px 5px;
-  background: rgb(20 22 28 / 78%);
-  color: #aab0bc;
-  font-size: 8px;
+.brewery-map-canvas .brewery-map-japanese .leaflet-tile {
+  filter: var(--brewery-map-tile-filter);
 }
 
-.brewery-map-canvas .leaflet-control-attribution a {
-  color: #c9ced8;
+.brewery-map-canvas .brewery-map-world .leaflet-tile {
+  filter: var(--brewery-map-world-filter);
+}
+
+.brewery-map-canvas .brewery-map-place-label-icon {
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.brewery-map-canvas .brewery-map-place-label-icon span {
+  display: block;
+  padding: 1px 3px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--panel-bg);
+  color: var(--text-main);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 13px;
+  text-align: center;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px var(--bg-color);
+}
+
+.brewery-map-attribution {
+  margin-top: 3px;
+  color: var(--text-sub);
+  font-size: 0.62rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.brewery-map-attribution a {
+  color: var(--text-sub);
 }
 
 .brewery-map-status {

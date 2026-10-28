@@ -6,6 +6,7 @@ const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/details?name=driv
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile';
 const DRIVE_REQUEST_TIMEOUT_MS = 60 * 1000;
 const IMAGE_SYNC_CONCURRENCY = 8;
+const DB_DELETE_BLOCKED_TIMEOUT_MS = 12 * 1000;
 
 export const GOOGLE_CLIENT_ID = '649730178066-ahldbjk9r9sn434u5hsgc9uhj96sllkv.apps.googleusercontent.com';
 
@@ -1035,10 +1036,24 @@ export async function destroyAllSellaData() {
 
     await new Promise((resolve, reject) => {
       const request = indexedDB.deleteDatabase('SellaDB');
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error || new Error('ローカルデータベースを削除できませんでした。'));
+      let blockedTimeout = null;
+      const clearBlockedTimeout = () => {
+        if (blockedTimeout) clearTimeout(blockedTimeout);
+      };
+      request.onsuccess = () => {
+        clearBlockedTimeout();
+        resolve();
+      };
+      request.onerror = () => {
+        clearBlockedTimeout();
+        reject(request.error || new Error('ローカルデータベースを削除できませんでした。'));
+      };
       request.onblocked = () => {
+        if (blockedTimeout) return;
         console.warn('[GoogleDrive] Waiting for other tabs to release the local database before deletion.');
+        blockedTimeout = setTimeout(() => {
+          reject(new Error('ほかのSakeLogタブがデータベースを使用中です。ほかのタブを閉じてから、もう一度お試しください。'));
+        }, DB_DELETE_BLOCKED_TIMEOUT_MS);
       };
     });
 

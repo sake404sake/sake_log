@@ -4,6 +4,40 @@ const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const LEAFLET_SCRIPT_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
 const PHOTON_URL = 'https://photon.komoot.io/api/';
 const GEOCODE_INTERVAL_MS = 1100;
+const JAPAN_MAP_BOUNDS = { south: 20, west: 122, north: 46, east: 154 };
+const GSI_ATTRIBUTION = '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">地理院タイル</a>';
+const ESRI_ATTRIBUTION = 'Tiles &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a>, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> and GIS user community';
+const JAPAN_REGIONS = [
+  { name: '北海道', lat: 43.4, lng: 142.7 },
+  { name: '東北', lat: 39.2, lng: 140.8 },
+  { name: '関東', lat: 36.1, lng: 139.5 },
+  { name: '中部', lat: 36.2, lng: 137.2 },
+  { name: '近畿', lat: 34.7, lng: 135.4 },
+  { name: '中国', lat: 34.9, lng: 132.8 },
+  { name: '四国', lat: 33.7, lng: 133.6 },
+  { name: '九州', lat: 32.2, lng: 130.7 },
+  { name: '沖縄', lat: 26.2, lng: 127.7 }
+];
+const JAPAN_MAJOR_CITIES = [
+  { name: '札幌', lat: 43.0618, lng: 141.3545 },
+  { name: '仙台', lat: 38.2682, lng: 140.8694 },
+  { name: '東京', lat: 35.6762, lng: 139.6503 },
+  { name: '新潟', lat: 37.9161, lng: 139.0364 },
+  { name: '名古屋', lat: 35.1815, lng: 136.9066 },
+  { name: '大阪', lat: 34.6937, lng: 135.5023 },
+  { name: '広島', lat: 34.3853, lng: 132.4553 },
+  { name: '福岡', lat: 33.5902, lng: 130.4017 },
+  { name: '那覇', lat: 26.2124, lng: 127.6809 }
+];
+const JAPAN_DETAIL_CITIES = [
+  { name: '金沢', lat: 36.5613, lng: 136.6562 },
+  { name: '長野', lat: 36.6513, lng: 138.181 },
+  { name: '静岡', lat: 34.9756, lng: 138.3828 },
+  { name: '京都', lat: 35.0116, lng: 135.7681 },
+  { name: '神戸', lat: 34.6901, lng: 135.1955 },
+  { name: '松山', lat: 33.8416, lng: 132.7657 },
+  { name: '熊本', lat: 32.8031, lng: 130.7079 }
+];
 
 let leafletPromise = null;
 let refreshPromise = null;
@@ -12,7 +46,11 @@ let geocodePromise = null;
 let lastGeocodeAt = 0;
 let leaflet;
 let map;
+let baseTileLayer;
+let worldLabelLayer;
+let baseMapRegion;
 let markerLayer;
+let placeLabelLayer;
 let placeSearchLayer;
 let activeFilter = '';
 let places = [];
@@ -57,6 +95,7 @@ function ensureMapMarkup(container) {
     <input id="brewery-map-search" class="brewery-map-search" type="search" placeholder="例: 新潟、獺祭、山田酒造" autocomplete="off">
     <div id="brewery-map-results" class="brewery-map-results" aria-live="polite"></div>
     <div id="brewery-map-canvas" class="brewery-map-canvas" role="application" aria-label="酒造の場所を示す地図"></div>
+    <div id="brewery-map-attribution" class="brewery-map-attribution" aria-label="地図データの出典"></div>
     <div id="brewery-map-status" class="brewery-map-status" role="status">地図を準備しています...</div>
   `;
   container.querySelector('#brewery-map-search').addEventListener('input', event => {
@@ -141,22 +180,115 @@ function initializeMap(L) {
     worldCopyJump: true,
     attributionControl: false
   }).setView([36.2, 138.25], 5);
-  map.attributionControl = L.control.attribution().addTo(map);
-  map.attributionControl.setPrefix(false);
   markerLayer = L.layerGroup().addTo(map);
+  map.createPane('breweryPlaceLabelsPane').style.zIndex = '625';
+  placeLabelLayer = L.layerGroup().addTo(map);
   placeSearchLayer = L.layerGroup().addTo(map);
-  const tiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Tiles &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a>, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> and GIS user community'
-  }).addTo(map);
-  tiles.on('tileerror', () => setStatus('地図タイルを取得できません。接続を確認してください。', true));
-  tiles.on('load', () => {
+  updateBaseMap();
+  map.on('moveend', () => {
+    updateBaseMap();
+    renderJapanesePlaceLabels();
+  });
+  map.on('zoomend', renderJapanesePlaceLabels);
+  setTimeout(() => map?.invalidateSize(), 150);
+}
+
+function renderJapanesePlaceLabels() {
+  if (!map || !leaflet || !placeLabelLayer) return;
+  placeLabelLayer.clearLayers();
+  if (baseMapRegion !== 'japan') return;
+  const zoom = map.getZoom();
+  const candidates = zoom <= 5
+    ? JAPAN_REGIONS
+    : zoom < 8
+      ? JAPAN_MAJOR_CITIES
+      : [...JAPAN_MAJOR_CITIES, ...JAPAN_DETAIL_CITIES];
+  const bounds = map.getBounds();
+  const accepted = [];
+
+  for (const place of candidates) {
+    const position = leaflet.latLng(place.lat, place.lng);
+    if (!bounds.contains(position)) continue;
+    const point = map.latLngToContainerPoint(position);
+    const width = place.name.length * 12 + 12;
+    const box = {
+      left: point.x - width / 2,
+      right: point.x + width / 2,
+      top: point.y - 10,
+      bottom: point.y + 10
+    };
+    const mapSize = map.getSize();
+    if (box.left < 0 || box.right > mapSize.x || box.top < 0 || box.bottom > mapSize.y) continue;
+    if (accepted.some(other => box.left < other.right + 4 &&
+      box.right + 4 > other.left &&
+      box.top < other.bottom + 3 &&
+      box.bottom + 3 > other.top)) continue;
+    accepted.push(box);
+
+    const icon = leaflet.divIcon({
+      className: 'brewery-map-place-label-icon',
+      html: `<span>${escapeHtml(place.name)}</span>`,
+      iconSize: [width, 20],
+      iconAnchor: [width / 2, 10]
+    });
+    leaflet.marker(position, {
+      icon,
+      pane: 'breweryPlaceLabelsPane',
+      keyboard: false,
+      interactive: false
+    }).addTo(placeLabelLayer);
+  }
+}
+
+function updateBaseMap() {
+  if (!map || !leaflet) return;
+  const center = map.getCenter();
+  const region = center.lat >= JAPAN_MAP_BOUNDS.south &&
+    center.lat <= JAPAN_MAP_BOUNDS.north &&
+    center.lng >= JAPAN_MAP_BOUNDS.west &&
+    center.lng <= JAPAN_MAP_BOUNDS.east
+    ? 'japan'
+    : 'world';
+  if (baseMapRegion === region) return;
+  baseMapRegion = region;
+  if (baseTileLayer) map.removeLayer(baseTileLayer);
+
+  const isJapan = region === 'japan';
+  const attribution = document.getElementById('brewery-map-attribution');
+  if (attribution) attribution.innerHTML = isJapan
+    ? `${GSI_ATTRIBUTION}（白地図を加工して表示、国土地理院）`
+    : `地図データ：${ESRI_ATTRIBUTION}`;
+  if (worldLabelLayer) {
+    map.removeLayer(worldLabelLayer);
+    worldLabelLayer = null;
+  }
+  baseTileLayer = isJapan
+    ? leaflet.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      className: 'brewery-map-japanese'
+    })
+    : leaflet.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      className: 'brewery-map-world'
+    });
+  baseTileLayer.on('tileerror', () => setStatus('地図タイルを取得できません。接続を確認してください。', true));
+  baseTileLayer.on('load', () => {
     const pending = places.filter(place => !hasCoordinates(place) && !place.notFound).length;
     if (pending === 0) {
-      setStatus(places.length ? '© OpenStreetMap contributors' : 'ログがなくても上の検索から酒造の場所を探せます。');
+      setStatus(places.length
+        ? `${places.filter(hasCoordinates).length}/${places.length}酒造にピンを表示中`
+        : 'ログがなくても上の検索から酒造の場所を探せます。');
     }
   });
-  setTimeout(() => map?.invalidateSize(), 150);
+  baseTileLayer.addTo(map);
+  renderJapanesePlaceLabels();
+  if (!isJapan) {
+    worldLabelLayer = leaflet.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        pane: 'overlayPane',
+        className: 'brewery-map-world-labels'
+    }).addTo(map);
+  }
 }
 
 function buildPlaces(logs, cachedLocations) {

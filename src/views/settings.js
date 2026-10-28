@@ -239,8 +239,9 @@ export function renderSettingsView() {
           <h3 style="color: #ef4444;">危険ゾーン: データの完全消去</h3>
         </div>
         <p class="card-desc" style="color: var(--text-sub);">
-          この操作は取り返しがつきません。ローカルブラウザのデータベース(IndexedDB)、キャッシュ、およびGoogle Drive AppDataに保存されているすべてのログと画像を<strong>完全に、かつ永久に抹消</strong>します。
+          この操作は取り返しがつきません。Googleアカウントに接続した状態で実行すると、ローカルの酒ログ・画像とGoogle Drive AppDataのバックアップを<strong>完全に、かつ永久に抹消</strong>します。ほかのSakeLogタブが開いている場合は、閉じてから実行してください。
         </p>
+        ${isGoogleConnected ? '' : '<p class="card-desc" style="color: #ef4444;">クラウド上のデータが再び同期されるのを防ぐため、先にGoogleアカウントへ接続してください。</p>'}
 
         <div style="background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 14px;">
           <div class="form-group" style="margin-bottom: 12px;">
@@ -249,7 +250,7 @@ export function renderSettingsView() {
             </label>
             <input type="text" class="input-dark" id="destroy-validation-input" placeholder="データをすべて消去する" style="border-color: rgba(239, 68, 68, 0.3);" />
           </div>
-          <button type="button" id="btn-destroy-all-data" class="btn-primary" disabled 
+          <button type="button" id="btn-destroy-all-data" class="btn-primary" data-google-connected="${isGoogleConnected}" disabled
                   style="background: #ef4444; color: #fff; border: none; width: 100%; justify-content: center; display: inline-flex; align-items: center; font-weight: bold; opacity: 0.3; cursor: not-allowed;">
             🚨 クラウドを含むすべてのデータを永久に消去する
           </button>

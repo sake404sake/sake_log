@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sakelog-shell-v13';
+const CACHE_NAME = 'sakelog-shell-v26';
 const CORE_ASSETS = [
   './',
   './index.html',
