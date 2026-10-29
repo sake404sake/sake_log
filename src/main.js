@@ -1467,7 +1467,13 @@ function initApp() {
           try {
             await destroyAllSellaData();
           } catch (error) {
-            alert(`完全消去を完了できませんでした。\n同期は安全のため停止しています。Google Driveへの接続と、他のSakeLogタブを確認して再度お試しください。\n\n詳細: ${error.message}`);
+            if (error.message === 'AUTH_EXPIRED') {
+              alert('Googleの認証期限が切れたため、クラウドの完全消去を中断しました。\nこの端末の未保存ログを含むローカルデータは消去しました。すでに削除したクラウドデータは復元されていません。\nGoogleに再ログインし、同じ完全消去をもう一度実行してください。残りのクラウドデータを削除します。消去中のデータ同期は停止しています。');
+            } else if (error.message.startsWith('AUTH_EXPIRED_LOCAL_DELETE_FAILED:')) {
+              alert(`Googleの認証期限が切れ、クラウドの完全消去を中断しました。ローカルデータも消去できませんでした。\nほかのSakeLogタブを閉じてから再度お試しください。\n\n詳細: ${error.message.replace('AUTH_EXPIRED_LOCAL_DELETE_FAILED: ', '')}`);
+            } else {
+              alert(`完全消去を完了できませんでした。\n同期は安全のため停止しています。Google Driveへの接続と、他のSakeLogタブを確認して再度お試しください。\n\n詳細: ${error.message}`);
+            }
           }
         }
       }

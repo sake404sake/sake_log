@@ -331,7 +331,11 @@ export async function logoutGoogle(clearLocal = false) {
   document.dispatchEvent(new CustomEvent('google-logout-success'));
 
   if (clearLocal) {
+    const destructionPending = localStorage.getItem('sella_data_destroy_pending') === 'true';
     localStorage.clear();
+    if (destructionPending) {
+      localStorage.setItem('sella_data_destroy_pending', 'true');
+    }
     alert('この端末のローカルデータを消去してログアウトしました。Google Drive上のデータは消去されていません。アプリを再ロードします。');
     window.location.reload();
   } else {
@@ -396,7 +400,9 @@ function handleTokenExpired() {
   document.dispatchEvent(new CustomEvent('google-logout-success'));
   document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: false } }));
 
-  alert('Google同期の認証が期限切れになりました。ローカルデータは保持されています。同期を再開するには、設定画面からGoogleに再接続してください。');
+  if (!dataDestructionInProgress) {
+    alert('Google同期の認証が期限切れになりました。ローカルデータは保持されています。同期を再開するには、設定画面からGoogleに再接続してください。');
+  }
 }
 
 async function driveFetch(url, options = {}, allowTokenRefresh = true) {
@@ -1078,6 +1084,16 @@ export async function destroyAllSellaData() {
     window.location.reload();
   } catch (error) {
     console.error('[GoogleDrive] Failed to completely erase SakeLog data:', error);
+    if (error.message === 'AUTH_EXPIRED') {
+      try {
+        await deleteLocalDatabase();
+        localStorage.clear();
+        localStorage.setItem('sella_data_destroy_pending', 'true');
+      } catch (localDeleteError) {
+        console.error('[GoogleDrive] Failed to delete local data after cloud authorization expired:', localDeleteError);
+        throw new Error(`AUTH_EXPIRED_LOCAL_DELETE_FAILED: ${localDeleteError.message}`);
+      }
+    }
     throw error;
   } finally {
     dataDestructionInProgress = false;

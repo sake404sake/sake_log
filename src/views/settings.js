@@ -9,6 +9,7 @@ export function renderSettingsView() {
   const lastSynced = localStorage.getItem('sella_last_synced_time') || '未同期';
 
   const isGoogleConnected = state.isGoogleLoggedIn || localStorage.getItem('sella_google_logged_in') === 'true';
+  const isDestructionPending = localStorage.getItem('sella_data_destroy_pending') === 'true';
   const syncStatus = state.isSyncing
     ? 'Google Drive 同期中'
     : navigator.onLine === false
@@ -238,6 +239,7 @@ export function renderSettingsView() {
           <span class="icon" style="font-size: 1.25rem;">⚠️</span>
           <h3 style="color: #ef4444;">危険ゾーン: データの完全消去</h3>
         </div>
+        ${isDestructionPending ? '<p class="card-desc" style="color: #ef4444; font-weight: bold;">前回の完全消去は中断されています。データが再同期されないよう同期を停止中です。Googleアカウントに再ログインして、下の完全消去を再実行してください。</p>' : ''}
         <p class="card-desc" style="color: var(--text-sub);">
           この操作は取り返しがつきません。Googleアカウントに接続した状態で実行すると、ローカルの酒ログ・画像とGoogle Drive AppDataのバックアップを<strong>完全に、かつ永久に抹消</strong>します。ほかのSakeLogタブが開いている場合は、閉じてから実行してください。
         </p>
