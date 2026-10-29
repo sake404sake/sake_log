@@ -167,10 +167,16 @@ function loadLeaflet() {
 }
 
 function isMapVisible() {
-  const panel = document.getElementById('right-panel');
-  if (!panel) return false;
-  const rect = panel.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < window.innerWidth;
+  const container = document.getElementById('sidebar-brewery-map');
+  if (!container) return false;
+  const rect = container.getBoundingClientRect();
+  const style = window.getComputedStyle(container);
+  return style.display !== 'none' &&
+    style.visibility !== 'hidden' &&
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.right > 0 &&
+    rect.left < window.innerWidth;
 }
 
 function initializeMap(L) {
@@ -656,26 +662,27 @@ export async function renderBreweryMap() {
     return refreshPromise;
   }
   refreshPromise = (async () => {
-    const [logs, cachedLocations] = await Promise.all([
-      getBreweryMapLogs(),
-      getBreweryLocations()
-    ]);
-    places = buildPlaces(logs, cachedLocations);
-    renderResults();
-
-    if (!isMapVisible()) return;
-    if (navigator.onLine === false) {
-      setStatus('保存済みの位置は表示できます。地図タイルと未検索の位置にはオンライン接続が必要です。');
-      return;
-    }
-
     try {
+      const [logs, cachedLocations] = await Promise.all([
+        getBreweryMapLogs(),
+        getBreweryLocations()
+      ]);
+      places = buildPlaces(logs, cachedLocations);
+      renderResults();
+
+      if (!isMapVisible()) return;
+      if (navigator.onLine === false) {
+        setStatus('保存済みの位置は表示できます。地図タイルと未検索の位置にはオンライン接続が必要です。');
+        return;
+      }
+
       initializeMap(await loadLeaflet());
       renderMarkers();
       void geocodeMissingPlaces();
     } catch (error) {
-      console.error('[BreweryMap] Map initialization failed:', error);
-      setStatus(error.message, true);
+      console.error('[BreweryMap] Failed to load or initialize the map:', error);
+      setStatus(`酒造マップを表示できません: ${error.message}`, true);
+      throw error;
     }
   })().finally(() => {
     refreshPromise = null;

@@ -259,6 +259,9 @@ function openSidebar() {
   rightPanel?.classList.remove('open');
   sidebar?.classList.add('open');
   overlay?.classList.add('active');
+  void renderBreweryMap().catch(err => {
+    console.error('[BreweryMap] Failed to open sidebar map:', err);
+  });
 }
 
 function openRightPanel() {
@@ -1445,8 +1448,8 @@ function initApp() {
     }
 
     if (e.target && e.target.id === 'btn-google-logout') {
-      const choice = confirm("Googleアカウント同期を切断しますか？\n\n[OK]: 共有端末等のため、ローカルブラウザのデータも完全に消去してログアウトする\n[キャンセル]: ローカルにデータは残したまま安全にログアウトする");
-      logoutGoogle(choice);
+      const choice = confirm("Googleアカウント同期を切断しますか？\n\n[OK]: この端末のローカルデータを消去してログアウトする（Google Drive上のデータは残ります）\n[キャンセル]: ローカルデータを残してログアウトする");
+      await logoutGoogle(choice);
       return;
     }
 

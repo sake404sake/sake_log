@@ -262,8 +262,44 @@ export function loginGoogle() {
   }
 }
 
-export function logoutGoogle(clearLocal = false) {
+function deleteLocalDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase('SellaDB');
+    let blockedTimeout = null;
+    const clearBlockedTimeout = () => {
+      if (blockedTimeout) clearTimeout(blockedTimeout);
+    };
+    request.onsuccess = () => {
+      clearBlockedTimeout();
+      resolve();
+    };
+    request.onerror = () => {
+      clearBlockedTimeout();
+      reject(request.error || new Error('ローカルデータベースを削除できませんでした。'));
+    };
+    request.onblocked = () => {
+      if (blockedTimeout) return;
+      console.warn('[GoogleDrive] Waiting for other tabs to release the local database before deletion.');
+      blockedTimeout = setTimeout(() => {
+        reject(new Error('ほかのSakeLogタブがデータベースを使用中です。ほかのタブを閉じてから、もう一度お試しください。'));
+      }, DB_DELETE_BLOCKED_TIMEOUT_MS);
+    };
+  });
+}
+
+export async function logoutGoogle(clearLocal = false) {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
+
+  if (clearLocal) {
+    try {
+      await deleteLocalDatabase();
+    } catch (error) {
+      console.error('[GoogleDrive] Failed to delete local data during logout:', error);
+      alert(`ローカルデータを消去できませんでした。ログイン状態は維持されています。\n\n詳細: ${error.message}`);
+      return;
+    }
+  }
+
   if (token) {
     window.google?.accounts?.oauth2.revoke(token, () => {
       console.log('[GoogleDrive] Token revoked.');
@@ -295,8 +331,8 @@ export function logoutGoogle(clearLocal = false) {
   document.dispatchEvent(new CustomEvent('google-logout-success'));
 
   if (clearLocal) {
-    indexedDB.deleteDatabase('SellaDB');
-    alert('ローカルデータをすべて消去してログアウトしました。アプリを再ロードします。');
+    localStorage.clear();
+    alert('この端末のローカルデータを消去してログアウトしました。Google Drive上のデータは消去されていません。アプリを再ロードします。');
     window.location.reload();
   } else {
     alert('ログアウトしました。お酒データはローカルに保持されています。');
@@ -1016,13 +1052,13 @@ export async function syncAllData(silent = false) {
 export async function destroyAllSellaData() {
   const token = state.googleAccessToken || localStorage.getItem('sella_google_token');
 
-  localStorage.setItem('sella_data_destroy_pending', 'true');
-  dataDestructionInProgress = true;
-  syncQueued = false;
   try {
     if (!token) {
       throw new Error('Google Driveに接続してから、クラウドを含む完全消去を実行してください。');
     }
+    localStorage.setItem('sella_data_destroy_pending', 'true');
+    dataDestructionInProgress = true;
+    syncQueued = false;
     if (syncPromise) await syncPromise;
 
     let remainingFiles = await listCloudFiles();
@@ -1034,28 +1070,7 @@ export async function destroyAllSellaData() {
       remainingFiles = await listCloudFiles();
     }
 
-    await new Promise((resolve, reject) => {
-      const request = indexedDB.deleteDatabase('SellaDB');
-      let blockedTimeout = null;
-      const clearBlockedTimeout = () => {
-        if (blockedTimeout) clearTimeout(blockedTimeout);
-      };
-      request.onsuccess = () => {
-        clearBlockedTimeout();
-        resolve();
-      };
-      request.onerror = () => {
-        clearBlockedTimeout();
-        reject(request.error || new Error('ローカルデータベースを削除できませんでした。'));
-      };
-      request.onblocked = () => {
-        if (blockedTimeout) return;
-        console.warn('[GoogleDrive] Waiting for other tabs to release the local database before deletion.');
-        blockedTimeout = setTimeout(() => {
-          reject(new Error('ほかのSakeLogタブがデータベースを使用中です。ほかのタブを閉じてから、もう一度お試しください。'));
-        }, DB_DELETE_BLOCKED_TIMEOUT_MS);
-      };
-    });
+    await deleteLocalDatabase();
 
     localStorage.clear();
 
