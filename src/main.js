@@ -290,9 +290,6 @@ function openSidebar() {
   rightPanel?.classList.remove('open');
   sidebar?.classList.add('open');
   overlay?.classList.add('active');
-  void renderBreweryMap().catch(err => {
-    console.error('[BreweryMap] Failed to open sidebar map:', err);
-  });
 }
 
 function openRightPanel() {

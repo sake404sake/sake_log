@@ -166,19 +166,6 @@ function loadLeaflet() {
   return leafletPromise;
 }
 
-function isMapVisible() {
-  const container = document.getElementById('sidebar-brewery-map');
-  if (!container) return false;
-  const rect = container.getBoundingClientRect();
-  const style = window.getComputedStyle(container);
-  return style.display !== 'none' &&
-    style.visibility !== 'hidden' &&
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.right > 0 &&
-    rect.left < window.innerWidth;
-}
-
 function initializeMap(L) {
   if (map) return;
   leaflet = L;
@@ -670,13 +657,13 @@ export async function renderBreweryMap() {
       places = buildPlaces(logs, cachedLocations);
       renderResults();
 
-      if (!isMapVisible()) return;
       if (navigator.onLine === false) {
         setStatus('保存済みの位置は表示できます。地図タイルと未検索の位置にはオンライン接続が必要です。');
         return;
       }
 
       initializeMap(await loadLeaflet());
+      map?.invalidateSize();
       renderMarkers();
       void geocodeMissingPlaces();
     } catch (error) {
