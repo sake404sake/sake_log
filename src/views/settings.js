@@ -256,6 +256,10 @@ export function renderSettingsView() {
                   style="background: #ef4444; color: #fff; border: none; width: 100%; justify-content: center; display: inline-flex; align-items: center; font-weight: bold; opacity: 0.3; cursor: not-allowed;">
             🚨 クラウドを含むすべてのデータを永久に消去する
           </button>
+          <div id="data-destruction-progress" hidden style="margin-top: 12px;" aria-live="polite">
+            <p id="data-destruction-status" role="status" style="margin: 0 0 8px; color: var(--text-main); font-size: 0.85rem;"></p>
+            <progress id="data-destruction-bar" hidden max="1" value="0" style="width: 100%; height: 10px; accent-color: #ef4444;"></progress>
+          </div>
         </div>
       </div>
 

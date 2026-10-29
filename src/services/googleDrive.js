@@ -19,6 +19,12 @@ let syncQueued = false;
 let syncPromise = null;
 let dataDestructionInProgress = false;
 
+function reportDataDestructionProgress(phase, message, completed = 0, total = 0) {
+  document.dispatchEvent(new CustomEvent('data-destruction-progress', {
+    detail: { phase, message, completed, total }
+  }));
+}
+
 const CRYPTO_SALT = new TextEncoder().encode('SellaSakeLogCryptoSalt_9982');
 
 async function deriveKeyFromGoogleId(googleUserId) {
@@ -1065,19 +1071,38 @@ export async function destroyAllSellaData() {
     localStorage.setItem('sella_data_destroy_pending', 'true');
     dataDestructionInProgress = true;
     syncQueued = false;
+    reportDataDestructionProgress('checking', 'Google Drive上のデータを確認しています...');
     if (syncPromise) await syncPromise;
 
     let remainingFiles = await listCloudFiles();
+    let totalFiles = remainingFiles.length;
+    let deletedFiles = 0;
+    reportDataDestructionProgress(
+      'cloud',
+      totalFiles ? `クラウドデータを削除中 (0/${totalFiles})` : 'クラウドデータはありません。ローカルデータを削除します...',
+      deletedFiles,
+      totalFiles
+    );
     while (remainingFiles.length > 0) {
       for (const file of remainingFiles) {
         console.log(`[GoogleDrive] Purging cloud file on destroy: ${file.name}`);
         await deleteCloudFile(file.id);
+        deletedFiles += 1;
+        reportDataDestructionProgress(
+          'cloud',
+          `クラウドデータを削除中 (${deletedFiles}/${totalFiles})`,
+          deletedFiles,
+          totalFiles
+        );
       }
       remainingFiles = await listCloudFiles();
+      totalFiles = deletedFiles + remainingFiles.length;
     }
 
+    reportDataDestructionProgress('local', 'ローカルデータを削除しています...');
     await deleteLocalDatabase();
 
+    reportDataDestructionProgress('complete', 'すべてのデータを削除しました。');
     localStorage.clear();
 
     alert('すべての酒ログデータ、画像、およびクラウドバックアップを完全に消去しました。システムを初期状態から再起動します。');
@@ -1086,13 +1111,18 @@ export async function destroyAllSellaData() {
     console.error('[GoogleDrive] Failed to completely erase SakeLog data:', error);
     if (error.message === 'AUTH_EXPIRED') {
       try {
+        reportDataDestructionProgress('local', '認証期限切れのため、未保存ログを含むローカルデータを削除しています...');
         await deleteLocalDatabase();
         localStorage.clear();
         localStorage.setItem('sella_data_destroy_pending', 'true');
+        reportDataDestructionProgress('interrupted', 'ローカルデータは削除済みです。クラウドの残りを削除するには再ログインして再実行してください。');
       } catch (localDeleteError) {
         console.error('[GoogleDrive] Failed to delete local data after cloud authorization expired:', localDeleteError);
+        reportDataDestructionProgress('failed', `ローカルデータを削除できませんでした: ${localDeleteError.message}`);
         throw new Error(`AUTH_EXPIRED_LOCAL_DELETE_FAILED: ${localDeleteError.message}`);
       }
+    } else {
+      reportDataDestructionProgress('failed', `完全消去に失敗しました: ${error.message}`);
     }
     throw error;
   } finally {

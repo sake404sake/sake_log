@@ -74,6 +74,36 @@ const views = {
   analytics: renderAnalyticsView
 };
 
+let dataDestructionProgress = null;
+
+function renderDataDestructionProgress() {
+  const container = document.getElementById('data-destruction-progress');
+  const status = document.getElementById('data-destruction-status');
+  const progressBar = document.getElementById('data-destruction-bar');
+  if (!container || !status || !progressBar || !dataDestructionProgress) return;
+
+  const { phase, message, completed = 0, total = 0 } = dataDestructionProgress;
+  const isActive = ['checking', 'cloud', 'local'].includes(phase);
+  container.hidden = false;
+  status.textContent = message;
+  status.style.color = phase === 'failed' ? '#ef4444' : 'var(--text-main)';
+  progressBar.hidden = phase !== 'cloud' || total === 0;
+  if (phase === 'cloud' && total > 0) {
+    progressBar.max = total;
+    progressBar.value = completed;
+  }
+
+  const destroyButton = document.getElementById('btn-destroy-all-data');
+  if (destroyButton) {
+    const input = document.getElementById('destroy-validation-input');
+    const isConfirmed = input?.value.trim() === 'データをすべて消去する' &&
+      destroyButton.dataset.googleConnected === 'true';
+    destroyButton.disabled = isActive || !isConfirmed;
+    destroyButton.style.opacity = isActive ? '0.5' : isConfirmed ? '1' : '0.3';
+    destroyButton.style.cursor = isActive ? 'wait' : isConfirmed ? 'pointer' : 'not-allowed';
+  }
+}
+
 export async function navigateTo(viewName) {
   const appContainer = document.getElementById('app');
   if (!appContainer) return;
@@ -96,6 +126,7 @@ export async function navigateTo(viewName) {
         themeSelect.value = localStorage.getItem('sella_theme') || 'dark';
       }
       updateModelDropdown();
+      renderDataDestructionProgress();
     }
   } catch (err) {
     console.error('View Render Error:', err);
@@ -559,6 +590,10 @@ function initApp() {
   renderSidebarCalendar();
 
   renderAiChatControls();
+  document.addEventListener('data-destruction-progress', event => {
+    dataDestructionProgress = event.detail;
+    renderDataDestructionProgress();
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDrawers();
   });
